@@ -146,22 +146,28 @@ function createProgressBar(current, max, length = 20) {
     return `${filled}${empty} ${percentage.toFixed(0)}% (${current}/${max})`;
 }
 
-function createSPProgressBar(sp, nextThreshold) {
+function createSPProgressBar(sp) {
+    // Определяем диапазоны и следующую цель для каждого ранга
+    let currentMin, currentMax, nextTarget;
+    
     if (sp >= 2500) {
         return '█████████████████████ 100% (МАСТЕР)';
+    } else if (sp >= 1000) {
+        // Эксперт (1000-2499) -> цель Мастер (2500)
+        currentMin = 1000;
+        nextTarget = 2500;
+    } else if (sp >= 350) {
+        // Владелец (350-999) -> цель Эксперт (1000)
+        currentMin = 350;
+        nextTarget = 1000;
+    } else {
+        // Новичок (0-349) -> цель Владелец (350)
+        currentMin = 0;
+        nextTarget = 350;
     }
     
-    const thresholds = [
-        { min: 0, max: 350, name: 'Owner' },
-        { min: 350, max: 1000, name: 'Expert' },
-        { min: 1000, max: 2500, name: 'Master' }
-    ];
-    
-    const current = thresholds.find(t => sp >= t.min && sp < t.max);
-    if (!current) return createProgressBar(sp, 2500, 20);
-    
-    const progress = sp - current.min;
-    const total = current.max - current.min;
+    const progress = sp - currentMin;
+    const total = nextTarget - currentMin;
     
     return createProgressBar(progress, total, 20);
 }
