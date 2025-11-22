@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { listStyles, getStylePlayerCount } from '../utils/dataManager.js';
-import { createInfoEmbed } from '../utils/embeds.js';
+import { createStylesListEmbed, createInfoEmbed } from '../utils/embeds.js';
 
 export const data = new SlashCommandBuilder()
     .setName('styles-list')
@@ -21,7 +21,7 @@ export async function execute(interaction) {
         return `**${style.name}**\nИгроков тренируется: ${playerCount}`;
     }).join('\n\n');
     
-    const embed = createInfoEmbed('🥋 Доступные боевые стили', styleText);
+    const embed = createStylesListEmbed('🥋 Доступные боевые стили', styleText);
     
     return interaction.reply({ embeds: [embed] });
 }

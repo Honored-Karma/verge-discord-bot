@@ -89,6 +89,15 @@ export function createRegisterEmbed(title, description) {
         .setTimestamp();
 }
 
+export function createStylesListEmbed(title, description) {
+    return new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setTitle(title)
+        .setDescription(description)
+        .setImage('https://s.iimg.su/s/22/uexBneExAdoahYKkvzj43zvE9k0z7Dgaq7j2HlEk.jpg')
+        .setTimestamp();
+}
+
 export function createProfileMainPage(player, user) {
     const embed = new EmbedBuilder()
         .setColor(0x0099FF)
