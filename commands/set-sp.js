@@ -5,24 +5,24 @@ import { isAdmin } from '../utils/adminCheck.js';
 
 export const data = new SlashCommandBuilder()
     .setName('set-sp')
-    .setDescription('[ADMIN] Set a player\'s SP for a specific style')
+    .setDescription('[АДМИН] Установить SP игрока для стиля')
     .addUserOption(option =>
         option.setName('user')
-            .setDescription('The player to modify')
+            .setDescription('Игрок для изменения')
             .setRequired(true))
     .addStringOption(option =>
         option.setName('style')
-            .setDescription('The martial arts style name')
+            .setDescription('Название боевого стиля')
             .setRequired(true))
     .addIntegerOption(option =>
         option.setName('amount')
-            .setDescription('The SP amount to set')
+            .setDescription('Количество SP')
             .setRequired(true));
 
 export async function execute(interaction) {
     if (!isAdmin(interaction.member)) {
         return interaction.reply({
-            embeds: [createErrorEmbed('Permission Denied', 'You must be a Game Master or admin to use this command.')],
+            embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
             ephemeral: true
         });
     }
@@ -36,7 +36,7 @@ export async function execute(interaction) {
     
     if (!player) {
         return interaction.reply({
-            embeds: [createErrorEmbed('Not Registered', `${targetUser.username} is not registered yet.`)],
+            embeds: [createErrorEmbed('Не зарегистрирован', `Игрок не зарегистрирован.`)],
             ephemeral: true
         });
     }
@@ -45,14 +45,14 @@ export async function execute(interaction) {
     
     if (!style) {
         return interaction.reply({
-            embeds: [createErrorEmbed('Style Not Found', `Style "${styleName}" does not exist. Use \`/styles-list\` to see available styles.`)],
+            embeds: [createErrorEmbed('Стиль не найден', `Стиль "${styleName}" не существует. Используйте \`/styles-list\` для просмотра доступных стилей.`)],
             ephemeral: true
         });
     }
     
     if (amount < 0) {
         return interaction.reply({
-            embeds: [createErrorEmbed('Invalid Amount', 'SP cannot be negative.')],
+            embeds: [createErrorEmbed('Некорректное значение', 'SP не может быть отрицательным.')],
             ephemeral: true
         });
     }
@@ -60,12 +60,14 @@ export async function execute(interaction) {
     const success = setSP(playerId, style.id, amount, interaction.user.id);
     
     if (success) {
+        const rank = amount >= 2500 ? 'Мастер' : amount >= 1000 ? 'Эксперт' : amount >= 350 ? 'Владелец' : 'Новичок';
         return interaction.reply({
-            embeds: [createSuccessEmbed('SP Updated', `Set **${targetUser.username}**'s **${styleName}** SP to **${amount}**.`)]
+            embeds: [createSuccessEmbed('SP обновлено', 
+                `Установлено **${amount} SP** для стиля **${styleName}** игроку **${player.character_name || player.username}**\n\nРанг: **${rank}**`)]
         });
     } else {
         return interaction.reply({
-            embeds: [createErrorEmbed('Error', 'Failed to update SP.')],
+            embeds: [createErrorEmbed('Ошибка', 'Не удалось обновить SP.')],
             ephemeral: true
         });
     }

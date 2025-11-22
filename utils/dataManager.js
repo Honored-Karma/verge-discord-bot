@@ -31,10 +31,10 @@ export function getPlayer(playerId) {
     }
 }
 
-export function createPlayer(playerId, username) {
+export function createPlayer(playerId, username, characterName, characterAvatar = null) {
     try {
-        const stmt = db.prepare('INSERT INTO players (id, username, balance, ap, last_train_timestamp, last_socialrp_timestamp, unlocked_avatar) VALUES (?, ?, 0, 0, 0, 0, 0)');
-        stmt.run(playerId, username);
+        const stmt = db.prepare('INSERT INTO players (id, username, character_name, character_avatar, krw, yen, ap, last_train_timestamp, last_socialrp_timestamp, unlocked_avatar) VALUES (?, ?, ?, ?, 0, 0, 0, 0, 0, 0)');
+        stmt.run(playerId, username, characterName, characterAvatar);
         return true;
     } catch (error) {
         console.error('Error creating player:', error);
@@ -84,7 +84,7 @@ export function setAP(playerId, amount, adminId) {
             avatarStmt.run(playerId);
         }
         
-        logAdminAction(adminId, 'SET_AP', `Set AP to ${amount} for player ${playerId}`);
+        logAdminAction(adminId, 'SET_AP', `Установил AP на ${amount} для игрока ${playerId}`);
         return true;
     } catch (error) {
         console.error('Error setting AP:', error);
@@ -109,6 +109,7 @@ export function getAllPlayerSP(playerId) {
             SELECT s.id, s.name, COALESCE(ps.sp, 0) as sp 
             FROM styles s 
             LEFT JOIN player_sp ps ON s.id = ps.style_id AND ps.player_id = ?
+            WHERE ps.sp > 0
             ORDER BY sp DESC
         `);
         return stmt.all(playerId);
@@ -142,7 +143,7 @@ export function addSP(playerId, styleId, amount, adminId) {
             updateStmt.run(newSP, playerId, styleId);
         }
         
-        logAdminAction(adminId, 'ADD_SP', `Added ${amount} SP (style ${styleId}) to player ${playerId}`);
+        logAdminAction(adminId, 'ADD_SP', `Добавил ${amount} SP (стиль ${styleId}) игроку ${playerId}`);
         return newSP;
     } catch (error) {
         console.error('Error adding SP:', error);
@@ -162,7 +163,7 @@ export function setSP(playerId, styleId, amount, adminId) {
             updateStmt.run(amount, playerId, styleId);
         }
         
-        logAdminAction(adminId, 'SET_SP', `Set SP to ${amount} (style ${styleId}) for player ${playerId}`);
+        logAdminAction(adminId, 'SET_SP', `Установил SP на ${amount} (стиль ${styleId}) для игрока ${playerId}`);
         return true;
     } catch (error) {
         console.error('Error setting SP:', error);
@@ -190,13 +191,13 @@ export function getStyleByName(name) {
     }
 }
 
-export function addStyle(name, description, adminId) {
+export function addStyle(name, adminId) {
     try {
         const timestamp = Math.floor(Date.now() / 1000);
-        const stmt = db.prepare('INSERT INTO styles (name, description, created_by, created_at) VALUES (?, ?, ?, ?)');
-        stmt.run(name, description, adminId, timestamp);
+        const stmt = db.prepare('INSERT INTO styles (name, created_by, created_at) VALUES (?, ?, ?)');
+        stmt.run(name, adminId, timestamp);
         
-        logAdminAction(adminId, 'ADD_STYLE', `Created style: ${name}`);
+        logAdminAction(adminId, 'ADD_STYLE', `Создал стиль: ${name}`);
         return true;
     } catch (error) {
         console.error('Error adding style:', error);
@@ -244,7 +245,7 @@ export function giveItem(playerId, itemId, qty, adminId) {
             insertStmt.run(playerId, itemId, qty);
         }
         
-        logAdminAction(adminId, 'GIVE_ITEM', `Gave ${qty}x ${itemId} to player ${playerId}`);
+        logAdminAction(adminId, 'GIVE_ITEM', `Выдал ${qty}x ${itemId} игроку ${playerId}`);
         return true;
     } catch (error) {
         console.error('Error giving item:', error);
@@ -256,12 +257,14 @@ export function getLeaderboard(sortBy = 'ap', limit = 10) {
     try {
         let stmt;
         if (sortBy === 'ap') {
-            stmt = db.prepare('SELECT id, username, ap, balance FROM players ORDER BY ap DESC LIMIT ?');
-        } else if (sortBy === 'balance') {
-            stmt = db.prepare('SELECT id, username, ap, balance FROM players ORDER BY balance DESC LIMIT ?');
+            stmt = db.prepare('SELECT id, username, character_name, ap, krw, yen FROM players ORDER BY ap DESC LIMIT ?');
+        } else if (sortBy === 'krw') {
+            stmt = db.prepare('SELECT id, username, character_name, ap, krw, yen FROM players WHERE krw > 0 ORDER BY krw DESC LIMIT ?');
+        } else if (sortBy === 'yen') {
+            stmt = db.prepare('SELECT id, username, character_name, ap, krw, yen FROM players WHERE yen > 0 ORDER BY yen DESC LIMIT ?');
         } else if (sortBy === 'sp') {
             stmt = db.prepare(`
-                SELECT p.id, p.username, p.ap, p.balance, COALESCE(SUM(ps.sp), 0) as total_sp 
+                SELECT p.id, p.username, p.character_name, p.ap, p.krw, p.yen, COALESCE(SUM(ps.sp), 0) as total_sp 
                 FROM players p 
                 LEFT JOIN player_sp ps ON p.id = ps.player_id 
                 GROUP BY p.id 
@@ -283,5 +286,65 @@ export function getItem(itemId) {
     } catch (error) {
         console.error('Error getting item:', error);
         return null;
+    }
+}
+
+export function addCurrency(playerId, currency, amount, adminId) {
+    try {
+        if (currency !== 'krw' && currency !== 'yen') return false;
+        
+        const player = getPlayer(playerId);
+        if (!player) return false;
+        
+        const newAmount = player[currency] + amount;
+        const stmt = db.prepare(`UPDATE players SET ${currency} = ? WHERE id = ?`);
+        stmt.run(newAmount, playerId);
+        
+        logAdminAction(adminId, 'ADD_CURRENCY', `Добавил ${amount} ${currency.toUpperCase()} игроку ${playerId}`);
+        return newAmount;
+    } catch (error) {
+        console.error('Error adding currency:', error);
+        return false;
+    }
+}
+
+export function setCurrency(playerId, currency, amount, adminId) {
+    try {
+        if (currency !== 'krw' && currency !== 'yen') return false;
+        
+        const stmt = db.prepare(`UPDATE players SET ${currency} = ? WHERE id = ?`);
+        stmt.run(amount, playerId);
+        
+        logAdminAction(adminId, 'SET_CURRENCY', `Установил ${currency.toUpperCase()} на ${amount} для игрока ${playerId}`);
+        return true;
+    } catch (error) {
+        console.error('Error setting currency:', error);
+        return false;
+    }
+}
+
+export function transferCurrency(fromId, toId, currency, amount) {
+    try {
+        if (currency !== 'krw' && currency !== 'yen') return { success: false, reason: 'Неверная валюта' };
+        
+        const from = getPlayer(fromId);
+        const to = getPlayer(toId);
+        
+        if (!from || !to) return { success: false, reason: 'Игрок не найден' };
+        if (from[currency] < amount) return { success: false, reason: 'Недостаточно средств' };
+        
+        const tax = Math.ceil(amount * 0.02);
+        const received = amount - tax;
+        
+        const updateFrom = db.prepare(`UPDATE players SET ${currency} = ${currency} - ? WHERE id = ?`);
+        const updateTo = db.prepare(`UPDATE players SET ${currency} = ${currency} + ? WHERE id = ?`);
+        
+        updateFrom.run(amount, fromId);
+        updateTo.run(received, toId);
+        
+        return { success: true, tax, received };
+    } catch (error) {
+        console.error('Error transferring currency:', error);
+        return { success: false, reason: 'Ошибка перевода' };
     }
 }

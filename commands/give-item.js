@@ -5,24 +5,24 @@ import { isAdmin } from '../utils/adminCheck.js';
 
 export const data = new SlashCommandBuilder()
     .setName('give-item')
-    .setDescription('[ADMIN] Give an item to a player')
+    .setDescription('[АДМИН] Выдать предмет игроку')
     .addUserOption(option =>
         option.setName('user')
-            .setDescription('The player to give the item to')
+            .setDescription('Игрок-получатель')
             .setRequired(true))
     .addStringOption(option =>
         option.setName('item_id')
-            .setDescription('The item ID (e.g., ap_tome_50)')
+            .setDescription('ID предмета (напр., ap_tome_50)')
             .setRequired(true))
     .addIntegerOption(option =>
         option.setName('qty')
-            .setDescription('Quantity to give (default: 1)')
+            .setDescription('Количество (по умолчанию: 1)')
             .setRequired(false));
 
 export async function execute(interaction) {
     if (!isAdmin(interaction.member)) {
         return interaction.reply({
-            embeds: [createErrorEmbed('Permission Denied', 'You must be a Game Master or admin to use this command.')],
+            embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
             ephemeral: true
         });
     }
@@ -36,7 +36,7 @@ export async function execute(interaction) {
     
     if (!player) {
         return interaction.reply({
-            embeds: [createErrorEmbed('Not Registered', `${targetUser.username} is not registered yet.`)],
+            embeds: [createErrorEmbed('Не зарегистрирован', `Игрок не зарегистрирован.`)],
             ephemeral: true
         });
     }
@@ -45,14 +45,14 @@ export async function execute(interaction) {
     
     if (!item) {
         return interaction.reply({
-            embeds: [createErrorEmbed('Item Not Found', `Item with ID "${itemId}" does not exist in the database.`)],
+            embeds: [createErrorEmbed('Предмет не найден', `Предмет с ID "${itemId}" не существует в базе данных.`)],
             ephemeral: true
         });
     }
     
     if (qty < 1) {
         return interaction.reply({
-            embeds: [createErrorEmbed('Invalid Quantity', 'Quantity must be at least 1.')],
+            embeds: [createErrorEmbed('Некорректное количество', 'Количество должно быть не меньше 1.')],
             ephemeral: true
         });
     }
@@ -60,12 +60,13 @@ export async function execute(interaction) {
     const success = giveItem(playerId, itemId, qty, interaction.user.id);
     
     if (success) {
+        const name = player.character_name || player.username;
         return interaction.reply({
-            embeds: [createSuccessEmbed('Item Given', `Gave **${qty}x ${item.name}** to **${targetUser.username}**.`)]
+            embeds: [createSuccessEmbed('Предмет выдан', `Выдано **${qty}x ${item.name}** игроку **${name}**`)]
         });
     } else {
         return interaction.reply({
-            embeds: [createErrorEmbed('Error', 'Failed to give item.')],
+            embeds: [createErrorEmbed('Ошибка', 'Не удалось выдать предмет.')],
             ephemeral: true
         });
     }

@@ -5,36 +5,38 @@ import { isAdmin } from '../utils/adminCheck.js';
 
 export const data = new SlashCommandBuilder()
     .setName('add-style')
-    .setDescription('[ADMIN] Create a new martial arts style')
+    .setDescription('[АДМИН] Создать новый боевой стиль')
     .addStringOption(option =>
         option.setName('name')
-            .setDescription('The name of the style')
-            .setRequired(true))
-    .addStringOption(option =>
-        option.setName('description')
-            .setDescription('Description of the style')
+            .setDescription('Название стиля')
             .setRequired(true));
 
 export async function execute(interaction) {
     if (!isAdmin(interaction.member)) {
         return interaction.reply({
-            embeds: [createErrorEmbed('Permission Denied', 'You must be a Game Master or admin to use this command.')],
+            embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
             ephemeral: true
         });
     }
     
     const name = interaction.options.getString('name');
-    const description = interaction.options.getString('description');
     
-    const success = addStyle(name, description, interaction.user.id);
+    if (name.length < 2 || name.length > 50) {
+        return interaction.reply({
+            embeds: [createErrorEmbed('Некорректное название', 'Название должно быть от 2 до 50 символов.')],
+            ephemeral: true
+        });
+    }
+    
+    const success = addStyle(name, interaction.user.id);
     
     if (success) {
         return interaction.reply({
-            embeds: [createSuccessEmbed('Style Created', `**${name}** has been added to the available martial arts styles!\n\n*${description}*`)]
+            embeds: [createSuccessEmbed('Стиль создан', `**${name}** был добавлен в список доступных боевых стилей!`)]
         });
     } else {
         return interaction.reply({
-            embeds: [createErrorEmbed('Error', 'Failed to create style. It may already exist.')],
+            embeds: [createErrorEmbed('Ошибка', 'Не удалось создать стиль. Возможно, он уже существует.')],
             ephemeral: true
         });
     }

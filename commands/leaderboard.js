@@ -4,19 +4,20 @@ import { createInfoEmbed } from '../utils/embeds.js';
 
 export const data = new SlashCommandBuilder()
     .setName('leaderboard')
-    .setDescription('View the top players')
+    .setDescription('Просмотр топа игроков')
     .addStringOption(option =>
         option.setName('sort_by')
-            .setDescription('What to sort by')
+            .setDescription('По чему сортировать')
             .setRequired(false)
             .addChoices(
-                { name: 'AP (Ability Points)', value: 'ap' },
-                { name: 'SP (Style Points)', value: 'sp' },
-                { name: 'Balance (Coins)', value: 'balance' }
+                { name: 'AP (Очки способностей)', value: 'ap' },
+                { name: 'SP (Очки стилей)', value: 'sp' },
+                { name: 'KRW (₩)', value: 'krw' },
+                { name: 'Йены (¥)', value: 'yen' }
             ))
     .addIntegerOption(option =>
         option.setName('limit')
-            .setDescription('Number of players to show (default: 10)')
+            .setDescription('Количество игроков (по умолчанию: 10)')
             .setRequired(false));
 
 export async function execute(interaction) {
@@ -25,7 +26,7 @@ export async function execute(interaction) {
     
     if (limit < 1 || limit > 50) {
         return interaction.reply({
-            content: 'Limit must be between 1 and 50.',
+            content: 'Лимит должен быть от 1 до 50.',
             ephemeral: true
         });
     }
@@ -34,31 +35,41 @@ export async function execute(interaction) {
     
     if (leaderboard.length === 0) {
         return interaction.reply({
-            embeds: [createInfoEmbed('📊 Leaderboard', 'No players registered yet.')],
+            embeds: [createInfoEmbed('📊 Таблица лидеров', 'Пока нет зарегистрированных игроков.')],
             ephemeral: true
         });
     }
     
-    let title = '📊 Leaderboard';
+    let title = '📊 Таблица лидеров';
     let leaderboardText = '';
     
     if (sortBy === 'ap') {
-        title += ' - Top AP';
+        title += ' - Топ по AP';
         leaderboardText = leaderboard.map((player, index) => {
             const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `**${index + 1}.**`;
-            return `${medal} **${player.username}** - ${player.ap} AP`;
+            const name = player.character_name || player.username;
+            return `${medal} **${name}** - ${player.ap} AP`;
         }).join('\n');
     } else if (sortBy === 'sp') {
-        title += ' - Top SP';
+        title += ' - Топ по SP';
         leaderboardText = leaderboard.map((player, index) => {
             const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `**${index + 1}.**`;
-            return `${medal} **${player.username}** - ${player.total_sp} SP`;
+            const name = player.character_name || player.username;
+            return `${medal} **${name}** - ${player.total_sp} SP`;
         }).join('\n');
-    } else if (sortBy === 'balance') {
-        title += ' - Top Balance';
+    } else if (sortBy === 'krw') {
+        title += ' - Топ по KRW';
         leaderboardText = leaderboard.map((player, index) => {
             const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `**${index + 1}.**`;
-            return `${medal} **${player.username}** - ${player.balance} coins`;
+            const name = player.character_name || player.username;
+            return `${medal} **${name}** - ${player.krw.toLocaleString('ru-RU')} ₩`;
+        }).join('\n');
+    } else if (sortBy === 'yen') {
+        title += ' - Топ по Йенам';
+        leaderboardText = leaderboard.map((player, index) => {
+            const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `**${index + 1}.**`;
+            const name = player.character_name || player.username;
+            return `${medal} **${name}** - ${player.yen.toLocaleString('ru-RU')} ¥`;
         }).join('\n');
     }
     

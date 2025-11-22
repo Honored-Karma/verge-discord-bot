@@ -5,20 +5,20 @@ import { isAdmin } from '../utils/adminCheck.js';
 
 export const data = new SlashCommandBuilder()
     .setName('add-ap')
-    .setDescription('[ADMIN] Add AP to a player')
+    .setDescription('[АДМИН] Добавить AP игроку')
     .addUserOption(option =>
         option.setName('user')
-            .setDescription('The player to modify')
+            .setDescription('Игрок для изменения')
             .setRequired(true))
     .addIntegerOption(option =>
         option.setName('amount')
-            .setDescription('The AP amount to add (can be negative)')
+            .setDescription('Количество AP для добавления (может быть отрицательным)')
             .setRequired(true));
 
 export async function execute(interaction) {
     if (!isAdmin(interaction.member)) {
         return interaction.reply({
-            embeds: [createErrorEmbed('Permission Denied', 'You must be a Game Master or admin to use this command.')],
+            embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
             ephemeral: true
         });
     }
@@ -31,7 +31,7 @@ export async function execute(interaction) {
     
     if (!player) {
         return interaction.reply({
-            embeds: [createErrorEmbed('Not Registered', `${targetUser.username} is not registered yet.`)],
+            embeds: [createErrorEmbed('Не зарегистрирован', `Игрок не зарегистрирован.`)],
             ephemeral: true
         });
     }
@@ -40,11 +40,12 @@ export async function execute(interaction) {
     
     if (newAP !== false) {
         return interaction.reply({
-            embeds: [createSuccessEmbed('AP Updated', `Added **${amount} AP** to **${targetUser.username}**. New total: **${newAP} AP**.`)]
+            embeds: [createSuccessEmbed('AP обновлено', 
+                `Добавлено **${amount} AP** игроку **${player.character_name || player.username}**.\n\nНовый баланс: **${newAP} AP**`)]
         });
     } else {
         return interaction.reply({
-            embeds: [createErrorEmbed('Error', 'Failed to update AP.')],
+            embeds: [createErrorEmbed('Ошибка', 'Не удалось обновить AP.')],
             ephemeral: true
         });
     }

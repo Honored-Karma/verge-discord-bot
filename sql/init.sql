@@ -2,7 +2,10 @@
 CREATE TABLE IF NOT EXISTS players (
     id TEXT PRIMARY KEY,
     username TEXT NOT NULL,
-    balance INTEGER DEFAULT 0,
+    character_name TEXT,
+    character_avatar TEXT,
+    krw INTEGER DEFAULT 0,
+    yen INTEGER DEFAULT 0,
     ap INTEGER DEFAULT 0,
     last_train_timestamp INTEGER DEFAULT 0,
     last_socialrp_timestamp INTEGER DEFAULT 0,
@@ -23,7 +26,6 @@ CREATE TABLE IF NOT EXISTS player_sp (
 CREATE TABLE IF NOT EXISTS styles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT UNIQUE NOT NULL,
-    description TEXT,
     created_by TEXT,
     created_at INTEGER NOT NULL
 );
@@ -56,19 +58,7 @@ CREATE TABLE IF NOT EXISTS admin_actions (
     timestamp INTEGER NOT NULL
 );
 
--- Insert default styles
-INSERT OR IGNORE INTO styles (name, description, created_by, created_at) VALUES
-    ('Aikido: reverse', 'The art of redirecting force and energy', 'system', strftime('%s', 'now')),
-    ('Blood Taekwondo', 'Aggressive striking style focused on devastating kicks', 'system', strftime('%s', 'now')),
-    ('Muay Thai', 'The art of eight limbs combining punches, kicks, elbows, and knees', 'system', strftime('%s', 'now')),
-    ('Dark Jiu-Jitsu', 'Grappling and submission techniques shrouded in shadow', 'system', strftime('%s', 'now')),
-    ('Sun Kendo', 'Sword mastery infused with radiant energy', 'system', strftime('%s', 'now')),
-    ('Qi boxing', 'Internal energy channeled through devastating punches', 'system', strftime('%s', 'now')),
-    ('Wolgwang Sword Style', 'Moonlight blade techniques of precision and grace', 'system', strftime('%s', 'now')),
-    ('Kyokushin Karate', 'Full-contact striking and iron body conditioning', 'system', strftime('%s', 'now'));
-
 -- Insert default items
 INSERT OR IGNORE INTO items (id, name, type, effect, created_at) VALUES
-    ('ap_tome_50', 'AP Tome (50)', 'consumable', '{"ap":50}', strftime('%s', 'now')),
-    ('ap_tome_100', 'AP Tome (100)', 'consumable', '{"ap":100}', strftime('%s', 'now')),
-    ('sp_scroll_muay_thai', 'SP Scroll: Muay Thai', 'consumable', '{"sp":{"style":"Muay Thai","value":30}}', strftime('%s', 'now'));
+    ('ap_tome_50', 'Том АП (50)', 'consumable', '{"ap":50}', strftime('%s', 'now')),
+    ('ap_tome_100', 'Том АП (100)', 'consumable', '{"ap":100}', strftime('%s', 'now'));

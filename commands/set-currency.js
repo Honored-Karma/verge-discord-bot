@@ -1,22 +1,26 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { getPlayer, getStyleByName, addSP } from '../utils/dataManager.js';
+import { getPlayer, setCurrency } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin } from '../utils/adminCheck.js';
 
 export const data = new SlashCommandBuilder()
-    .setName('add-sp')
-    .setDescription('[АДМИН] Добавить SP игроку для стиля')
+    .setName('set-currency')
+    .setDescription('[АДМИН] Установить валюту игрока')
     .addUserOption(option =>
         option.setName('user')
-            .setDescription('Игрок для изменения')
+            .setDescription('Игрок')
             .setRequired(true))
     .addStringOption(option =>
-        option.setName('style')
-            .setDescription('Название боевого стиля')
-            .setRequired(true))
+        option.setName('currency')
+            .setDescription('Валюта')
+            .setRequired(true)
+            .addChoices(
+                { name: 'KRW (₩)', value: 'krw' },
+                { name: 'Йены (¥)', value: 'yen' }
+            ))
     .addIntegerOption(option =>
         option.setName('amount')
-            .setDescription('Количество SP для добавления')
+            .setDescription('Количество')
             .setRequired(true));
 
 export async function execute(interaction) {
@@ -28,7 +32,7 @@ export async function execute(interaction) {
     }
     
     const targetUser = interaction.options.getUser('user');
-    const styleName = interaction.options.getString('style');
+    const currency = interaction.options.getString('currency');
     const amount = interaction.options.getInteger('amount');
     const playerId = targetUser.id;
     
@@ -41,26 +45,25 @@ export async function execute(interaction) {
         });
     }
     
-    const style = getStyleByName(styleName);
-    
-    if (!style) {
+    if (amount < 0) {
         return interaction.reply({
-            embeds: [createErrorEmbed('Стиль не найден', `Стиль "${styleName}" не существует. Используйте \`/styles-list\` для просмотра доступных стилей.`)],
+            embeds: [createErrorEmbed('Некорректная сумма', 'Сумма не может быть отрицательной.')],
             ephemeral: true
         });
     }
     
-    const newSP = addSP(playerId, style.id, amount, interaction.user.id);
+    const success = setCurrency(playerId, currency, amount, interaction.user.id);
     
-    if (newSP !== false) {
-        const rank = newSP >= 2500 ? 'Мастер' : newSP >= 1000 ? 'Эксперт' : newSP >= 350 ? 'Владелец' : 'Новичок';
+    if (success) {
+        const currencySymbol = currency === 'krw' ? '₩' : '¥';
+        
         return interaction.reply({
-            embeds: [createSuccessEmbed('SP обновлено', 
-                `Добавлено **${amount} SP** к стилю **${styleName}** игроку **${player.character_name || player.username}**\n\nНовый баланс: **${newSP} SP** (${rank})`)]
+            embeds: [createSuccessEmbed('Валюта установлена', 
+                `Установлен баланс **${amount.toLocaleString('ru-RU')} ${currencySymbol}** для игрока **${player.character_name || player.username}**`)]
         });
     } else {
         return interaction.reply({
-            embeds: [createErrorEmbed('Ошибка', 'Не удалось обновить SP.')],
+            embeds: [createErrorEmbed('Ошибка', 'Не удалось установить валюту.')],
             ephemeral: true
         });
     }

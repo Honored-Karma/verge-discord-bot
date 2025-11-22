@@ -1,13 +1,13 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { getPlayer, getAllPlayerSP, getPlayerInventory } from '../utils/dataManager.js';
-import { createProfileEmbed, createErrorEmbed } from '../utils/embeds.js';
+import { getPlayer, getAllPlayerSP } from '../utils/dataManager.js';
+import { createProfileMainPage, createProfileAPSPPage, createProfileStylesPage, createProfileButtons, createStyleNavigationButtons, createErrorEmbed } from '../utils/embeds.js';
 
 export const data = new SlashCommandBuilder()
     .setName('profile')
-    .setDescription('View a player profile')
+    .setDescription('Просмотр профиля игрока')
     .addUserOption(option =>
         option.setName('user')
-            .setDescription('The user to view (leave empty for yourself)')
+            .setDescription('Пользователь для просмотра (оставьте пустым для себя)')
             .setRequired(false));
 
 export async function execute(interaction) {
@@ -18,15 +18,66 @@ export async function execute(interaction) {
     
     if (!player) {
         return interaction.reply({
-            embeds: [createErrorEmbed('Not Registered', `${targetUser.username} is not registered yet. Use \`/register\` to get started!`)],
+            embeds: [createErrorEmbed('Не зарегистрирован', `Игрок не зарегистрирован. Используйте \`/register\` для начала!`)],
             ephemeral: true
         });
     }
     
-    const styles = getAllPlayerSP(playerId);
-    const inventory = getPlayerInventory(playerId);
+    const embed = createProfileMainPage(player, targetUser);
+    const buttons = createProfileButtons(0);
     
-    const embed = createProfileEmbed(player, styles, inventory, targetUser);
+    const response = await interaction.reply({ 
+        embeds: [embed], 
+        components: [buttons],
+        fetchReply: true
+    });
     
-    return interaction.reply({ embeds: [embed] });
+    const collector = response.createMessageComponentCollector({ time: 300000 });
+    
+    let currentPage = 0;
+    let stylesPage = 0;
+    
+    collector.on('collect', async i => {
+        if (i.user.id !== interaction.user.id) {
+            return i.reply({ content: 'Это не ваш профиль!', ephemeral: true });
+        }
+        
+        const styles = getAllPlayerSP(playerId);
+        let newEmbed, newButtons;
+        
+        if (i.customId === 'profile_main') {
+            currentPage = 0;
+            newEmbed = createProfileMainPage(player, targetUser);
+            newButtons = [createProfileButtons(0)];
+        } else if (i.customId === 'profile_apsp') {
+            currentPage = 1;
+            newEmbed = createProfileAPSPPage(player, targetUser);
+            newButtons = [createProfileButtons(1)];
+        } else if (i.customId === 'profile_styles') {
+            currentPage = 2;
+            stylesPage = 0;
+            const result = createProfileStylesPage(player, styles, targetUser, stylesPage);
+            newEmbed = result.embed;
+            newButtons = [createProfileButtons(2)];
+            if (result.totalPages > 1) {
+                newButtons.push(createStyleNavigationButtons(stylesPage, result.totalPages));
+            }
+        } else if (i.customId === 'styles_prev') {
+            stylesPage = Math.max(0, stylesPage - 1);
+            const result = createProfileStylesPage(player, styles, targetUser, stylesPage);
+            newEmbed = result.embed;
+            newButtons = [createProfileButtons(2), createStyleNavigationButtons(stylesPage, result.totalPages)];
+        } else if (i.customId === 'styles_next') {
+            const result = createProfileStylesPage(player, styles, targetUser, stylesPage + 1);
+            stylesPage++;
+            newEmbed = result.embed;
+            newButtons = [createProfileButtons(2), createStyleNavigationButtons(stylesPage, result.totalPages)];
+        }
+        
+        await i.update({ embeds: [newEmbed], components: newButtons });
+    });
+    
+    collector.on('end', () => {
+        interaction.editReply({ components: [] }).catch(() => {});
+    });
 }

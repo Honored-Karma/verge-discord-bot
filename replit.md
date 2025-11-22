@@ -1,143 +1,156 @@
 # Discord RPG Bot Project
 
 ## Overview
-Discord RPG bot with comprehensive player progression system, martial arts training mechanics, and admin management tools. Built with Node.js, discord.js v14, and SQLite.
+Discord RPG бот с системой прогрессии персонажей, боевыми стилями, двумя валютами и админ-инструментами. Построен на Node.js, discord.js v14 и SQLite. Полностью руссифицирован.
 
 ## Recent Changes
-- **2025-11-22**: Initial project setup
-  - Created complete Discord bot infrastructure with 13 slash commands
-  - Implemented database schema with SQLite (players, styles, inventory, SP tracking)
-  - Set up AP/SP progression system with cooldowns and validation
-  - Added admin tools for player management
-  - Configured 8 default martial arts styles
-  - Created comprehensive documentation
+- **2025-11-22**: Полная переработка бота
+  - Руссификация всех команд и сообщений
+  - Добавлены две валюты: KRW (₩) и Йены (¥)
+  - Обновлена регистрация с вводом имени и аватара персонажа
+  - Создан новый интерактивный профиль с кнопками (3 страницы)
+  - Убраны стартовые стили - админы добавляют по желанию
+  - Добавлена команда /pay с налогом 2%
+  - Добавлены команды управления валютами для админов
+  - Улучшено отображение SP с прогресс-барами
+  - Скрытие нулевых валют в профиле и топе
 
 ## Architecture
 
 ### Database Schema
-- **players**: User profiles with AP progression and timestamps
-- **player_sp**: Style-specific SP tracking (many-to-many relationship)
-- **styles**: Martial arts styles with descriptions
-- **items**: Item definitions with JSON effects
-- **inventory**: Player item storage
-- **admin_actions**: Audit log for all admin changes
+- **players**: Профили с character_name, character_avatar, krw, yen, ap
+- **player_sp**: SP для каждого стиля отдельно
+- **styles**: Боевые стили (без описаний, только названия)
+- **items**: Предметы с эффектами
+- **inventory**: Инвентарь игроков
+- **admin_actions**: Лог действий админов
 
 ### Command Structure
-**User Commands:**
-- `/register` - Player registration
-- `/train` - AP earning through training (800+ chars, 5h cooldown)
-- `/social-rp` - AP earning through RP (20 AP, 12h cooldown)
-- `/profile` - Display player stats and progression
-- `/inventory` - View items
-- `/styles-list` - Show available martial arts
-- `/leaderboard` - Rankings by AP/SP/balance
+**Пользовательские команды:**
+- `/register <имя> [аватар]` - Регистрация с именем персонажа
+- `/train <текст>` - Тренировка (800+ символов, 10 AP, 5ч кулдаун)
+- `/social-rp <текст>` - Взаимодействие (20 AP, 12ч кулдаун)
+- `/profile [@игрок]` - Интерактивный профиль с кнопками
+- `/inventory [@игрок]` - Просмотр инвентаря
+- `/styles-list` - Список доступных стилей
+- `/leaderboard [тип] [лимит]` - Таблица лидеров (AP/SP/KRW/Йены)
+- `/pay <игрок> <валюта> <сумма>` - Перевод валюты (налог 2%)
 
-**Admin Commands:**
-- `/set-ap`, `/add-ap` - Modify player AP
-- `/set-sp`, `/add-sp` - Modify style-specific SP
-- `/add-style` - Create new martial arts styles
-- `/give-item` - Distribute items to players
+**Админ-команды:**
+- `/set-ap`, `/add-ap` - Управление AP
+- `/set-sp`, `/add-sp` - Управление SP по стилям
+- `/set-currency`, `/add-currency` - Управление валютами
+- `/add-style <название>` - Создание новых стилей
+- `/give-item <игрок> <id> [количество]` - Выдача предметов
+
+### Новая система профиля
+**Страница 1 - Основная информация:**
+- Имя и аватар персонажа
+- AP и количество техник
+- Статус Avatar/Embodiment (при 1000 AP)
+- Валюты (скрываются если 0)
+
+**Страница 2 - Прогресс AP/SP:**
+- Прогресс-бар к следующей технике
+- Общий SP
+- Детальная информация о прогрессии
+
+**Страница 3 - Боевые стили:**
+- Список изученных стилей с SP
+- Прогресс-бары для каждого стиля
+- Ранги: Новичок/Владелец/Эксперт/Мастер
+- Пагинация стрелками (по 3 стиля)
+
+### Экономическая система
+**Две валюты:**
+- KRW (₩) - Южнокорейская вона
+- Йены (¥) - Японская иена
+
+**Механика перевода:**
+- Команда `/pay` для перевода между игроками
+- Налог 2% с каждой транзакции
+- Скрытие нулевых балансов
 
 ### Progression Systems
 
 **AP (Ability Points):**
-- Training: 10 AP per submission (800+ characters, 5h cooldown)
-- Social RP: 20 AP per submission (12h cooldown)
-- Milestone: Every 100 AP unlocks a technique
-- Avatar unlock at 1000 AP
+- Тренировка: 10 AP (800+ символов, 5ч кулдаун)
+- Соц. взаимодействие: 20 AP (12ч кулдаун)
+- Каждые 100 AP = 1 техника
+- 1000 AP = Avatar/Embodiment
 
 **SP (Style Points):**
-- Style-specific progression
-- Ranks: Novice (0), Owner (350), Expert (1000), Master (2500)
-- Admin-managed progression
+- Управляется администраторами
+- Ранги: Новичок (0), Владелец (350), Эксперт (1000), Мастер (2500)
+- Отображение прогресса к следующему рангу
 
 ### Technology Stack
-- **Runtime**: Node.js 20+ with ES modules
+- **Runtime**: Node.js 20+ с ES модулями
 - **Discord API**: discord.js v14
 - **Database**: better-sqlite3 (SQLite)
-- **Environment**: dotenv for configuration
-- **Utilities**: ms for time parsing
+- **Environment**: dotenv
+- **Utilities**: ms для времени
 
 ## Required Configuration
 
-### Discord Setup
-1. Create bot at [Discord Developer Portal](https://discord.com/developers/applications)
-2. Enable necessary intents (Guilds, GuildMessages, MessageContent)
-3. Generate bot token
-4. Get application Client ID
-5. Invite bot with proper permissions
-
 ### Environment Variables (Secrets)
-- `DISCORD_TOKEN` or `TOKEN` - Bot token (REQUIRED)
-- `CLIENT_ID` - Application ID (REQUIRED for command deployment)
-- `GUILD_ID` - Server ID for dev testing (OPTIONAL)
-- `ADMIN_IDS` - Comma-separated admin user IDs (OPTIONAL)
+- `DISCORD_TOKEN` или `TOKEN` - Токен бота (ОБЯЗАТЕЛЬНО)
+- `CLIENT_ID` - ID приложения (ОБЯЗАТЕЛЬНО)
+- `GUILD_ID` - ID сервера для тестирования (ОПЦИОНАЛЬНО)
+- `ADMIN_IDS` - ID админов через запятую (ОПЦИОНАЛЬНО)
 
 ### Admin Permissions
-Admins are determined by:
-1. Users in ADMIN_IDS environment variable
-2. Users with "Game Master" role
-3. Server owner (fallback)
+Админами являются:
+1. Пользователи в ADMIN_IDS
+2. Роль "Game Master"
+3. Владелец сервера
+4. Discord Administrator права
 
 ## File Structure
 ```
-├── commands/           # Slash command handlers (13 files)
-├── utils/             # Utility modules
-│   ├── db.js         # Database connection & initialization
-│   ├── dataManager.js # CRUD operations
-│   ├── progressBar.js # Progress visualization
-│   ├── cooldowns.js  # Cooldown validation
-│   └── embeds.js     # Discord embed builders
-├── sql/              # Database schema
-│   └── init.sql      # Table definitions & default data
-├── data/             # Configuration
-│   └── default_items.json # Item definitions
-├── logs/             # Action logging
-│   └── actions.log   # Admin action audit trail
-├── index.js          # Main bot entry point
-├── deploy-commands.js # Slash command registration
-└── package.json      # Dependencies and scripts
+├── commands/           # 16 slash команд
+├── utils/             # Утилиты
+│   ├── db.js         # БД подключение
+│   ├── dataManager.js # CRUD операции
+│   ├── progressBar.js # Прогресс-бары
+│   ├── cooldowns.js  # Кулдауны
+│   ├── embeds.js     # Discord embeds
+│   └── adminCheck.js # Проверка прав
+├── sql/              # Схема БД
+│   └── init.sql      # Таблицы и стартовые данные
+├── data/             # Конфигурация
+│   └── default_items.json # Предметы
+├── logs/             # Логи
+│   └── actions.log   # Аудит действий админов
+├── index.js          # Главный файл
+├── deploy-commands.js # Регистрация команд
+└── package.json      # Зависимости
 ```
 
 ## Deployment Workflow
-1. Set Discord credentials in Secrets
-2. Run `npm run deploy` to register commands
-3. Run `npm start` to launch bot
-4. Verify bot connection in console
-
-## Database Features
-- Automatic initialization from init.sql
-- WAL mode for better concurrency
-- Foreign key constraints for data integrity
-- Default martial arts styles pre-populated
-- Sample items included
+1. Установите DISCORD_TOKEN и CLIENT_ID в Secrets
+2. Запустите `npm run deploy` для регистрации команд
+3. Бот автоматически запустится
+4. Проверьте подключение в консоли
 
 ## Security Features
-- Prepared statements for SQL injection prevention
-- Input validation (text length, character composition)
-- Admin action logging (database + file)
-- Cooldown enforcement with timestamp tracking
-- Role-based access control
-
-## Default Martial Arts Styles
-1. Aikido: reverse
-2. Blood Taekwondo
-3. Muay Thai
-4. Dark Jiu-Jitsu
-5. Sun Kendo
-6. Qi boxing
-7. Wolgwang Sword Style
-8. Kyokushin Karate
+- Prepared statements (защита от SQL injection)
+- Валидация ввода (длина, символы)
+- Логирование действий админов
+- Проверка кулдаунов
+- Многоуровневая проверка прав
 
 ## User Preferences
-- Language: Russian (user speaks Russian)
-- Code style: ES modules, modern JavaScript
-- Comments: Simple English in code
-- Error handling: Comprehensive with user-friendly messages
+- Язык: Русский (полная руссификация)
+- Стиль кода: ES модули, современный JavaScript
+- Команды: На английском, содержимое на русском
+- Без "ролевых" формулировок
 
 ## Notes
-- Bot uses slash commands only (no prefix commands)
-- All interactions use Discord embeds for better UX
-- Progress bars use Unicode block characters
-- Database file: `rpg_bot.db` (auto-created)
-- Commands deploy instantly to guild, globally within 1 hour
+- Бот использует только slash команды
+- Все взаимодействия через Discord embeds
+- Прогресс-бары Unicode символами
+- БД файл: `rpg_bot.db` (создается автоматически)
+- Интерактивные кнопки в профиле
+- Стили добавляются админами по желанию
+- Валюты скрываются если равны 0

@@ -9,10 +9,10 @@ const TRAIN_AP_REWARD = 10;
 
 export const data = new SlashCommandBuilder()
     .setName('train')
-    .setDescription('Submit training text to earn AP (800+ characters, 5 hour cooldown)')
+    .setDescription('Тренировка для получения AP (800+ символов, кулдаун 5 часов)')
     .addStringOption(option =>
         option.setName('text')
-            .setDescription('Your training roleplay text (minimum 800 characters)')
+            .setDescription('Текст тренировки (минимум 800 символов)')
             .setRequired(true));
 
 export async function execute(interaction) {
@@ -23,14 +23,16 @@ export async function execute(interaction) {
     let player = getPlayer(playerId);
     
     if (!player) {
-        createPlayer(playerId, username);
-        player = getPlayer(playerId);
+        return interaction.reply({
+            embeds: [createErrorEmbed('Не зарегистрирован', 'Сначала зарегистрируйтесь командой `/register`!')],
+            ephemeral: true
+        });
     }
     
     const validation = validateTrainingText(trainingText);
     if (!validation.valid) {
         return interaction.reply({
-            embeds: [createErrorEmbed('Invalid Training Text', validation.reason)],
+            embeds: [createErrorEmbed('Некорректный текст', validation.reason)],
             ephemeral: true
         });
     }
@@ -38,7 +40,7 @@ export async function execute(interaction) {
     const cooldownCheck = checkCooldown(player.last_train_timestamp, TRAIN_COOLDOWN);
     if (cooldownCheck.onCooldown) {
         return interaction.reply({
-            embeds: [createErrorEmbed('Training Cooldown', `You must wait **${cooldownCheck.remainingFormatted}** before training again.`)],
+            embeds: [createErrorEmbed('Кулдаун', `Следующая тренировка доступна через **${cooldownCheck.remainingFormatted}**`)],
             ephemeral: true
         });
     }
@@ -47,7 +49,7 @@ export async function execute(interaction) {
     
     if (newAP === false) {
         return interaction.reply({
-            embeds: [createErrorEmbed('Error', 'Failed to add AP. Please try again.')],
+            embeds: [createErrorEmbed('Ошибка', 'Не удалось добавить AP. Попробуйте снова.')],
             ephemeral: true
         });
     }
@@ -55,15 +57,15 @@ export async function execute(interaction) {
     const apProgress = getAPProgress(newAP);
     const progressText = progressBar(apProgress.current, apProgress.max, 20);
     
-    const embed = createSuccessEmbed('Training Complete!', 
-        `You have earned **${TRAIN_AP_REWARD} AP**!\n\n` +
-        `**Total AP:** ${newAP}\n` +
-        `**Techniques Unlocked:** ${apProgress.techniques}\n\n` +
-        `**Progress to Next Technique:**\n${progressText}`
+    const embed = createSuccessEmbed('Тренировка завершена!', 
+        `Вы получили **${TRAIN_AP_REWARD} AP**!\n\n` +
+        `**Всего AP:** ${newAP}\n` +
+        `**Техник разблокировано:** ${apProgress.techniques}\n\n` +
+        `**Прогресс к следующей технике:**\n${progressText}`
     );
     
     if (newAP >= 1000) {
-        embed.setDescription(embed.data.description + '\n\n🌟 **You have reached 1000 AP! Avatar/Embodiment is now available!**');
+        embed.setDescription(embed.data.description + '\n\n🌟 **Вы достигли 1000 AP! Avatar/Embodiment доступен!**');
     }
     
     return interaction.reply({ embeds: [embed] });

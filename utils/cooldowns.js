@@ -35,14 +35,14 @@ export function formatTime(ms) {
 
 export function validateTrainingText(text) {
     if (text.length < 800) {
-        return { valid: false, reason: `Training text must be at least 800 characters. Current: ${text.length}` };
+        return { valid: false, reason: `Текст тренировки должен содержать минимум 800 символов. Сейчас: ${text.length}` };
     }
     
-    const letterDigitSpaceCount = (text.match(/[a-zA-Z0-9\s]/g) || []).length;
+    const letterDigitSpaceCount = (text.match(/[a-zA-Zа-яА-ЯёЁ0-9\s]/g) || []).length;
     const percentage = (letterDigitSpaceCount / text.length) * 100;
     
     if (percentage < 50) {
-        return { valid: false, reason: 'Training text must contain at least 50% letters, digits, or spaces. No spamming links or symbols.' };
+        return { valid: false, reason: 'Текст должен содержать минимум 50% букв, цифр или пробелов. Запрещен спам ссылками или символами.' };
     }
     
     return { valid: true };

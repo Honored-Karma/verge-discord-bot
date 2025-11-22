@@ -4,30 +4,56 @@ import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 
 export const data = new SlashCommandBuilder()
     .setName('register')
-    .setDescription('Register yourself in the RPG system');
+    .setDescription('Зарегистрироваться в системе')
+    .addStringOption(option =>
+        option.setName('character_name')
+            .setDescription('Имя вашего персонажа')
+            .setRequired(true))
+    .addAttachmentOption(option =>
+        option.setName('avatar')
+            .setDescription('Аватар персонажа (необязательно)')
+            .setRequired(false));
 
 export async function execute(interaction) {
     const playerId = interaction.user.id;
     const username = interaction.user.username;
+    const characterName = interaction.options.getString('character_name');
+    const avatarAttachment = interaction.options.getAttachment('avatar');
     
     const existingPlayer = getPlayer(playerId);
     
     if (existingPlayer) {
         return interaction.reply({
-            embeds: [createErrorEmbed('Already Registered', 'You are already registered in the system!')],
+            embeds: [createErrorEmbed('Уже зарегистрирован', 'Вы уже зарегистрированы в системе!')],
             ephemeral: true
         });
     }
     
-    const success = createPlayer(playerId, username);
+    if (characterName.length < 2 || characterName.length > 32) {
+        return interaction.reply({
+            embeds: [createErrorEmbed('Некорректное имя', 'Имя персонажа должно быть от 2 до 32 символов.')],
+            ephemeral: true
+        });
+    }
+    
+    let avatarUrl = null;
+    if (avatarAttachment) {
+        if (avatarAttachment.contentType && avatarAttachment.contentType.startsWith('image/')) {
+            avatarUrl = avatarAttachment.url;
+        }
+    }
+    
+    const success = createPlayer(playerId, username, characterName, avatarUrl);
     
     if (success) {
         return interaction.reply({
-            embeds: [createSuccessEmbed('Registration Complete', `Welcome, **${username}**! You have been registered in the RPG system.\n\nUse \`/train\` to earn AP and \`/profile\` to view your progress!`)]
+            embeds: [createSuccessEmbed('Регистрация завершена', 
+                `Добро пожаловать, **${characterName}**!\n\n` +
+                `Используйте \`/train\` для получения AP и \`/profile\` для просмотра профиля!`)]
         });
     } else {
         return interaction.reply({
-            embeds: [createErrorEmbed('Registration Failed', 'An error occurred during registration. Please try again.')],
+            embeds: [createErrorEmbed('Ошибка регистрации', 'Произошла ошибка при регистрации. Попробуйте снова.')],
             ephemeral: true
         });
     }
