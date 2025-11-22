@@ -29,7 +29,8 @@ export async function execute(interaction) {
     
     const targetUser = interaction.options.getUser('user');
     const styleName = interaction.options.getString('style_name');
-    const initialSP = interaction.options.getInteger('initial_sp') || 0;
+    let initialSP = interaction.options.getInteger('initial_sp');
+    if (initialSP === null) initialSP = 1;
     const playerId = targetUser.id;
     
     const player = getPlayer(playerId);

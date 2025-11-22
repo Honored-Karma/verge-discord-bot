@@ -366,3 +366,20 @@ export function deletePlayer(playerId, adminId) {
         return false;
     }
 }
+
+export function deleteStyle(styleId, adminId) {
+    try {
+        const style = db.prepare('SELECT * FROM styles WHERE id = ?').get(styleId);
+        if (!style) return false;
+        
+        // Удаляем стиль и все связанные данные
+        db.prepare('DELETE FROM player_sp WHERE style_id = ?').run(styleId);
+        db.prepare('DELETE FROM styles WHERE id = ?').run(styleId);
+        
+        logAdminAction(adminId, 'DELETE_STYLE', `Удалил стиль: ${style.name}`);
+        return true;
+    } catch (error) {
+        console.error('Error deleting style:', error);
+        return false;
+    }
+}
