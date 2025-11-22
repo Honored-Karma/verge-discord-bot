@@ -148,7 +148,7 @@ function createProgressBar(current, max, length = 20) {
 
 function createSPProgressBar(sp) {
     // Определяем диапазоны и следующую цель для каждого ранга
-    let currentMin, currentMax, nextTarget;
+    let currentMin, nextTarget;
     
     if (sp >= 2500) {
         return '█████████████████████ 100% (МАСТЕР)';
@@ -168,8 +168,14 @@ function createSPProgressBar(sp) {
     
     const progress = sp - currentMin;
     const total = nextTarget - currentMin;
+    const percentage = Math.min(100, Math.max(0, (progress / total) * 100));
+    const filledBlocks = Math.floor((percentage / 100) * 20);
+    const emptyBlocks = 20 - filledBlocks;
     
-    return createProgressBar(progress, total, 20);
+    const filled = '█'.repeat(filledBlocks);
+    const empty = '░'.repeat(emptyBlocks);
+    
+    return `${filled}${empty} ${percentage.toFixed(0)}% (${sp}/${nextTarget})`;
 }
 
 function getSPRankInfo(sp) {
