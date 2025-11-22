@@ -67,6 +67,17 @@ export function addAP(playerId, amount, actionType = 'train') {
             avatarStmt.run(playerId);
         }
         
+        // Add "+Техника" items for every 100 AP milestone
+        const oldMilestones = Math.floor(player.ap / 100);
+        const newMilestones = Math.floor(newAP / 100);
+        const newTechniques = newMilestones - oldMilestones;
+        
+        if (newTechniques > 0) {
+            for (let i = 0; i < newTechniques; i++) {
+                giveItem(playerId, '+Техника', 1, 'system');
+            }
+        }
+        
         return newAP;
     } catch (error) {
         console.error('Error adding AP:', error);
@@ -219,11 +230,10 @@ export function getStylePlayerCount(styleId) {
 export function getPlayerInventory(playerId) {
     try {
         const stmt = db.prepare(`
-            SELECT i.id, i.name, i.type, i.effect, inv.qty 
-            FROM inventory inv 
-            JOIN items i ON inv.item_id = i.id 
-            WHERE inv.player_id = ?
-            ORDER BY inv.id DESC
+            SELECT item_name, qty 
+            FROM inventory 
+            WHERE player_id = ?
+            ORDER BY id DESC
         `);
         return stmt.all(playerId);
     } catch (error) {
@@ -232,20 +242,20 @@ export function getPlayerInventory(playerId) {
     }
 }
 
-export function giveItem(playerId, itemId, qty, adminId) {
+export function giveItem(playerId, itemName, qty, adminId) {
     try {
-        const checkStmt = db.prepare('SELECT * FROM inventory WHERE player_id = ? AND item_id = ?');
-        const existing = checkStmt.get(playerId, itemId);
+        const checkStmt = db.prepare('SELECT * FROM inventory WHERE player_id = ? AND item_name = ?');
+        const existing = checkStmt.get(playerId, itemName);
         
         if (existing) {
-            const updateStmt = db.prepare('UPDATE inventory SET qty = qty + ? WHERE player_id = ? AND item_id = ?');
-            updateStmt.run(qty, playerId, itemId);
+            const updateStmt = db.prepare('UPDATE inventory SET qty = qty + ? WHERE player_id = ? AND item_name = ?');
+            updateStmt.run(qty, playerId, itemName);
         } else {
-            const insertStmt = db.prepare('INSERT INTO inventory (player_id, item_id, qty) VALUES (?, ?, ?)');
-            insertStmt.run(playerId, itemId, qty);
+            const insertStmt = db.prepare('INSERT INTO inventory (player_id, item_name, qty) VALUES (?, ?, ?)');
+            insertStmt.run(playerId, itemName, qty);
         }
         
-        logAdminAction(adminId, 'GIVE_ITEM', `Выдал ${qty}x ${itemId} игроку ${playerId}`);
+        logAdminAction(adminId, 'GIVE_ITEM', `Выдал ${qty}x ${itemName} игроку ${playerId}`);
         return true;
     } catch (error) {
         console.error('Error giving item:', error);
@@ -279,43 +289,20 @@ export function getLeaderboard(sortBy = 'ap', limit = 10) {
     }
 }
 
-export function getItem(itemId) {
-    try {
-        const stmt = db.prepare('SELECT * FROM items WHERE id = ?');
-        return stmt.get(itemId);
-    } catch (error) {
-        console.error('Error getting item:', error);
-        return null;
-    }
-}
-
-export function getItemByName(name) {
-    try {
-        const stmt = db.prepare('SELECT * FROM items WHERE name = ?');
-        return stmt.get(name);
-    } catch (error) {
-        console.error('Error getting item by name:', error);
-        return null;
-    }
-}
-
 export function useItem(playerId, itemName, qty) {
     try {
-        const item = getItemByName(itemName);
-        if (!item) return { success: false, reason: 'Предмет не найден' };
-        
-        const inv = db.prepare('SELECT * FROM inventory WHERE player_id = ? AND item_id = ?').get(playerId, item.id);
+        const inv = db.prepare('SELECT * FROM inventory WHERE player_id = ? AND item_name = ?').get(playerId, itemName);
         if (!inv) return { success: false, reason: 'Предмет не в инвентаре' };
         if (inv.qty < qty) return { success: false, reason: 'Недостаточно предметов' };
         
         const newQty = inv.qty - qty;
         if (newQty === 0) {
-            db.prepare('DELETE FROM inventory WHERE player_id = ? AND item_id = ?').run(playerId, item.id);
+            db.prepare('DELETE FROM inventory WHERE player_id = ? AND item_name = ?').run(playerId, itemName);
         } else {
-            db.prepare('UPDATE inventory SET qty = ? WHERE player_id = ? AND item_id = ?').run(newQty, playerId, item.id);
+            db.prepare('UPDATE inventory SET qty = ? WHERE player_id = ? AND item_name = ?').run(newQty, playerId, itemName);
         }
         
-        return { success: true, item };
+        return { success: true, itemName };
     } catch (error) {
         console.error('Error using item:', error);
         return { success: false, reason: 'Ошибка использования предмета' };

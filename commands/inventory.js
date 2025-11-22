@@ -46,13 +46,8 @@ export async function execute(interaction) {
     }
     
     const inventoryText = inventory.map(item => {
-        const effect = item.effect ? JSON.parse(item.effect) : null;
-        let effectText = '';
-        if (effect?.ap) effectText = ` (+${effect.ap} AP)`;
-        if (effect?.sp) effectText = ` (+${effect.sp.value} SP к ${effect.sp.style})`;
-        
-        return `**${item.name}** x${item.qty}${effectText}\n*${item.type}* - ID: \`${item.id}\``;
-    }).join('\n\n');
+        return `**${item.item_name}** x${item.qty}`;
+    }).join('\n');
     
     const name = player.character_name || player.username;
     const embed = createInventoryEmbed(`🎒 Инвентарь — ${name}`, inventoryText);

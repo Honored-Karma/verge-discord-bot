@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { getPlayer, getItemByName, giveItem } from '../utils/dataManager.js';
+import { getPlayer, giveItem } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin } from '../utils/adminCheck.js';
 import { checkGlobalCooldown, autoDeleteMessage } from '../utils/cooldowns.js';
@@ -13,7 +13,7 @@ export const data = new SlashCommandBuilder()
             .setRequired(true))
     .addStringOption(option =>
         option.setName('item_name')
-            .setDescription('Название предмета (напр., "AP Tome (50)")')
+            .setDescription('Название предмета (любое)')
             .setRequired(true))
     .addIntegerOption(option =>
         option.setName('qty')
@@ -47,34 +47,31 @@ export async function execute(interaction) {
     const player = getPlayer(playerId);
     
     if (!player) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не зарегистрирован', `Игрок не зарегистрирован.`)],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
-    }
-    
-    const item = getItemByName(itemName);
-    
-    if (!item) {
-        return interaction.reply({
-            embeds: [createErrorEmbed('Предмет не найден', `Предмет с названием "${itemName}" не существует в базе данных.`)],
-            ephemeral: true
-        });
+        autoDeleteMessage(msg);
+        return;
     }
     
     if (qty < 1) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Некорректное количество', 'Количество должно быть не меньше 1.')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
-    const success = giveItem(playerId, itemId, qty, interaction.user.id);
+    const success = giveItem(playerId, itemName, qty, interaction.user.id);
     
     if (success) {
         const name = player.character_name || player.username;
         const msg = await interaction.reply({
-            embeds: [createSuccessEmbed('Предмет выдан', `Выдано **${qty}x ${item.name}** игроку **${name}**`)],
+            embeds: [createSuccessEmbed('Предмет выдан', `Выдано **${qty}x ${itemName}** игроку **${name}**`)],
             fetchReply: true
         });
         autoDeleteMessage(msg);

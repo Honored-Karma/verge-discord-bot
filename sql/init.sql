@@ -30,23 +30,13 @@ CREATE TABLE IF NOT EXISTS styles (
     created_at INTEGER NOT NULL
 );
 
--- Items that can be given to players
-CREATE TABLE IF NOT EXISTS items (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    type TEXT NOT NULL,
-    effect TEXT,
-    created_at INTEGER NOT NULL
-);
-
--- Player inventory
+-- Player inventory (stores item names directly, no reference to items table)
 CREATE TABLE IF NOT EXISTS inventory (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     player_id TEXT NOT NULL,
-    item_id TEXT NOT NULL,
+    item_name TEXT NOT NULL,
     qty INTEGER DEFAULT 1,
-    FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE,
-    FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
+    FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
 );
 
 -- Admin action log
@@ -57,8 +47,3 @@ CREATE TABLE IF NOT EXISTS admin_actions (
     details TEXT,
     timestamp INTEGER NOT NULL
 );
-
--- Insert default items
-INSERT OR IGNORE INTO items (id, name, type, effect, created_at) VALUES
-    ('ap_tome_50', 'Том АП (50)', 'consumable', '{"ap":50}', strftime('%s', 'now')),
-    ('ap_tome_100', 'Том АП (100)', 'consumable', '{"ap":100}', strftime('%s', 'now'));
