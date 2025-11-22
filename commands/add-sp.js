@@ -1,14 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, getStyleByName, addSP } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
-
-function isAdmin(member) {
-    const adminIds = process.env.ADMIN_IDS ? process.env.ADMIN_IDS.split(',') : [];
-    if (adminIds.includes(member.id)) return true;
-    if (member.roles.cache.some(role => role.name === 'Game Master')) return true;
-    if (member.guild.ownerId === member.id) return true;
-    return false;
-}
+import { isAdmin } from '../utils/adminCheck.js';
 
 export const data = new SlashCommandBuilder()
     .setName('add-sp')
