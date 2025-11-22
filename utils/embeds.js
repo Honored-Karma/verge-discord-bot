@@ -56,6 +56,7 @@ export function createProfileAPSPPage(player, user, totalSP = 0) {
         .setColor(0x0099FF)
         .setTitle(`📊 Прогресс — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
+        .setImage('https://s.iimg.su/s/22/uClf58LxwwC7ZyuLlAWkzTJ3TD4tsoH4fjoKN653.jpg')
         .setTimestamp();
     
     const nextMilestone = Math.ceil(player.ap / 100) * 100;
