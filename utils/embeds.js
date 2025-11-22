@@ -109,6 +109,7 @@ export function createProfileStylesPage(player, styles, user, page = 0) {
         .setColor(0x0099FF)
         .setTitle(`🥋 Боевые стили — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
+        .setImage('https://s.iimg.su/s/22/ufK5WxvxJvic3v3sAKeMNidyrlIjH9veHktCaMW1.jpg')
         .setTimestamp();
     
     if (!styles || styles.length === 0) {
