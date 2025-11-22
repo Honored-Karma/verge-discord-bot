@@ -2,7 +2,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 
 export function createSuccessEmbed(title, description) {
     return new EmbedBuilder()
-        .setColor(0x00FF00)
+        .setColor(0x0099FF)
         .setTitle(`✅ ${title}`)
         .setDescription(description)
         .setTimestamp();
@@ -10,7 +10,7 @@ export function createSuccessEmbed(title, description) {
 
 export function createErrorEmbed(title, description) {
     return new EmbedBuilder()
-        .setColor(0xFF0000)
+        .setColor(0x0099FF)
         .setTitle(`❌ ${title}`)
         .setDescription(description)
         .setTimestamp();
@@ -26,7 +26,7 @@ export function createInfoEmbed(title, description) {
 
 export function createProfileMainPage(player, user) {
     const embed = new EmbedBuilder()
-        .setColor(0x9B59B6)
+        .setColor(0x0099FF)
         .setTitle(`📋 Профиль — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .setImage('https://s.iimg.su/s/22/gqWynCdxyhjnJyLDeFjmUbuQHLhpUklQ3Eih04WP.jpg')
@@ -53,7 +53,7 @@ export function createProfileMainPage(player, user) {
 
 export function createProfileAPSPPage(player, user, totalSP = 0) {
     const embed = new EmbedBuilder()
-        .setColor(0x9B59B6)
+        .setColor(0x0099FF)
         .setTitle(`📊 Прогресс — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .setTimestamp();
@@ -79,7 +79,7 @@ export function createProfileAPSPPage(player, user, totalSP = 0) {
 
 export function createProfileBalancePage(player, user) {
     const embed = new EmbedBuilder()
-        .setColor(0x9B59B6)
+        .setColor(0x0099FF)
         .setTitle(`💰 Баланс — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .setTimestamp();
@@ -105,7 +105,7 @@ export function createProfileBalancePage(player, user) {
 
 export function createProfileStylesPage(player, styles, user, page = 0) {
     const embed = new EmbedBuilder()
-        .setColor(0x9B59B6)
+        .setColor(0x0099FF)
         .setTitle(`🥋 Боевые стили — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .setTimestamp();
