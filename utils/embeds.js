@@ -76,6 +76,32 @@ export function createProfileAPSPPage(player, user, totalSP = 0) {
     return embed;
 }
 
+export function createProfileBalancePage(player, user) {
+    const embed = new EmbedBuilder()
+        .setColor(0x9B59B6)
+        .setTitle(`💰 Баланс — ${player.character_name || player.username}`)
+        .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
+        .setTimestamp();
+    
+    let balanceText = '';
+    if (player.krw > 0) {
+        balanceText += `💵 **${player.krw.toLocaleString('ru-RU')}** KRW\n`;
+    } else {
+        balanceText += `💵 **0** KRW\n`;
+    }
+    
+    if (player.yen > 0) {
+        balanceText += `💴 **${player.yen.toLocaleString('ru-RU')}** ¥`;
+    } else {
+        balanceText += `💴 **0** ¥`;
+    }
+    
+    embed.addFields({ name: '📊 Валюты', value: balanceText, inline: false });
+    embed.setFooter({ text: `ID: ${player.id} • Страница 4/4` });
+    
+    return embed;
+}
+
 export function createProfileStylesPage(player, styles, user, page = 0) {
     const embed = new EmbedBuilder()
         .setColor(0x9B59B6)
@@ -85,7 +111,7 @@ export function createProfileStylesPage(player, styles, user, page = 0) {
     
     if (!styles || styles.length === 0) {
         embed.setDescription('Нет изученных стилей');
-        embed.setFooter({ text: `ID: ${player.id} • Страница 3/3` });
+        embed.setFooter({ text: `ID: ${player.id} • Страница 3/4` });
         return { embed, totalPages: 1 };
     }
     
@@ -103,7 +129,7 @@ export function createProfileStylesPage(player, styles, user, page = 0) {
         embed.addFields({ name: `${style.name}`, value: fieldValue, inline: false });
     });
     
-    embed.setFooter({ text: `ID: ${player.id} • Страница 3/3 • Стили: ${page + 1}/${totalPages}` });
+    embed.setFooter({ text: `ID: ${player.id} • Страница 3/4 • Стили: ${page + 1}/${totalPages}` });
     
     return { embed, totalPages };
 }
@@ -164,6 +190,10 @@ export function createProfileButtons(page) {
             new ButtonBuilder()
                 .setCustomId('profile_styles')
                 .setLabel('Стили')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('profile_balance')
+                .setLabel('Баланс')
                 .setStyle(ButtonStyle.Secondary)
         );
     } else if (page === 1) {
@@ -180,6 +210,30 @@ export function createProfileButtons(page) {
             new ButtonBuilder()
                 .setCustomId('profile_styles')
                 .setLabel('Стили')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('profile_balance')
+                .setLabel('Баланс')
+                .setStyle(ButtonStyle.Secondary)
+        );
+    } else if (page === 2) {
+        row.addComponents(
+            new ButtonBuilder()
+                .setCustomId('profile_main')
+                .setLabel('Основная')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('profile_apsp')
+                .setLabel('AP/SP')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('profile_styles')
+                .setLabel('Стили')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(true),
+            new ButtonBuilder()
+                .setCustomId('profile_balance')
+                .setLabel('Баланс')
                 .setStyle(ButtonStyle.Secondary)
         );
     } else {
@@ -195,6 +249,10 @@ export function createProfileButtons(page) {
             new ButtonBuilder()
                 .setCustomId('profile_styles')
                 .setLabel('Стили')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('profile_balance')
+                .setLabel('Баланс')
                 .setStyle(ButtonStyle.Primary)
                 .setDisabled(true)
         );

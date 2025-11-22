@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, getAllPlayerSP, getTotalSP } from '../utils/dataManager.js';
-import { createProfileMainPage, createProfileAPSPPage, createProfileStylesPage, createProfileButtons, createStyleNavigationButtons, createErrorEmbed } from '../utils/embeds.js';
+import { createProfileMainPage, createProfileAPSPPage, createProfileStylesPage, createProfileBalancePage, createProfileButtons, createStyleNavigationButtons, createErrorEmbed } from '../utils/embeds.js';
 
 export const data = new SlashCommandBuilder()
     .setName('profile')
@@ -73,6 +73,10 @@ export async function execute(interaction) {
             stylesPage++;
             newEmbed = result.embed;
             newButtons = [createProfileButtons(2), createStyleNavigationButtons(stylesPage, result.totalPages)];
+        } else if (i.customId === 'profile_balance') {
+            currentPage = 3;
+            newEmbed = createProfileBalancePage(player, targetUser);
+            newButtons = [createProfileButtons(3)];
         }
         
         await i.update({ embeds: [newEmbed], components: newButtons });
