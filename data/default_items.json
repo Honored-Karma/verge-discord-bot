@@ -1,0 +1,46 @@
+{
+  "items": [
+    {
+      "id": "ap_tome_50",
+      "name": "AP Tome (50)",
+      "type": "consumable",
+      "description": "A mystical tome that grants 50 AP when used",
+      "effect": {
+        "ap": 50
+      }
+    },
+    {
+      "id": "ap_tome_100",
+      "name": "AP Tome (100)",
+      "type": "consumable",
+      "description": "A powerful tome that grants 100 AP when used",
+      "effect": {
+        "ap": 100
+      }
+    },
+    {
+      "id": "sp_scroll_muay_thai",
+      "name": "SP Scroll: Muay Thai",
+      "type": "consumable",
+      "description": "A training scroll that grants 30 SP in Muay Thai",
+      "effect": {
+        "sp": {
+          "style": "Muay Thai",
+          "value": 30
+        }
+      }
+    },
+    {
+      "id": "sp_scroll_aikido",
+      "name": "SP Scroll: Aikido",
+      "type": "consumable",
+      "description": "A training scroll that grants 30 SP in Aikido: reverse",
+      "effect": {
+        "sp": {
+          "style": "Aikido: reverse",
+          "value": 30
+        }
+      }
+    }
+  ]
+}
