@@ -10,9 +10,10 @@ export function createSuccessEmbed(title, description) {
 
 export function createErrorEmbed(title, description) {
     return new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0xFF0000)
         .setTitle(`❌ ${title}`)
         .setDescription(description)
+        .setImage('https://s.iimg.su/s/22/uohed4ixYWCczdInGXb1odpCeZrFRlMjrQQGq8qI.jpg')
         .setTimestamp();
 }
 
