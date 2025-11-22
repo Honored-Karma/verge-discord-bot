@@ -289,6 +289,39 @@ export function getItem(itemId) {
     }
 }
 
+export function getItemByName(name) {
+    try {
+        const stmt = db.prepare('SELECT * FROM items WHERE name = ?');
+        return stmt.get(name);
+    } catch (error) {
+        console.error('Error getting item by name:', error);
+        return null;
+    }
+}
+
+export function useItem(playerId, itemName, qty) {
+    try {
+        const item = getItemByName(itemName);
+        if (!item) return { success: false, reason: 'Предмет не найден' };
+        
+        const inv = db.prepare('SELECT * FROM inventory WHERE player_id = ? AND item_id = ?').get(playerId, item.id);
+        if (!inv) return { success: false, reason: 'Предмет не в инвентаре' };
+        if (inv.qty < qty) return { success: false, reason: 'Недостаточно предметов' };
+        
+        const newQty = inv.qty - qty;
+        if (newQty === 0) {
+            db.prepare('DELETE FROM inventory WHERE player_id = ? AND item_id = ?').run(playerId, item.id);
+        } else {
+            db.prepare('UPDATE inventory SET qty = ? WHERE player_id = ? AND item_id = ?').run(newQty, playerId, item.id);
+        }
+        
+        return { success: true, item };
+    } catch (error) {
+        console.error('Error using item:', error);
+        return { success: false, reason: 'Ошибка использования предмета' };
+    }
+}
+
 export function addCurrency(playerId, currency, amount, adminId) {
     try {
         if (currency !== 'krw' && currency !== 'yen') return false;

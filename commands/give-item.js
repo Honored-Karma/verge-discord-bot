@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { getPlayer, getItem, giveItem } from '../utils/dataManager.js';
+import { getPlayer, getItemByName, giveItem } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin } from '../utils/adminCheck.js';
 import { checkGlobalCooldown, autoDeleteMessage } from '../utils/cooldowns.js';
@@ -12,8 +12,8 @@ export const data = new SlashCommandBuilder()
             .setDescription('Игрок-получатель')
             .setRequired(true))
     .addStringOption(option =>
-        option.setName('item_id')
-            .setDescription('ID предмета (напр., ap_tome_50)')
+        option.setName('item_name')
+            .setDescription('Название предмета (напр., "AP Tome (50)")')
             .setRequired(true))
     .addIntegerOption(option =>
         option.setName('qty')
@@ -40,7 +40,7 @@ export async function execute(interaction) {
     }
     
     const targetUser = interaction.options.getUser('user');
-    const itemId = interaction.options.getString('item_id');
+    const itemName = interaction.options.getString('item_name');
     const qty = interaction.options.getInteger('qty') || 1;
     const playerId = targetUser.id;
     
@@ -53,11 +53,11 @@ export async function execute(interaction) {
         });
     }
     
-    const item = getItem(itemId);
+    const item = getItemByName(itemName);
     
     if (!item) {
         return interaction.reply({
-            embeds: [createErrorEmbed('Предмет не найден', `Предмет с ID "${itemId}" не существует в базе данных.`)],
+            embeds: [createErrorEmbed('Предмет не найден', `Предмет с названием "${itemName}" не существует в базе данных.`)],
             ephemeral: true
         });
     }
