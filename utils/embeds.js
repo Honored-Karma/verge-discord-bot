@@ -29,6 +29,7 @@ export function createProfileMainPage(player, user) {
         .setColor(0x9B59B6)
         .setTitle(`📋 Профиль — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
+        .setImage('https://s.iimg.su/s/22/gqWynCdxyhjnJyLDeFjmUbuQHLhpUklQ3Eih04WP.jpg')
         .setTimestamp();
     
     embed.addFields({ name: '⚡ Очки способностей (AP)', value: `${player.ap} AP`, inline: true });
