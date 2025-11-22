@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, getPlayerInventory } from '../utils/dataManager.js';
-import { createInfoEmbed, createErrorEmbed } from '../utils/embeds.js';
+import { createInventoryEmbed, createInfoEmbed, createErrorEmbed } from '../utils/embeds.js';
 
 export const data = new SlashCommandBuilder()
     .setName('inventory')
@@ -43,7 +43,7 @@ export async function execute(interaction) {
     }).join('\n\n');
     
     const name = player.character_name || player.username;
-    const embed = createInfoEmbed(`🎒 Инвентарь — ${name}`, inventoryText);
+    const embed = createInventoryEmbed(`🎒 Инвентарь — ${name}`, inventoryText);
     
     return interaction.reply({ embeds: [embed] });
 }

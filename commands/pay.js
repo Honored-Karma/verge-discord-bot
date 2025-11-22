@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, transferCurrency } from '../utils/dataManager.js';
-import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
+import { createPayEmbed, createErrorEmbed } from '../utils/embeds.js';
 
 export const data = new SlashCommandBuilder()
     .setName('pay')
@@ -72,7 +72,7 @@ export async function execute(interaction) {
     const currencySymbol = currency === 'krw' ? '₩' : '¥';
     const currencyName = currency === 'krw' ? 'KRW' : 'Йен';
     
-    const embed = createSuccessEmbed('Перевод выполнен!', 
+    const embed = createPayEmbed('Перевод выполнен!', 
         `💸 Вы перевели **${amount.toLocaleString('ru-RU')} ${currencySymbol}** игроку **${toPlayer.character_name || toPlayer.username}**\n\n` +
         `**Налог (2%):** ${result.tax.toLocaleString('ru-RU')} ${currencySymbol}\n` +
         `**Получатель получил:** ${result.received.toLocaleString('ru-RU')} ${currencySymbol}`

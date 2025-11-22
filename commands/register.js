@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, createPlayer } from '../utils/dataManager.js';
-import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
+import { createRegisterEmbed, createErrorEmbed } from '../utils/embeds.js';
 
 export const data = new SlashCommandBuilder()
     .setName('register')
@@ -47,7 +47,7 @@ export async function execute(interaction) {
     
     if (success) {
         return interaction.reply({
-            embeds: [createSuccessEmbed('Регистрация завершена', 
+            embeds: [createRegisterEmbed('Регистрация завершена', 
                 `Добро пожаловать, **${characterName}**!\n\nУдачи в приключениях! 🚀`)]
         });
     } else {

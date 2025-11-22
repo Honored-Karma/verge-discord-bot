@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, addAP } from '../utils/dataManager.js';
 import { checkCooldown } from '../utils/cooldowns.js';
-import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
+import { createSocialRPEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { progressBar, getAPProgress } from '../utils/progressBar.js';
 
 const SOCIALRP_COOLDOWN = 12 * 60 * 60 * 1000;
@@ -55,7 +55,7 @@ export async function execute(interaction) {
     const apProgress = getAPProgress(newAP);
     const progressText = progressBar(apProgress.current, apProgress.max, 20);
     
-    const embed = createSuccessEmbed('Взаимодействие завершено!', 
+    const embed = createSocialRPEmbed('Взаимодействие завершено!', 
         `Вы получили **${SOCIALRP_AP_REWARD} AP**!\n\n` +
         `**Всего AP:** ${newAP}\n` +
         `**Техник разблокировано:** ${apProgress.techniques}\n\n` +

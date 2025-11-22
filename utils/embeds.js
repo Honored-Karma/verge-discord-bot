@@ -44,6 +44,51 @@ export function createLeaderboardEmbed(title, description, sortBy) {
     return embed;
 }
 
+export function createTrainEmbed(title, description) {
+    return new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setTitle(`✅ ${title}`)
+        .setDescription(description)
+        .setImage('https://s.iimg.su/s/22/ufkWBu0xWZJ35E1dhmIFfmTwEoXZtvP8zOPqXpsI.jpg')
+        .setTimestamp();
+}
+
+export function createSocialRPEmbed(title, description) {
+    return new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setTitle(`✅ ${title}`)
+        .setDescription(description)
+        .setImage('https://s.iimg.su/s/22/u8s3xB1xoVgeQgI8hXTRd6MZ88M8XiFCWKQfVaAj.jpg')
+        .setTimestamp();
+}
+
+export function createPayEmbed(title, description) {
+    return new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setTitle(`✅ ${title}`)
+        .setDescription(description)
+        .setImage('https://s.iimg.su/s/22/uFdH3S7x2AJgL3HbTz3lECdHIvTFBrlq6A1a6f0n.jpg')
+        .setTimestamp();
+}
+
+export function createInventoryEmbed(title, description) {
+    return new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setTitle(title)
+        .setDescription(description)
+        .setImage('https://s.iimg.su/s/22/umRJkWkxFm1Vz7bFaeY7yfOl5Vwj7cuvVJ7OS5Sz.jpg')
+        .setTimestamp();
+}
+
+export function createRegisterEmbed(title, description) {
+    return new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setTitle(`✅ ${title}`)
+        .setDescription(description)
+        .setImage('https://s.iimg.su/s/22/uPwMsKAxzFj3zv2fzk1VVgPLssmMEosDzMeKuRk4.jpg')
+        .setTimestamp();
+}
+
 export function createProfileMainPage(player, user) {
     const embed = new EmbedBuilder()
         .setColor(0x0099FF)

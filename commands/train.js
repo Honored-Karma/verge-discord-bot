@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, createPlayer, addAP } from '../utils/dataManager.js';
 import { checkCooldown, validateTrainingText } from '../utils/cooldowns.js';
-import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
+import { createTrainEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { progressBar, getAPProgress } from '../utils/progressBar.js';
 
 const TRAIN_COOLDOWN = 5 * 60 * 60 * 1000;
@@ -57,7 +57,7 @@ export async function execute(interaction) {
     const apProgress = getAPProgress(newAP);
     const progressText = progressBar(apProgress.current, apProgress.max, 20);
     
-    const embed = createSuccessEmbed('Тренировка завершена!', 
+    const embed = createTrainEmbed('Тренировка завершена!', 
         `Вы получили **${TRAIN_AP_REWARD} AP**!\n\n` +
         `**Всего AP:** ${newAP}\n` +
         `**Техник разблокировано:** ${apProgress.techniques}\n\n` +
