@@ -48,8 +48,7 @@ export async function execute(interaction) {
     if (success) {
         return interaction.reply({
             embeds: [createSuccessEmbed('Регистрация завершена', 
-                `Добро пожаловать, **${characterName}**!\n\n` +
-                `Используйте \`/train\` для получения AP и \`/profile\` для просмотра профиля!`)]
+                `Добро пожаловать, **${characterName}**!\n\nУдачи в приключениях! 🚀`)]
         });
     } else {
         return interaction.reply({
