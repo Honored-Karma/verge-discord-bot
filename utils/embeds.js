@@ -83,6 +83,7 @@ export function createProfileBalancePage(player, user) {
         .setColor(0x0099FF)
         .setTitle(`💰 Баланс — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
+        .setImage('https://s.iimg.su/s/22/uLqXmUuxOHQ7fpQo0nDeYZzNFsHDabcjaeMIG1cz.jpg')
         .setTimestamp();
     
     let balanceText = '';
