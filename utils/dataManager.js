@@ -348,3 +348,21 @@ export function transferCurrency(fromId, toId, currency, amount) {
         return { success: false, reason: 'Ошибка перевода' };
     }
 }
+
+export function deletePlayer(playerId, adminId) {
+    try {
+        const player = getPlayer(playerId);
+        if (!player) return false;
+        
+        // Удаляем все данные игрока
+        db.prepare('DELETE FROM player_sp WHERE player_id = ?').run(playerId);
+        db.prepare('DELETE FROM inventory WHERE player_id = ?').run(playerId);
+        db.prepare('DELETE FROM players WHERE id = ?').run(playerId);
+        
+        logAdminAction(adminId, 'DELETE_PLAYER', `Удалил игрока ${playerId} (${player.character_name})`);
+        return true;
+    } catch (error) {
+        console.error('Error deleting player:', error);
+        return false;
+    }
+}
