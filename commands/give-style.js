@@ -1,0 +1,74 @@
+import { SlashCommandBuilder } from 'discord.js';
+import { getPlayer, getStyleByName, setSP } from '../utils/dataManager.js';
+import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
+import { isAdmin } from '../utils/adminCheck.js';
+
+export const data = new SlashCommandBuilder()
+    .setName('give-style')
+    .setDescription('[АДМИН] Выдать боевой стиль игроку')
+    .addUserOption(option =>
+        option.setName('user')
+            .setDescription('Игрок-получатель')
+            .setRequired(true))
+    .addStringOption(option =>
+        option.setName('style_name')
+            .setDescription('Название стиля')
+            .setRequired(true))
+    .addIntegerOption(option =>
+        option.setName('initial_sp')
+            .setDescription('Начальное SP (по умолчанию: 0)')
+            .setRequired(false));
+
+export async function execute(interaction) {
+    if (!isAdmin(interaction.member)) {
+        return interaction.reply({
+            embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
+            ephemeral: true
+        });
+    }
+    
+    const targetUser = interaction.options.getUser('user');
+    const styleName = interaction.options.getString('style_name');
+    const initialSP = interaction.options.getInteger('initial_sp') || 0;
+    const playerId = targetUser.id;
+    
+    const player = getPlayer(playerId);
+    
+    if (!player) {
+        return interaction.reply({
+            embeds: [createErrorEmbed('Не зарегистрирован', `Игрок не зарегистрирован.`)],
+            ephemeral: true
+        });
+    }
+    
+    const style = getStyleByName(styleName);
+    
+    if (!style) {
+        return interaction.reply({
+            embeds: [createErrorEmbed('Стиль не найден', `Стиль **"${styleName}"** не существует. Создайте его командой \`/add-style\`.`)],
+            ephemeral: true
+        });
+    }
+    
+    if (initialSP < 0) {
+        return interaction.reply({
+            embeds: [createErrorEmbed('Некорректное значение', 'SP не может быть отрицательным.')],
+            ephemeral: true
+        });
+    }
+    
+    const success = setSP(playerId, style.id, initialSP, interaction.user.id);
+    
+    if (success) {
+        const name = player.character_name || player.username;
+        return interaction.reply({
+            embeds: [createSuccessEmbed('Стиль выдан', 
+                `Выдан стиль **${styleName}** игроку **${name}** с **${initialSP} SP**`)]
+        });
+    } else {
+        return interaction.reply({
+            embeds: [createErrorEmbed('Ошибка', 'Не удалось выдать стиль.')],
+            ephemeral: true
+        });
+    }
+}
