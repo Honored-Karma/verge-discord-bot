@@ -2,6 +2,7 @@ import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, deletePlayer } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin } from '../utils/adminCheck.js';
+import { checkGlobalCooldown, autoDeleteMessage } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
     .setName('delete-user')
@@ -17,6 +18,17 @@ export async function execute(interaction) {
             embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
             ephemeral: true
         });
+    }
+
+    const globalCooldown = checkGlobalCooldown(interaction.user.id);
+    if (globalCooldown.onCooldown) {
+        const msg = await interaction.reply({
+            content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
+            ephemeral: true,
+            fetchReply: true
+        });
+        autoDeleteMessage(msg);
+        return;
     }
     
     const targetUser = interaction.options.getUser('user');
@@ -34,14 +46,18 @@ export async function execute(interaction) {
     const success = deletePlayer(playerId, interaction.user.id);
     
     if (success) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createSuccessEmbed('Профиль удален', 
-                `Профиль **${player.character_name}** успешно удален.\nИгрок может переучеться командой \`/register\`.`)]
+                `Профиль **${player.character_name}** успешно удален.\nИгрок может переучеться командой \`/register\`.`)],
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
     } else {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось удалить профиль.')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
     }
 }

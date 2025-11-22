@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, createPlayer } from '../utils/dataManager.js';
 import { createRegisterEmbed, createErrorEmbed } from '../utils/embeds.js';
+import { checkGlobalCooldown, autoDeleteMessage } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
     .setName('register')
@@ -15,6 +16,16 @@ export const data = new SlashCommandBuilder()
             .setRequired(false));
 
 export async function execute(interaction) {
+    const globalCooldown = checkGlobalCooldown(interaction.user.id);
+    if (globalCooldown.onCooldown) {
+        const msg = await interaction.reply({
+            content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
+            ephemeral: true
+        });
+        autoDeleteMessage(msg);
+        return;
+    }
+
     const playerId = interaction.user.id;
     const username = interaction.user.username;
     const characterName = interaction.options.getString('character_name');
@@ -46,14 +57,18 @@ export async function execute(interaction) {
     const success = createPlayer(playerId, username, characterName, avatarUrl);
     
     if (success) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createRegisterEmbed('Регистрация завершена', 
-                `Добро пожаловать, **${characterName}**!\n\nУдачи в приключениях! 🚀`)]
+                `Добро пожаловать, **${characterName}**!\n\nУдачи в приключениях! 🚀`)],
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
     } else {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка регистрации', 'Произошла ошибка при регистрации. Попробуйте снова.')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
     }
 }

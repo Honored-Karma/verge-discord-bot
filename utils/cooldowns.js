@@ -1,5 +1,35 @@
 import ms from 'ms';
 
+// Global command cooldown tracker (3 seconds between commands per user)
+const globalCooldowns = new Map();
+const GLOBAL_COOLDOWN_MS = 3000;
+const AUTO_DELETE_MS = 20000;
+
+export function checkGlobalCooldown(userId) {
+    const now = Date.now();
+    const userCooldown = globalCooldowns.get(userId);
+    
+    if (userCooldown && now - userCooldown < GLOBAL_COOLDOWN_MS) {
+        const remaining = GLOBAL_COOLDOWN_MS - (now - userCooldown);
+        return {
+            onCooldown: true,
+            remaining,
+            remainingFormatted: `${Math.ceil(remaining / 1000)}s`
+        };
+    }
+    
+    globalCooldowns.set(userId, now);
+    return { onCooldown: false };
+}
+
+export function autoDeleteMessage(message) {
+    if (message && message.delete) {
+        setTimeout(() => {
+            message.delete().catch(() => {});
+        }, AUTO_DELETE_MS);
+    }
+}
+
 export function checkCooldown(lastTimestamp, cooldownMs) {
     const now = Math.floor(Date.now() / 1000);
     const cooldownSeconds = cooldownMs / 1000;

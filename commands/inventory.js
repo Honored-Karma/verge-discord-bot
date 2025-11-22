@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, getPlayerInventory } from '../utils/dataManager.js';
 import { createInventoryEmbed, createInfoEmbed, createErrorEmbed } from '../utils/embeds.js';
+import { checkGlobalCooldown, autoDeleteMessage } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
     .setName('inventory')
@@ -11,6 +12,17 @@ export const data = new SlashCommandBuilder()
             .setRequired(false));
 
 export async function execute(interaction) {
+    const globalCooldown = checkGlobalCooldown(interaction.user.id);
+    if (globalCooldown.onCooldown) {
+        const msg = await interaction.reply({
+            content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
+            ephemeral: true,
+            fetchReply: true
+        });
+        autoDeleteMessage(msg);
+        return;
+    }
+
     const targetUser = interaction.options.getUser('user') || interaction.user;
     const playerId = targetUser.id;
     
@@ -45,5 +57,6 @@ export async function execute(interaction) {
     const name = player.character_name || player.username;
     const embed = createInventoryEmbed(`🎒 Инвентарь — ${name}`, inventoryText);
     
-    return interaction.reply({ embeds: [embed] });
+    const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
+    autoDeleteMessage(msg);
 }

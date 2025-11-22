@@ -2,6 +2,7 @@ import { SlashCommandBuilder } from 'discord.js';
 import { deleteStyle, getStyleByName } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin } from '../utils/adminCheck.js';
+import { checkGlobalCooldown, autoDeleteMessage } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
     .setName('delete-style')
@@ -18,6 +19,17 @@ export async function execute(interaction) {
             ephemeral: true
         });
     }
+
+    const globalCooldown = checkGlobalCooldown(interaction.user.id);
+    if (globalCooldown.onCooldown) {
+        const msg = await interaction.reply({
+            content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
+            ephemeral: true,
+            fetchReply: true
+        });
+        autoDeleteMessage(msg);
+        return;
+    }
     
     const styleName = interaction.options.getString('style_name');
     
@@ -33,14 +45,18 @@ export async function execute(interaction) {
     const success = deleteStyle(style.id, interaction.user.id);
     
     if (success) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createSuccessEmbed('Стиль удален', 
-                `Стиль **${styleName}** был удален вместе со всеми данными об изучении.`)]
+                `Стиль **${styleName}** был удален вместе со всеми данными об изучении.`)],
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
     } else {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось удалить стиль.')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
     }
 }

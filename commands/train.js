@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, createPlayer, addAP } from '../utils/dataManager.js';
-import { checkCooldown, validateTrainingText } from '../utils/cooldowns.js';
+import { checkCooldown, validateTrainingText, checkGlobalCooldown, autoDeleteMessage } from '../utils/cooldowns.js';
 import { createTrainEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { progressBar, getAPProgress } from '../utils/progressBar.js';
 
@@ -16,6 +16,17 @@ export const data = new SlashCommandBuilder()
             .setRequired(true));
 
 export async function execute(interaction) {
+    const globalCooldown = checkGlobalCooldown(interaction.user.id);
+    if (globalCooldown.onCooldown) {
+        const msg = await interaction.reply({
+            content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
+            ephemeral: true,
+            fetchReply: true
+        });
+        autoDeleteMessage(msg);
+        return;
+    }
+
     const playerId = interaction.user.id;
     const username = interaction.user.username;
     const trainingText = interaction.options.getString('text');
@@ -68,5 +79,6 @@ export async function execute(interaction) {
         embed.setDescription(embed.data.description + '\n\n🌟 **Вы достигли 1000 AP! Avatar/Embodiment доступен!**');
     }
     
-    return interaction.reply({ embeds: [embed] });
+    const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
+    autoDeleteMessage(msg);
 }

@@ -2,6 +2,7 @@ import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, setAP } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin } from '../utils/adminCheck.js';
+import { checkGlobalCooldown, autoDeleteMessage } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
     .setName('set-ap')
@@ -21,6 +22,17 @@ export async function execute(interaction) {
             embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
             ephemeral: true
         });
+    }
+
+    const globalCooldown = checkGlobalCooldown(interaction.user.id);
+    if (globalCooldown.onCooldown) {
+        const msg = await interaction.reply({
+            content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
+            ephemeral: true,
+            fetchReply: true
+        });
+        autoDeleteMessage(msg);
+        return;
     }
     
     const targetUser = interaction.options.getUser('user');
@@ -46,14 +58,18 @@ export async function execute(interaction) {
     const success = setAP(playerId, amount, interaction.user.id);
     
     if (success) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createSuccessEmbed('AP обновлено', 
-                `Установлено **${amount} AP** для игрока **${player.character_name || player.username}**`)]
+                `Установлено **${amount} AP** для игрока **${player.character_name || player.username}**`)],
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
     } else {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось обновить AP.')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
     }
 }

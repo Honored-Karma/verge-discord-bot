@@ -2,6 +2,7 @@ import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, addCurrency } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin } from '../utils/adminCheck.js';
+import { checkGlobalCooldown, autoDeleteMessage } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
     .setName('add-currency')
@@ -30,6 +31,17 @@ export async function execute(interaction) {
             ephemeral: true
         });
     }
+
+    const globalCooldown = checkGlobalCooldown(interaction.user.id);
+    if (globalCooldown.onCooldown) {
+        const msg = await interaction.reply({
+            content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
+            ephemeral: true,
+            fetchReply: true
+        });
+        autoDeleteMessage(msg);
+        return;
+    }
     
     const targetUser = interaction.options.getUser('user');
     const currency = interaction.options.getString('currency');
@@ -51,15 +63,19 @@ export async function execute(interaction) {
         const currencySymbol = currency === 'krw' ? '₩' : '¥';
         const currencyName = currency === 'krw' ? 'KRW' : 'Йен';
         
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createSuccessEmbed('Валюта добавлена', 
                 `Добавлено **${amount.toLocaleString('ru-RU')} ${currencySymbol}** игроку **${player.character_name || player.username}**.\n\n` +
-                `Новый баланс: **${newAmount.toLocaleString('ru-RU')} ${currencySymbol}**`)]
+                `Новый баланс: **${newAmount.toLocaleString('ru-RU')} ${currencySymbol}**`)],
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
     } else {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось добавить валюту.')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
     }
 }
