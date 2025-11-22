@@ -33,6 +33,12 @@ export function createLeaderboardEmbed(title, description, sortBy) {
     
     if (sortBy === 'ap') {
         embed.setImage('https://s.iimg.su/s/22/uUNAXW5xTskOqP8qqHauAb5eSud6yn7mpUFh91Qj.jpg');
+    } else if (sortBy === 'sp') {
+        embed.setImage('https://s.iimg.su/s/22/uLyAz19xZcYEibwhCNcyjlRjHJhicEGazYqGob5B.jpg');
+    } else if (sortBy === 'krw') {
+        embed.setImage('https://s.iimg.su/s/22/uAHetLrx0gHhdpdgNEk0sz5rXNryIiakpM4NOC2i.jpg');
+    } else if (sortBy === 'yen') {
+        embed.setImage('https://s.iimg.su/s/22/umoD00txjt1iM7PD84VYYbh5EMcNXMFHU09ztUYR.jpg');
     }
     
     return embed;
