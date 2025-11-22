@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { getPlayer, getAllPlayerSP } from '../utils/dataManager.js';
+import { getPlayer, getAllPlayerSP, getTotalSP } from '../utils/dataManager.js';
 import { createProfileMainPage, createProfileAPSPPage, createProfileStylesPage, createProfileButtons, createStyleNavigationButtons, createErrorEmbed } from '../utils/embeds.js';
 
 export const data = new SlashCommandBuilder()
@@ -51,7 +51,8 @@ export async function execute(interaction) {
             newButtons = [createProfileButtons(0)];
         } else if (i.customId === 'profile_apsp') {
             currentPage = 1;
-            newEmbed = createProfileAPSPPage(player, targetUser);
+            const totalSP = getTotalSP(playerId);
+            newEmbed = createProfileAPSPPage(player, targetUser, totalSP);
             newButtons = [createProfileButtons(1)];
         } else if (i.customId === 'profile_styles') {
             currentPage = 2;

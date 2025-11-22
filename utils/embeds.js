@@ -50,7 +50,7 @@ export function createProfileMainPage(player, user) {
     return embed;
 }
 
-export function createProfileAPSPPage(player, user) {
+export function createProfileAPSPPage(player, user, totalSP = 0) {
     const embed = new EmbedBuilder()
         .setColor(0x9B59B6)
         .setTitle(`📊 Прогресс — ${player.character_name || player.username}`)
@@ -68,7 +68,6 @@ export function createProfileAPSPPage(player, user) {
         inline: false 
     });
     
-    const totalSP = getTotalSPFromStyles(player.id);
     embed.addFields({ name: '🥋 Всего SP', value: `${totalSP} SP`, inline: true });
     embed.addFields({ name: '🎯 Техник разблокировано', value: `${Math.floor(player.ap / 100)}`, inline: true });
     
@@ -109,9 +108,6 @@ export function createProfileStylesPage(player, styles, user, page = 0) {
     return { embed, totalPages };
 }
 
-function getTotalSPFromStyles(playerId) {
-    return 0;
-}
 
 function createProgressBar(current, max, length = 20) {
     const percentage = Math.min(100, Math.max(0, (current / max) * 100));
