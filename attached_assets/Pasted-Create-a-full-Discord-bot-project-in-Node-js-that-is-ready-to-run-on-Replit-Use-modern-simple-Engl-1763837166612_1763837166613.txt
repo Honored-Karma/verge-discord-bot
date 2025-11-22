@@ -1,0 +1,171 @@
+Create a full Discord bot project in Node.js that is ready to run on Replit. Use modern, simple English in comments and code. Use slash commands only. Use discord.js v14+ and SQLite (better-sqlite3 or sqlite3). The bot focuses on training, AP/SP progression, player profiles, styles (admin-only creation), and admin tools. No battle commands. Keep code clear, commented, and production-ready with safety checks and cooldowns.
+
+Requirements:
+- Node 18+ style (ES modules)
+- Dependencies: discord.js, dotenv, better-sqlite3 (or sqlite3), ms (optional), ascii-progress or custom progress bar util
+- Files to create:
+  - index.js                  (main boot)
+  - deploy-commands.js        (register slash commands to a dev guild)
+  - package.json
+  - .env.example
+  - README.md
+  - /commands/
+      - train.js
+      - socialrp.js
+      - register.js
+      - profile.js
+      - styles-list.js
+      - add-style.js            (admin only)
+      - set-ap.js               (admin only)
+      - set-sp.js               (admin only)
+      - give-item.js           (admin only)
+      - inventory.js
+      - leaderboard.js
+  - /utils/
+      - db.js                  (sqlite connection & helpers)
+      - dataManager.js         (CRUD wrappers)
+      - progressBar.js         (returns string bar)
+      - cooldowns.js
+      - embeds.js              (embed builder helpers)
+  - /sql/
+      - init.sql               (SQL to create tables)
+  - /data/
+      - default_items.json     (optional starter items)
+  - /logs/
+      - actions.log            (text log file writer)
+
+Database schema (SQLite):
+- players
+  - id TEXT PRIMARY KEY
+  - username TEXT
+  - balance INTEGER DEFAULT 0
+  - ap INTEGER DEFAULT 0
+  - last_ap_timestamp INTEGER DEFAULT 0
+  - unlocked_avatar BOOLEAN DEFAULT 0
+- player_sp
+  - player_id TEXT
+  - style_id INTEGER
+  - sp INTEGER DEFAULT 0
+  - PRIMARY KEY (player_id, style_id)
+- styles
+  - id INTEGER PRIMARY KEY AUTOINCREMENT
+  - name TEXT UNIQUE
+  - description TEXT
+  - created_by TEXT (admin id)
+  - created_at INTEGER
+- items
+  - id TEXT PRIMARY KEY
+  - name TEXT
+  - type TEXT
+  - effect JSON TEXT
+  - created_at INTEGER
+- inventory
+  - id INTEGER PRIMARY KEY AUTOINCREMENT
+  - player_id TEXT
+  - item_id TEXT
+  - qty INTEGER DEFAULT 1
+- admin_actions
+  - id INTEGER PRIMARY KEY AUTOINCREMENT
+  - admin_id TEXT
+  - action TEXT
+  - details TEXT
+  - timestamp INTEGER
+
+SQL initialization (init.sql): create the tables above.
+
+Functional rules (implement exactly):
+1. AP rules:
+   - Social RP: gives 20 AP, cooldown 12 hours per player.
+   - Training (command `/train`): requires `text` argument of at least 800 characters (count spaces). Gives 10 AP, cooldown 5 hours.
+   - Every 100 AP the player can create or learn a new technique. (store as a note in player or items; a simple `techniques` text field or separate table optional).
+   - Reaching **1000 AP** flags player as eligible for Avatar/Embodiment (unlocked_avatar flag). GM/admin must confirm via `/set-ap` or a special admin command to mark final awakening.
+   - Enforce cooldowns and store last_ap_timestamp in players.
+
+2. SP rules:
+   - SP is style-specific. Each style has its own SP counter in `player_sp`.
+   - Training SP awarding: admins can use `/set-sp` to modify SP for style (no automatic battle SP as requested).
+   - There are style mastery thresholds: 0 (Novice), 350 (Owner), 1000 (Expert), 2500 (Master). Show rank based on SP for that style.
+
+3. Styles:
+   - Style list default (create these rows on DB init): 
+     - "Aikido: reverse"
+     - "Blood Taekwondo"
+     - "Muay Thai"
+     - "Dark Jiu-Jitsu"
+     - "Sun Kendo"
+     - "Qi boxing"
+     - "Wolgwang Sword Style"
+     - "Kyokushin Karate"
+   - Only admins (role "Game Master" or an `ADMIN_ID` from env) can add new styles (`/add-style`) or remove them. `/styles-list` lists all styles and shows total players with SP in each.
+
+4. Inventory:
+   - Admins can add items with `/give-item @user item_id` which will show in inventory.
+   - Users can view `/inventory` and use `/use-item item_id` (implement `/use-item` only if you want; at minimum display use action in embed).
+   - Item effects can be simple: `{"ap":50}` or `{"sp":{"style":"Muay Thai","value":30}}`. When an item is used, apply those effects and write action to admin_actions log.
+
+5. Profiles & Displays:
+   - `/register` registers user in DB (id, username).
+   - `/profile @user` shows embed with:
+     - Username & avatar
+     - AP (value) and progress bar to next 100 AP (use progress bar util)
+     - List of styles with SP per style and rank label (Novice/Owner/Expert/Master)
+     - Inventory summary (first 5 items)
+     - Avatar/unlocked flag
+     - Footer: user ID + last AP timestamp in human readable
+   - Progress bar: e.g. 20 blocks wide, show filled and empty blocks and percentage (text, not images).
+
+6. Commands (slash names and arguments — implement in `deploy-commands.js` and `commands/`):
+   - `/register` — register yourself (no args).
+   - `/train text:<string>` — submits training text; validate ≥800 chars; award 10 AP; send embed with new AP and progress bar; store timestamp for cooldown 5h.
+   - `/social-rp text:<string>` — submit social rp; award 20 AP; cooldown 12h.
+   - `/profile user:<user(optional)>` — show profile embed.
+   - `/styles-list` — show styles and short stats (players count per style).
+   - `/add-style name:<string> description:<string>` — admin only, adds style to DB.
+   - `/set-ap user:<user> amount:<integer>` — admin only, set AP to absolute value.
+   - `/add-ap user:<user> amount:<integer>` — admin only, add AP (delta).
+   - `/set-sp user:<user> style:<style_name> amount:<integer>` — admin only, set SP for a style.
+   - `/add-sp user:<user> style:<style_name> amount:<integer>` — admin only, add SP.
+   - `/inventory user:<user(optional)>` — show inventory items.
+   - `/give-item user:<user> item_id:<string> qty:<integer>` — admin only.
+   - `/leaderboard sort_by:<choice(ap|sp|balance)> limit:<integer optional>` — show top players. For `sp` show total SP across styles.
+
+7. Admin checks:
+   - Use either guild role name `Game Master` OR `ADMIN_IDS` env variable with comma-separated admin user ids. If neither found, fallback to guild Owner. All admin-only commands must check this.
+
+8. Cooldowns & anti-farm:
+   - Store last action timestamps for `/train` and `/social-rp` individually.
+   - If a player tries during cooldown, return human readable cooldown left (hours/mins).
+   - For `/train`, check text for "not mostly links": require at least 50% letters/digits or spaces. Reject otherwise.
+
+9. Progress & rank text:
+   - For AP progress, show "Progress to next Technique" where each technique is unlocked per 100 AP.
+   - For style rank: compute rank by SP thresholds and show color indicator in embed.
+
+10. Embeds & UX:
+    - Use neat embeds with fields and inline fields.
+    - Use emoji icons when possible (but keep text fallback).
+    - Example embed for `/profile`: Title = "Profile — <username>", fields: AP (value + progress bar), Styles (inline listing of style: SP (rank)), Inventory (small list), Footer = "ID: ... • Last AP: ...".
+
+11. DB helpers and data manager:
+    - Provide `db.js` to initialize DB and run `init.sql` if tables missing.
+    - Provide `dataManager.js` with functions: getPlayer(id), createPlayer(id, username), addAP(id, amount), setAP, getSP(id, styleId), addSP, listStyles(), addStyle(name, desc, adminId).
+    - Wrap DB calls in try/catch and log admin actions in `admin_actions` table.
+
+12. Logging:
+    - Every admin change writes row to `admin_actions` table and appends a line to `/logs/actions.log`.
+
+13. README:
+    - Explain how to set secrets: TOKEN, CLIENT_ID, GUILD_ID (for dev), ADMIN_IDS (optional), and how to run `node deploy-commands.js` then `node index.js`.
+    - Explain how to edit SQL or switch to production DB.
+
+14. Make the code modular and well commented (English, simple). Provide example command file template for one command (`train.js`) and a clear pattern for creating more.
+
+15. Safety:
+    - Do not implement harmful actions. Validate input sizes. Sanitize text stored in DB (escape or use prepared statements).
+
+Extras (optional but preferred):
+- Add a small progress bar util `progressBar(current, max, length=20)` returning string like: `██████░░░░ 30% (300/1000)`.
+- Pre-fill DB `styles` table with the 8 default styles on first run.
+- Provide `./data/default_items.json` with a couple of sample items like `{"id":"ap_tome_50","name":"AP Tome (50)","type":"consumable","effect":{"ap":50}}` and provide admin command to give it.
+
+Please produce the full project files and code, ready to run on Replit. Keep language simple and comments short. Thanks.
