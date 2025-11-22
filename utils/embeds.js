@@ -24,6 +24,20 @@ export function createInfoEmbed(title, description) {
         .setTimestamp();
 }
 
+export function createLeaderboardEmbed(title, description, sortBy) {
+    const embed = new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setTitle(title)
+        .setDescription(description)
+        .setTimestamp();
+    
+    if (sortBy === 'ap') {
+        embed.setImage('https://s.iimg.su/s/22/uUNAXW5xTskOqP8qqHauAb5eSud6yn7mpUFh91Qj.jpg');
+    }
+    
+    return embed;
+}
+
 export function createProfileMainPage(player, user) {
     const embed = new EmbedBuilder()
         .setColor(0x0099FF)

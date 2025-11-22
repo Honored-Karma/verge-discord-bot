@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getLeaderboard } from '../utils/dataManager.js';
-import { createInfoEmbed } from '../utils/embeds.js';
+import { createInfoEmbed, createLeaderboardEmbed } from '../utils/embeds.js';
 
 export const data = new SlashCommandBuilder()
     .setName('leaderboard')
@@ -73,7 +73,7 @@ export async function execute(interaction) {
         }).join('\n');
     }
     
-    const embed = createInfoEmbed(title, leaderboardText);
+    const embed = createLeaderboardEmbed(title, leaderboardText, sortBy);
     
     return interaction.reply({ embeds: [embed] });
 }
