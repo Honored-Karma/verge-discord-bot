@@ -9,7 +9,7 @@ const TRAIN_AP_REWARD = 10;
 
 export const data = new SlashCommandBuilder()
     .setName('train')
-    .setDescription('Тренировка для получения AP (800+ символов, кулдаун 5 часов)')
+    .setDescription('Тренировка для получения AP (10 AP, 800+ символов, кулдаун 5 часов)')
     .addStringOption(option =>
         option.setName('text')
             .setDescription('Текст тренировки (минимум 800 символов)')
@@ -20,7 +20,6 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const msg = await interaction.reply({
             content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -36,7 +35,6 @@ export async function execute(interaction) {
     if (!player) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не зарегистрирован', 'Сначала зарегистрируйтесь командой `/register`!')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -47,7 +45,6 @@ export async function execute(interaction) {
     if (!validation.valid) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Некорректный текст', validation.reason)],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -58,7 +55,6 @@ export async function execute(interaction) {
     if (cooldownCheck.onCooldown) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Кулдаун', `Следующая тренировка доступна через **${cooldownCheck.remainingFormatted}**`)],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -70,7 +66,6 @@ export async function execute(interaction) {
     if (newAP === false) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось добавить AP. Попробуйте снова.')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

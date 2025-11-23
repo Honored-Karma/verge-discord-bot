@@ -5,11 +5,11 @@ import { createSocialRPEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { progressBar, getAPProgress } from '../utils/progressBar.js';
 
 const SOCIALRP_COOLDOWN = 12 * 60 * 60 * 1000;
-const SOCIALRP_AP_REWARD = 20;
+const SOCIALRP_AP_REWARD = 10;
 
 export const data = new SlashCommandBuilder()
     .setName('social-rp')
-    .setDescription('Социальное взаимодействие для получения AP (20 AP, кулдаун 12 часов)')
+    .setDescription('Социальное взаимодействие для получения AP (10 AP, кулдаун 12 часов)')
     .addStringOption(option =>
         option.setName('text')
             .setDescription('Текст взаимодействия')
@@ -20,7 +20,6 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const msg = await interaction.reply({
             content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -35,7 +34,6 @@ export async function execute(interaction) {
     if (!player) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не зарегистрирован', 'Сначала зарегистрируйтесь командой `/register`!')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -45,7 +43,6 @@ export async function execute(interaction) {
     if (rpText.length < 50) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Текст слишком короткий', 'Текст должен содержать минимум 50 символов.')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -56,7 +53,6 @@ export async function execute(interaction) {
     if (cooldownCheck.onCooldown) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Кулдаун', `Следующее взаимодействие доступно через **${cooldownCheck.remainingFormatted}**`)],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -68,7 +64,6 @@ export async function execute(interaction) {
     if (newAP === false) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось добавить AP. Попробуйте снова.')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
