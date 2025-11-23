@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS players (
     ap INTEGER DEFAULT 0,
     last_train_timestamp INTEGER DEFAULT 0,
     last_socialrp_timestamp INTEGER DEFAULT 0,
-    unlocked_avatar INTEGER DEFAULT 0
+    unlocked_avatar INTEGER DEFAULT 0,
+    ap_multiplier REAL DEFAULT 100.0
 );
 
 -- Player SP per style

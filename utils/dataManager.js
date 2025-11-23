@@ -33,7 +33,7 @@ export function getPlayer(playerId) {
 
 export function createPlayer(playerId, username, characterName, characterAvatar = null) {
     try {
-        const stmt = db.prepare('INSERT INTO players (id, username, character_name, character_avatar, krw, yen, ap, last_train_timestamp, last_socialrp_timestamp, unlocked_avatar) VALUES (?, ?, ?, ?, 0, 0, 0, 0, 0, 0)');
+        const stmt = db.prepare('INSERT INTO players (id, username, character_name, character_avatar, krw, yen, ap, last_train_timestamp, last_socialrp_timestamp, unlocked_avatar, ap_multiplier) VALUES (?, ?, ?, ?, 0, 0, 0, 0, 0, 0, 100.0)');
         stmt.run(playerId, username, characterName, characterAvatar);
         return true;
     } catch (error) {
@@ -47,7 +47,10 @@ export function addAP(playerId, amount, actionType = 'train') {
         const player = getPlayer(playerId);
         if (!player) return false;
         
-        const newAP = player.ap + amount;
+        // Apply AP multiplier (multiplier is stored as percentage, e.g., 150 = 150%)
+        const multiplier = (player.ap_multiplier || 100) / 100;
+        const adjustedAmount = Math.round(amount * multiplier);
+        const newAP = player.ap + adjustedAmount;
         const timestamp = Math.floor(Date.now() / 1000);
         
         let updateStmt;
@@ -400,6 +403,22 @@ export function deleteStyle(styleId, adminId) {
         return true;
     } catch (error) {
         console.error('Error deleting style:', error);
+        return false;
+    }
+}
+
+export function setAPMultiplier(playerId, multiplier, adminId) {
+    try {
+        // Ensure multiplier is within valid range (0.5 = 50%, 5 = 500%)
+        const validMultiplier = Math.max(0.5, Math.min(5, multiplier / 100)) * 100;
+        
+        const stmt = db.prepare('UPDATE players SET ap_multiplier = ? WHERE id = ?');
+        stmt.run(validMultiplier, playerId);
+        
+        logAdminAction(adminId, 'SET_AP_MULTIPLIER', `Установил множитель AP ${validMultiplier}% для игрока ${playerId}`);
+        return validMultiplier;
+    } catch (error) {
+        console.error('Error setting AP multiplier:', error);
         return false;
     }
 }
