@@ -18,10 +18,13 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
     if (!isAdmin(interaction.member)) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
 
     const globalCooldown = checkGlobalCooldown(interaction.user.id);
@@ -42,17 +45,23 @@ export async function execute(interaction) {
     const player = getPlayer(playerId);
     
     if (!player) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не зарегистрирован', `Игрок не зарегистрирован.`)],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     if (amount < 0) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Некорректное значение', 'AP не может быть отрицательным.')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     const success = setAP(playerId, amount, interaction.user.id);

@@ -42,43 +42,58 @@ export async function execute(interaction) {
     const amount = interaction.options.getInteger('amount');
     
     if (fromId === toId) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Нельзя переводить себе!')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     if (amount <= 0) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Сумма должна быть больше 0!')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     const fromPlayer = getPlayer(fromId);
     const toPlayer = getPlayer(toId);
     
     if (!fromPlayer) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не зарегистрирован', 'Сначала зарегистрируйтесь командой `/register`!')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     if (!toPlayer) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', `${toUser.username} не зарегистрирован!`)],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     const result = transferCurrency(fromId, toId, currency, amount);
     
     if (!result.success) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка перевода', result.reason)],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     const currencySymbol = currency === 'krw' ? '₩' : '¥';

@@ -18,10 +18,13 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
     if (!isAdmin(interaction.member)) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
 
     const globalCooldown = checkGlobalCooldown(interaction.user.id);
@@ -42,10 +45,13 @@ export async function execute(interaction) {
     const player = getPlayer(playerId);
     
     if (!player) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не зарегистрирован', `Игрок не зарегистрирован.`)],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     const newAP = addAP(playerId, amount, 'admin');

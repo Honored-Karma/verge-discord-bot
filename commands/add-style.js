@@ -14,10 +14,13 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
     if (!isAdmin(interaction.member)) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
 
     const globalCooldown = checkGlobalCooldown(interaction.user.id);
@@ -34,10 +37,13 @@ export async function execute(interaction) {
     const name = interaction.options.getString('name');
     
     if (name.length < 2 || name.length > 50) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Некорректное название', 'Название должно быть от 2 до 50 символов.')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     const success = addStyle(name, interaction.user.id);

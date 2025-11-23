@@ -33,34 +33,46 @@ export async function execute(interaction) {
     let player = getPlayer(playerId);
     
     if (!player) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не зарегистрирован', 'Сначала зарегистрируйтесь командой `/register`!')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     if (rpText.length < 50) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Текст слишком короткий', 'Текст должен содержать минимум 50 символов.')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     const cooldownCheck = checkCooldown(player.last_socialrp_timestamp, SOCIALRP_COOLDOWN);
     if (cooldownCheck.onCooldown) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Кулдаун', `Следующее взаимодействие доступно через **${cooldownCheck.remainingFormatted}**`)],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     const newAP = addAP(playerId, SOCIALRP_AP_REWARD, 'socialrp');
     
     if (newAP === false) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось добавить AP. Попробуйте снова.')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     const apProgress = getAPProgress(newAP);

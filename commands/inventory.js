@@ -29,20 +29,26 @@ export async function execute(interaction) {
     const player = getPlayer(playerId);
     
     if (!player) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не зарегистрирован', `Игрок не зарегистрирован.`)],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     const inventory = getPlayerInventory(playerId);
     
     if (inventory.length === 0) {
         const name = player.character_name || player.username;
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createInfoEmbed('🎒 Инвентарь', `Инвентарь игрока **${name}** пуст.`)],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     const inventoryText = inventory.map(item => {

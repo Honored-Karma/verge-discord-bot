@@ -22,10 +22,13 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
     if (!isAdmin(interaction.member)) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
 
     const globalCooldown = checkGlobalCooldown(interaction.user.id);
@@ -48,26 +51,35 @@ export async function execute(interaction) {
     const player = getPlayer(playerId);
     
     if (!player) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не зарегистрирован', `Игрок не зарегистрирован.`)],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     const style = getStyleByName(styleName);
     
     if (!style) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Стиль не найден', `Стиль **"${styleName}"** не существует. Создайте его командой \`/add-style\`.`)],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     if (initialSP < 0) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Некорректное значение', 'SP не может быть отрицательным.')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     const success = setSP(playerId, style.id, initialSP, interaction.user.id);

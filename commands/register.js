@@ -34,17 +34,23 @@ export async function execute(interaction) {
     const existingPlayer = getPlayer(playerId);
     
     if (existingPlayer) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Уже зарегистрирован', 'Вы уже зарегистрированы в системе!')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     if (characterName.length < 2 || characterName.length > 32) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Некорректное имя', 'Имя персонажа должно быть от 2 до 32 символов.')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     let avatarUrl = null;

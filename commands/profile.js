@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, getAllPlayerSP, getTotalSP } from '../utils/dataManager.js';
 import { createProfileMainPage, createProfileAPSPPage, createProfileStylesPage, createProfileBalancePage, createProfileButtons, createStyleNavigationButtons, createErrorEmbed } from '../utils/embeds.js';
+import { checkGlobalCooldown, autoDeleteMessage } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
     .setName('profile')
@@ -11,16 +12,30 @@ export const data = new SlashCommandBuilder()
             .setRequired(false));
 
 export async function execute(interaction) {
+    const globalCooldown = checkGlobalCooldown(interaction.user.id);
+    if (globalCooldown.onCooldown) {
+        const msg = await interaction.reply({
+            content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
+            ephemeral: true,
+            fetchReply: true
+        });
+        autoDeleteMessage(msg);
+        return;
+    }
+
     const targetUser = interaction.options.getUser('user') || interaction.user;
     const playerId = targetUser.id;
     
     const player = getPlayer(playerId);
     
     if (!player) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не зарегистрирован', `Игрок не зарегистрирован. Используйте \`/register\` для начала!`)],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     const embed = createProfileMainPage(player, targetUser);
@@ -85,4 +100,9 @@ export async function execute(interaction) {
     collector.on('end', () => {
         interaction.editReply({ components: [] }).catch(() => {});
     });
+    
+    // Auto-delete profile message after 20 seconds
+    setTimeout(() => {
+        response.delete().catch(() => {});
+    }, 20000);
 }

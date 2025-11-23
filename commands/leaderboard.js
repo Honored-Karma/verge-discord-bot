@@ -37,19 +37,25 @@ export async function execute(interaction) {
     const limit = interaction.options.getInteger('limit') || 10;
     
     if (limit < 1 || limit > 50) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             content: 'Лимит должен быть от 1 до 50.',
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     const leaderboard = getLeaderboard(sortBy, limit);
     
     if (leaderboard.length === 0) {
-        return interaction.reply({
+        const msg = await interaction.reply({
             embeds: [createInfoEmbed('📊 Таблица лидеров', 'Пока нет зарегистрированных игроков.')],
-            ephemeral: true
+            ephemeral: true,
+            fetchReply: true
         });
+        autoDeleteMessage(msg);
+        return;
     }
     
     let title = '📊 Таблица лидеров';
