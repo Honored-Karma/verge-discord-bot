@@ -72,11 +72,19 @@ export async function execute(interaction) {
         return;
     }
     
+    // Get updated player data to show multiplier
+    const updatedPlayer = getPlayer(playerId);
+    const multiplier = updatedPlayer.ap_multiplier || 100;
+    const actualAPGained = Math.round(TRAIN_AP_REWARD * multiplier / 100);
+    
     const apProgress = getAPProgress(newAP);
     const progressText = progressBar(apProgress.current, apProgress.max, 20);
     
     const embed = createTrainEmbed('Тренировка завершена!', 
-        `Вы получили **${TRAIN_AP_REWARD} AP**!\n\n` +
+        `**📊 Получено AP:**\n` +
+        `Базовое значение: **${TRAIN_AP_REWARD} AP**\n` +
+        `Множитель: **${multiplier}%**\n` +
+        `Итого получено: **+${actualAPGained} AP**\n\n` +
         `**Всего AP:** ${newAP}\n` +
         `**Техник разблокировано:** ${apProgress.techniques}\n\n` +
         `**Прогресс к следующей технике:**\n${progressText}`
