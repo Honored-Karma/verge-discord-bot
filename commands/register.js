@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, createPlayer } from '../utils/dataManager.js';
 import { createRegisterEmbed, createErrorEmbed } from '../utils/embeds.js';
-import { checkGlobalCooldown, autoDeleteMessage } from '../utils/cooldowns.js';
+import { checkGlobalCooldown, autoDeleteMessageShort, autoDeleteMessage } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
     .setName('register')
@@ -20,9 +20,9 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const msg = await interaction.reply({
             content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
-            ephemeral: true
+            fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
 
@@ -36,20 +36,20 @@ export async function execute(interaction) {
     if (existingPlayer) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Уже зарегистрирован', 'Вы уже зарегистрированы в системе!')],
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
     
     if (characterName.length < 2 || characterName.length > 32) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Некорректное имя', 'Имя персонажа должно быть от 2 до 32 символов.')],
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
     
@@ -68,13 +68,13 @@ export async function execute(interaction) {
                 `Добро пожаловать, **${characterName}**!\n\nУдачи в приключениях! 🚀`)],
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
     } else {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка регистрации', 'Произошла ошибка при регистрации. Попробуйте снова.')],
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
     }
 }

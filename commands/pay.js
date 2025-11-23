@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, transferCurrency } from '../utils/dataManager.js';
 import { createPayEmbed, createErrorEmbed } from '../utils/embeds.js';
-import { checkGlobalCooldown, autoDeleteMessage } from '../utils/cooldowns.js';
+import { checkGlobalCooldown, autoDeleteMessageShort, autoDeleteMessage } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
     .setName('pay')
@@ -28,10 +28,10 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const msg = await interaction.reply({
             content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
 
@@ -44,20 +44,20 @@ export async function execute(interaction) {
     if (fromId === toId) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Нельзя переводить себе!')],
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
     
     if (amount <= 0) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Сумма должна быть больше 0!')],
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
     
@@ -67,20 +67,20 @@ export async function execute(interaction) {
     if (!fromPlayer) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не зарегистрирован', 'Сначала зарегистрируйтесь командой `/register`!')],
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
     
     if (!toPlayer) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', `${toUser.username} не зарегистрирован!`)],
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
     
@@ -89,10 +89,10 @@ export async function execute(interaction) {
     if (!result.success) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка перевода', result.reason)],
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
     
@@ -106,5 +106,5 @@ export async function execute(interaction) {
     );
     
     const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
-    autoDeleteMessage(msg);
+    autoDeleteMessageShort(msg);
 }

@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, addAP } from '../utils/dataManager.js';
-import { checkCooldown, checkGlobalCooldown, autoDeleteMessage } from '../utils/cooldowns.js';
+import { checkCooldown, checkGlobalCooldown, autoDeleteMessageShort, autoDeleteMessage } from '../utils/cooldowns.js';
 import { createSocialRPEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { progressBar, getAPProgress } from '../utils/progressBar.js';
 
@@ -20,10 +20,10 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const msg = await interaction.reply({
             content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
 
@@ -35,20 +35,20 @@ export async function execute(interaction) {
     if (!player) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не зарегистрирован', 'Сначала зарегистрируйтесь командой `/register`!')],
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
     
     if (rpText.length < 50) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Текст слишком короткий', 'Текст должен содержать минимум 50 символов.')],
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
     
@@ -56,10 +56,10 @@ export async function execute(interaction) {
     if (cooldownCheck.onCooldown) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Кулдаун', `Следующее взаимодействие доступно через **${cooldownCheck.remainingFormatted}**`)],
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
     
@@ -68,10 +68,10 @@ export async function execute(interaction) {
     if (newAP === false) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось добавить AP. Попробуйте снова.')],
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
     
@@ -90,5 +90,5 @@ export async function execute(interaction) {
     }
     
     const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
-    autoDeleteMessage(msg);
+    autoDeleteMessageShort(msg);
 }

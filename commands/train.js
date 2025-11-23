@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, createPlayer, addAP } from '../utils/dataManager.js';
-import { checkCooldown, validateTrainingText, checkGlobalCooldown, autoDeleteMessage } from '../utils/cooldowns.js';
+import { checkCooldown, validateTrainingText, checkGlobalCooldown, autoDeleteMessageShort, autoDeleteMessage } from '../utils/cooldowns.js';
 import { createTrainEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { progressBar, getAPProgress } from '../utils/progressBar.js';
 
@@ -20,10 +20,10 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const msg = await interaction.reply({
             content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
 
@@ -36,10 +36,10 @@ export async function execute(interaction) {
     if (!player) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не зарегистрирован', 'Сначала зарегистрируйтесь командой `/register`!')],
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
     
@@ -47,10 +47,10 @@ export async function execute(interaction) {
     if (!validation.valid) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Некорректный текст', validation.reason)],
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
     
@@ -58,10 +58,10 @@ export async function execute(interaction) {
     if (cooldownCheck.onCooldown) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Кулдаун', `Следующая тренировка доступна через **${cooldownCheck.remainingFormatted}**`)],
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
     
@@ -70,10 +70,10 @@ export async function execute(interaction) {
     if (newAP === false) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось добавить AP. Попробуйте снова.')],
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
     
@@ -92,5 +92,5 @@ export async function execute(interaction) {
     }
     
     const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
-    autoDeleteMessage(msg);
+    autoDeleteMessageShort(msg);
 }

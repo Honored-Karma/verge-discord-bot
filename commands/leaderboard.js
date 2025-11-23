@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getLeaderboard } from '../utils/dataManager.js';
 import { createInfoEmbed, createLeaderboardEmbed } from '../utils/embeds.js';
-import { checkGlobalCooldown, autoDeleteMessage } from '../utils/cooldowns.js';
+import { checkGlobalCooldown, autoDeleteMessageShort, autoDeleteMessage } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
     .setName('leaderboard')
@@ -26,10 +26,10 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const msg = await interaction.reply({
             content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
 
@@ -39,10 +39,10 @@ export async function execute(interaction) {
     if (limit < 1 || limit > 50) {
         const msg = await interaction.reply({
             content: 'Лимит должен быть от 1 до 50.',
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
     
@@ -51,10 +51,10 @@ export async function execute(interaction) {
     if (leaderboard.length === 0) {
         const msg = await interaction.reply({
             embeds: [createInfoEmbed('📊 Таблица лидеров', 'Пока нет зарегистрированных игроков.')],
-            ephemeral: true,
+            fetchReply: true,
             fetchReply: true
         });
-        autoDeleteMessage(msg);
+        autoDeleteMessageShort(msg);
         return;
     }
     
@@ -94,5 +94,5 @@ export async function execute(interaction) {
     const embed = createLeaderboardEmbed(title, leaderboardText, sortBy);
     
     const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
-    autoDeleteMessage(msg);
+    autoDeleteMessageShort(msg);
 }
