@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, addAP } from '../utils/dataManager.js';
-import { checkCooldown, checkGlobalCooldown, autoDeleteMessageShort, autoDeleteMessage } from '../utils/cooldowns.js';
+import { checkCooldown, checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 import { createSocialRPEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { progressBar, getAPProgress } from '../utils/progressBar.js';
 
@@ -29,7 +29,7 @@ export async function execute(interaction) {
     const playerId = interaction.user.id;
     const rpText = interaction.options.getString('text');
     
-    let player = getPlayer(playerId);
+    let player = await getPlayer(playerId);
     
     if (!player) {
         const msg = await interaction.reply({
@@ -59,7 +59,7 @@ export async function execute(interaction) {
         return;
     }
     
-    const newAP = addAP(playerId, SOCIALRP_AP_REWARD, 'socialrp');
+    const newAP = await addAP(playerId, SOCIALRP_AP_REWARD, 'socialrp');
     
     if (newAP === false) {
         const msg = await interaction.reply({
@@ -71,7 +71,7 @@ export async function execute(interaction) {
     }
     
     // Get updated player data to show multiplier
-    const updatedPlayer = getPlayer(playerId);
+    const updatedPlayer = await getPlayer(playerId);
     const multiplier = updatedPlayer.ap_multiplier || 100;
     const actualAPGained = Math.round(SOCIALRP_AP_REWARD * multiplier / 100);
     

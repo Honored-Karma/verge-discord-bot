@@ -2,7 +2,7 @@ import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, addCurrency } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin } from '../utils/adminCheck.js';
-import { checkGlobalCooldown, autoDeleteMessageShort, autoDeleteMessage } from '../utils/cooldowns.js';
+import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
     .setName('add-currency')
@@ -28,7 +28,6 @@ export async function execute(interaction) {
     if (!isAdmin(interaction.member)) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -39,7 +38,6 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const msg = await interaction.reply({
             content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -51,19 +49,18 @@ export async function execute(interaction) {
     const amount = interaction.options.getInteger('amount');
     const playerId = targetUser.id;
     
-    const player = getPlayer(playerId);
+    const player = await getPlayer(playerId);
     
     if (!player) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не зарегистрирован', `Игрок не зарегистрирован.`)],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
         return;
     }
     
-    const newAmount = addCurrency(playerId, currency, amount, interaction.user.id);
+    const newAmount = await addCurrency(playerId, currency, amount, interaction.user.id);
     
     if (newAmount !== false) {
         const currencySymbol = currency === 'krw' ? '₩' : '¥';
@@ -79,7 +76,6 @@ export async function execute(interaction) {
     } else {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось добавить валюту.')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

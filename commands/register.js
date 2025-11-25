@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, createPlayer } from '../utils/dataManager.js';
 import { createRegisterEmbed, createErrorEmbed } from '../utils/embeds.js';
-import { checkGlobalCooldown, autoDeleteMessageShort, autoDeleteMessage } from '../utils/cooldowns.js';
+import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
     .setName('register')
@@ -31,12 +31,11 @@ export async function execute(interaction) {
     const characterName = interaction.options.getString('character_name');
     const avatarAttachment = interaction.options.getAttachment('avatar');
     
-    const existingPlayer = getPlayer(playerId);
+    const existingPlayer = await getPlayer(playerId);
     
     if (existingPlayer) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Уже зарегистрирован', 'Вы уже зарегистрированы в системе!')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -46,7 +45,6 @@ export async function execute(interaction) {
     if (characterName.length < 2 || characterName.length > 32) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Некорректное имя', 'Имя персонажа должно быть от 2 до 32 символов.')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -60,7 +58,7 @@ export async function execute(interaction) {
         }
     }
     
-    const success = createPlayer(playerId, username, characterName, avatarUrl);
+    const success = await createPlayer(playerId, username, characterName, avatarUrl);
     
     if (success) {
         const msg = await interaction.reply({
@@ -72,7 +70,6 @@ export async function execute(interaction) {
     } else {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка регистрации', 'Произошла ошибка при регистрации. Попробуйте снова.')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

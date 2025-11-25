@@ -2,7 +2,7 @@ import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, getStyleByName, setSP } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin } from '../utils/adminCheck.js';
-import { checkGlobalCooldown, autoDeleteMessageShort, autoDeleteMessage } from '../utils/cooldowns.js';
+import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
     .setName('give-style')
@@ -23,8 +23,7 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
     if (!isAdmin(interaction.member)) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
-            fetchReply: true,
+            embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторами.')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -35,7 +34,6 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const msg = await interaction.reply({
             content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -48,24 +46,22 @@ export async function execute(interaction) {
     if (initialSP === null) initialSP = 1;
     const playerId = targetUser.id;
     
-    const player = getPlayer(playerId);
+    const player = await getPlayer(playerId);
     
     if (!player) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не зарегистрирован', `Игрок не зарегистрирован.`)],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
         return;
     }
     
-    const style = getStyleByName(styleName);
+    const style = await getStyleByName(styleName);
     
     if (!style) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Стиль не найден', `Стиль **"${styleName}"** не существует. Создайте его командой \`/add-style\`.`)],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -75,14 +71,13 @@ export async function execute(interaction) {
     if (initialSP < 0) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Некорректное значение', 'SP не может быть отрицательным.')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
         return;
     }
     
-    const success = setSP(playerId, style.id, initialSP, interaction.user.id);
+    const success = await setSP(playerId, style.id, initialSP, interaction.user.id);
     
     if (success) {
         const name = player.character_name || player.username;
@@ -95,7 +90,6 @@ export async function execute(interaction) {
     } else {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось выдать стиль.')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

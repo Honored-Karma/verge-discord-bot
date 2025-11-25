@@ -1,9 +1,15 @@
 # Discord RPG Bot Project
 
 ## Overview
-Discord RPG бот с системой прогрессии персонажей, боевыми стилями, двумя валютами и админ-инструментами. Построен на Node.js, discord.js v14 и SQLite. Полностью руссифицирован.
+Discord RPG бот с системой прогрессии персонажей, боевыми стилями, двумя валютами и админ-инструментами. Построен на Node.js, discord.js v14 и PostgreSQL (Replit Built-in Database). Полностью руссифицирован.
 
 ## Recent Changes
+- **2025-11-25 (v6)**: Полная миграция с SQLite на PostgreSQL (Replit Built-in Database)
+  - Мигрирована вся система хранения данных на встроенную PostgreSQL Replit
+  - Все команды обновлены на async для работы с PostgreSQL драйвером
+  - БД структура оптимизирована для PostgreSQL
+  - Все функции работают стабильно с PostgreSQL
+  
 - **2025-11-25 (v5.2)**: Улучшения удаления сообщений и системы SP
   - KD удаления сообщений изменён на ровно 20 секунд
   - Команды `/add-sp` и `/set-sp` теперь показывают список стилей с номерами (1) 2) 3))
@@ -134,7 +140,7 @@ Discord RPG бот с системой прогрессии персонажей
 ### Technology Stack
 - **Runtime**: Node.js 20+ с ES модулями
 - **Discord API**: discord.js v14
-- **Database**: better-sqlite3 (SQLite)
+- **Database**: pg (PostgreSQL, встроенная база Replit)
 - **Environment**: dotenv
 - **Utilities**: ms для времени
 

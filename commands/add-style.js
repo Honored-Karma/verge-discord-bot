@@ -2,7 +2,7 @@ import { SlashCommandBuilder } from 'discord.js';
 import { addStyle } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin } from '../utils/adminCheck.js';
-import { checkGlobalCooldown, autoDeleteMessageShort, autoDeleteMessage } from '../utils/cooldowns.js';
+import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
     .setName('add-style')
@@ -16,7 +16,6 @@ export async function execute(interaction) {
     if (!isAdmin(interaction.member)) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -27,7 +26,6 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const msg = await interaction.reply({
             content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -39,14 +37,13 @@ export async function execute(interaction) {
     if (name.length < 2 || name.length > 50) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Некорректное название', 'Название должно быть от 2 до 50 символов.')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
         return;
     }
     
-    const success = addStyle(name, interaction.user.id);
+    const success = await addStyle(name, interaction.user.id);
     
     if (success) {
         const msg = await interaction.reply({
@@ -57,7 +54,6 @@ export async function execute(interaction) {
     } else {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось создать стиль. Возможно, он уже существует.')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

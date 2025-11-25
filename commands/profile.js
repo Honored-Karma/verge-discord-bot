@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, getAllPlayerSP, getTotalSP } from '../utils/dataManager.js';
 import { createProfileMainPage, createProfileAPSPPage, createProfileStylesPage, createProfileBalancePage, createProfileButtons, createStyleNavigationButtons, createErrorEmbed } from '../utils/embeds.js';
-import { checkGlobalCooldown, autoDeleteMessageShort, autoDeleteMessage } from '../utils/cooldowns.js';
+import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
     .setName('profile')
@@ -16,7 +16,6 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const msg = await interaction.reply({
             content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -26,12 +25,11 @@ export async function execute(interaction) {
     const targetUser = interaction.options.getUser('user') || interaction.user;
     const playerId = targetUser.id;
     
-    const player = getPlayer(playerId);
+    const player = await getPlayer(playerId);
     
     if (!player) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не зарегистрирован', `Игрок не зарегистрирован. Используйте \`/register\` для начала!`)],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -57,7 +55,7 @@ export async function execute(interaction) {
             return i.reply({ content: 'Это не ваш профиль!', ephemeral: true });
         }
         
-        const styles = getAllPlayerSP(playerId);
+        const styles = await getAllPlayerSP(playerId);
         let newEmbed, newButtons;
         
         if (i.customId === 'profile_main') {
@@ -66,7 +64,7 @@ export async function execute(interaction) {
             newButtons = [createProfileButtons(0)];
         } else if (i.customId === 'profile_apsp') {
             currentPage = 1;
-            const totalSP = getTotalSP(playerId);
+            const totalSP = await getTotalSP(playerId);
             newEmbed = createProfileAPSPPage(player, targetUser, totalSP);
             newButtons = [createProfileButtons(1)];
         } else if (i.customId === 'profile_styles') {

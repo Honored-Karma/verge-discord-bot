@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS player_sp (
 
 -- Martial arts styles
 CREATE TABLE IF NOT EXISTS styles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,
     created_by TEXT,
     created_at INTEGER NOT NULL
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS styles (
 
 -- Player inventory (stores item names directly, no reference to items table)
 CREATE TABLE IF NOT EXISTS inventory (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     player_id TEXT NOT NULL,
     item_name TEXT NOT NULL,
     qty INTEGER DEFAULT 1,
@@ -42,9 +42,15 @@ CREATE TABLE IF NOT EXISTS inventory (
 
 -- Admin action log
 CREATE TABLE IF NOT EXISTS admin_actions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     admin_id TEXT NOT NULL,
     action TEXT NOT NULL,
     details TEXT,
     timestamp INTEGER NOT NULL
 );
+
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_player_sp_player_id ON player_sp(player_id);
+CREATE INDEX IF NOT EXISTS idx_admin_actions_admin_id ON admin_actions(admin_id);
+CREATE INDEX IF NOT EXISTS idx_admin_actions_timestamp ON admin_actions(timestamp);
+CREATE INDEX IF NOT EXISTS idx_inventory_player_id ON inventory(player_id);

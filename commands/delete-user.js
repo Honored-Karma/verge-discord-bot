@@ -2,7 +2,7 @@ import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, deletePlayer } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin } from '../utils/adminCheck.js';
-import { checkGlobalCooldown, autoDeleteMessageShort, autoDeleteMessage } from '../utils/cooldowns.js';
+import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
     .setName('delete-user')
@@ -16,7 +16,6 @@ export async function execute(interaction) {
     if (!isAdmin(interaction.member)) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -27,7 +26,6 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const msg = await interaction.reply({
             content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -37,19 +35,18 @@ export async function execute(interaction) {
     const targetUser = interaction.options.getUser('user');
     const playerId = targetUser.id;
     
-    const player = getPlayer(playerId);
+    const player = await getPlayer(playerId);
     
     if (!player) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не найден', `Игрок **${targetUser.username}** не зарегистрирован.`)],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
         return;
     }
     
-    const success = deletePlayer(playerId, interaction.user.id);
+    const success = await deletePlayer(playerId, interaction.user.id);
     
     if (success) {
         const msg = await interaction.reply({
@@ -61,7 +58,6 @@ export async function execute(interaction) {
     } else {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось удалить профиль.')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

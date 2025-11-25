@@ -21,7 +21,7 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
     if (!isAdmin(interaction.member)) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
+            embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторами.')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -42,7 +42,7 @@ export async function execute(interaction) {
     const multiplier = interaction.options.getInteger('multiplier');
     const playerId = targetUser.id;
     
-    const player = getPlayer(playerId);
+    const player = await getPlayer(playerId);
     
     if (!player) {
         const msg = await interaction.reply({
@@ -53,7 +53,7 @@ export async function execute(interaction) {
         return;
     }
     
-    const result = setAPMultiplier(playerId, multiplier, interaction.user.id);
+    const result = await setAPMultiplier(playerId, multiplier, interaction.user.id);
     
     if (result !== false) {
         const msg = await interaction.reply({

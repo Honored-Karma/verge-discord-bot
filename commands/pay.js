@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, transferCurrency } from '../utils/dataManager.js';
 import { createPayEmbed, createErrorEmbed } from '../utils/embeds.js';
-import { checkGlobalCooldown, autoDeleteMessageShort, autoDeleteMessage } from '../utils/cooldowns.js';
+import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
     .setName('pay')
@@ -28,7 +28,6 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const msg = await interaction.reply({
             content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -44,7 +43,6 @@ export async function execute(interaction) {
     if (fromId === toId) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Нельзя переводить себе!')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -54,20 +52,18 @@ export async function execute(interaction) {
     if (amount <= 0) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Сумма должна быть больше 0!')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
         return;
     }
     
-    const fromPlayer = getPlayer(fromId);
-    const toPlayer = getPlayer(toId);
+    const fromPlayer = await getPlayer(fromId);
+    const toPlayer = await getPlayer(toId);
     
     if (!fromPlayer) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не зарегистрирован', 'Сначала зарегистрируйтесь командой `/register`!')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -77,19 +73,17 @@ export async function execute(interaction) {
     if (!toPlayer) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', `${toUser.username} не зарегистрирован!`)],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
         return;
     }
     
-    const result = transferCurrency(fromId, toId, currency, amount);
+    const result = await transferCurrency(fromId, toId, currency, amount);
     
     if (!result.success) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка перевода', result.reason)],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

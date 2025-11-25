@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, useItem } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
-import { checkGlobalCooldown, autoDeleteMessageShort, autoDeleteMessage } from '../utils/cooldowns.js';
+import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
     .setName('use')
@@ -20,7 +20,6 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const msg = await interaction.reply({
             content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -31,12 +30,11 @@ export async function execute(interaction) {
     const itemName = interaction.options.getString('item_name');
     const qty = interaction.options.getInteger('quantity') || 1;
     
-    const player = getPlayer(playerId);
+    const player = await getPlayer(playerId);
     
     if (!player) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Не зарегистрирован', 'Сначала зарегистрируйтесь командой `/register`!')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -46,14 +44,13 @@ export async function execute(interaction) {
     if (qty < 1) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Некорректное количество', 'Количество должно быть не меньше 1.')],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
         return;
     }
     
-    const result = useItem(playerId, itemName, qty);
+    const result = await useItem(playerId, itemName, qty);
     
     if (result.success) {
         const msg = await interaction.reply({
@@ -65,7 +62,6 @@ export async function execute(interaction) {
     } else {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка использования', result.reason)],
-            fetchReply: true,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
