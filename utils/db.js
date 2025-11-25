@@ -1,27 +1,72 @@
-import Database from 'better-sqlite3';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { MongoClient, ObjectId } from 'mongodb';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const mongoUri = process.env.MONGODB_URI;
 
-const dbPath = join(__dirname, '..', 'rpg_bot.db');
-const db = new Database(dbPath);
+if (!mongoUri) {
+    console.error('❌ MONGODB_URI not set in environment variables');
+    process.exit(1);
+}
 
-db.pragma('journal_mode = WAL');
+let client = null;
+let db = null;
 
-function initializeDatabase() {
+async function connectDatabase() {
     try {
-        const initSQL = readFileSync(join(__dirname, '..', 'sql', 'init.sql'), 'utf-8');
-        db.exec(initSQL);
+        client = new MongoClient(mongoUri, {
+            maxPoolSize: 10,
+        });
+        
+        await client.connect();
+        db = client.db('discord_rpg_bot');
+        
+        await initializeDatabase();
         console.log('✅ Database initialized successfully');
+        return db;
     } catch (error) {
-        console.error('❌ Error initializing database:', error);
+        console.error('❌ Error connecting to MongoDB:', error);
         throw error;
     }
 }
 
-initializeDatabase();
+async function initializeDatabase() {
+    try {
+        // Create collections if they don't exist
+        const collections = await db.listCollections().toArray();
+        const collectionNames = collections.map(c => c.name);
+        
+        if (!collectionNames.includes('players')) {
+            await db.createCollection('players');
+            await db.collection('players').createIndex({ id: 1 }, { unique: true });
+        }
+        
+        if (!collectionNames.includes('player_sp')) {
+            await db.createCollection('player_sp');
+            await db.collection('player_sp').createIndex({ player_id: 1, style_id: 1 }, { unique: true });
+        }
+        
+        if (!collectionNames.includes('styles')) {
+            await db.createCollection('styles');
+            await db.collection('styles').createIndex({ name: 1 }, { unique: true });
+        }
+        
+        if (!collectionNames.includes('inventory')) {
+            await db.createCollection('inventory');
+            await db.collection('inventory').createIndex({ player_id: 1 });
+        }
+        
+        if (!collectionNames.includes('admin_actions')) {
+            await db.createCollection('admin_actions');
+            await db.collection('admin_actions').createIndex({ admin_id: 1 });
+            await db.collection('admin_actions').createIndex({ timestamp: 1 });
+        }
+    } catch (error) {
+        console.error('❌ Error initializing database collections:', error);
+        throw error;
+    }
+}
+
+// Connect to database on module load
+await connectDatabase();
 
 export default db;
+export { client, connectDatabase };
