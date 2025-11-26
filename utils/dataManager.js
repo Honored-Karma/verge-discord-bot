@@ -429,6 +429,41 @@ export async function giveStyle(playerId, styleName, initialSp = 0, adminId) {
     }
 }
 
+export async function exchangeCurrency(playerId, currency, amount) {
+    try {
+        const player = await getPlayer(playerId);
+        if (!player) return { success: false, reason: 'Игрок не найден' };
+        
+        // Курс: 1 йен = 9.4 воны
+        const EXCHANGE_RATE = 9.4;
+        
+        if (currency === 'yen') {
+            // Обменять йены на воны
+            if (player.yen < amount) return { success: false, reason: `Недостаточно йен! У вас только ${player.yen.toLocaleString('ru-RU')} ¥` };
+            
+            const krwReceived = Math.floor(amount * EXCHANGE_RATE);
+            await pool.query('UPDATE players SET yen = yen - $1, krw = krw + $2 WHERE id = $3', [amount, krwReceived, playerId]);
+            
+            return { success: true, received: krwReceived };
+        } else if (currency === 'krw') {
+            // Обменять воны на йены
+            if (player.krw < amount) return { success: false, reason: `Недостаточно вон! У вас только ${player.krw.toLocaleString('ru-RU')} ₩` };
+            
+            const yenReceived = Math.floor(amount / EXCHANGE_RATE);
+            if (yenReceived === 0) return { success: false, reason: `Слишком мало вон! Минимум ${Math.ceil(EXCHANGE_RATE)} ₩` };
+            
+            await pool.query('UPDATE players SET krw = krw - $1, yen = yen + $2 WHERE id = $3', [amount, yenReceived, playerId]);
+            
+            return { success: true, received: yenReceived };
+        }
+        
+        return { success: false, reason: 'Неверная валюта' };
+    } catch (error) {
+        console.error('Error exchanging currency:', error);
+        return { success: false, reason: 'Ошибка обмена' };
+    }
+}
+
 export async function getAdminActions(limit = 50) {
     try {
         const result = await pool.query('SELECT * FROM admin_actions ORDER BY timestamp DESC LIMIT $1', [limit]);
