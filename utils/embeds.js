@@ -90,13 +90,39 @@ export function createRegisterEmbed(title, description) {
         .setTimestamp();
 }
 
-export function createStylesListEmbed(title, description) {
-    return new EmbedBuilder()
+export function createStylesListEmbed(title, description, page = 1, totalPages = 1) {
+    const embed = new EmbedBuilder()
         .setColor(0x0099FF)
         .setTitle(title)
         .setDescription(description)
         .setImage('https://s.iimg.su/s/22/uexBneExAdoahYKkvzj43zvE9k0z7Dgaq7j2HlEk.jpg')
         .setTimestamp();
+    
+    if (totalPages > 1) {
+        embed.setFooter({ text: `Страница ${page}/${totalPages}` });
+    }
+    
+    return embed;
+}
+
+export function createStylesNavigationButtons(page = 0, totalPages = 1) {
+    const row = new ActionRowBuilder();
+    
+    const prevButton = new ButtonBuilder()
+        .setCustomId('styles_prev')
+        .setLabel('← Назад')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(page === 0);
+    
+    const nextButton = new ButtonBuilder()
+        .setCustomId('styles_next')
+        .setLabel('Вперёд →')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(page === totalPages - 1);
+    
+    row.addComponents(prevButton, nextButton);
+    
+    return row;
 }
 
 export function createProfileMainPage(player, user) {
