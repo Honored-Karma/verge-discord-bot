@@ -142,8 +142,14 @@ export async function getTotalSP(playerId) {
 
 export async function addSP(playerId, styleId, amount, adminId) {
     try {
+        const player = await getPlayer(playerId);
+        if (!player) return false;
+        
+        const multiplier = (player.sp_multiplier || 100) / 100;
+        const adjustedAmount = Math.round(amount * multiplier);
+        
         const currentSP = await getSP(playerId, styleId);
-        const newSP = currentSP + amount;
+        const newSP = currentSP + adjustedAmount;
         
         if (currentSP === 0) {
             await pool.query('INSERT INTO player_sp (player_id, style_id, sp) VALUES ($1, $2, $3)', [playerId, styleId, newSP]);
@@ -151,7 +157,7 @@ export async function addSP(playerId, styleId, amount, adminId) {
             await pool.query('UPDATE player_sp SET sp = $1 WHERE player_id = $2 AND style_id = $3', [newSP, playerId, styleId]);
         }
         
-        logAdminAction(adminId, 'ADD_SP', `Добавил ${amount} SP (стиль ${styleId}) игроку ${playerId}`);
+        logAdminAction(adminId, 'ADD_SP', `Добавил ${amount} SP (×${player.sp_multiplier}% = ${adjustedAmount}) стиль ${styleId} игроку ${playerId}`);
         return newSP;
     } catch (error) {
         console.error('Error adding SP:', error);
@@ -407,6 +413,18 @@ export async function setAPMultiplier(playerId, multiplier, adminId) {
         return validMultiplier;
     } catch (error) {
         console.error('Error setting AP multiplier:', error);
+        return false;
+    }
+}
+
+export async function setSPMultiplier(playerId, multiplier, adminId) {
+    try {
+        const validMultiplier = Math.max(50, Math.min(500, multiplier));
+        await pool.query('UPDATE players SET sp_multiplier = $1 WHERE id = $2', [validMultiplier, playerId]);
+        logAdminAction(adminId, 'SET_SP_MULTIPLIER', `Установил множитель SP ${validMultiplier}% для игрока ${playerId}`);
+        return validMultiplier;
+    } catch (error) {
+        console.error('Error setting SP multiplier:', error);
         return false;
     }
 }
