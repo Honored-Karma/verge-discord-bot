@@ -57,15 +57,14 @@ export async function addAP(playerId, amount, actionType = 'train') {
         let updateQuery = '';
         if (actionType === 'train') {
             updateQuery = 'UPDATE players SET ap = $1, last_train_timestamp = $2 WHERE id = $3';
+            await pool.query(updateQuery, [newAP, timestamp, playerId]);
         } else if (actionType === 'socialrp') {
             updateQuery = 'UPDATE players SET ap = $1, last_socialrp_timestamp = $2 WHERE id = $3';
+            await pool.query(updateQuery, [newAP, timestamp, playerId]);
         } else {
-            updateQuery = 'UPDATE players SET ap = $1 WHERE id = $3';
+            updateQuery = 'UPDATE players SET ap = $1 WHERE id = $2';
             await pool.query(updateQuery, [newAP, playerId]);
-            return newAP;
         }
-        
-        await pool.query(updateQuery, [newAP, timestamp, playerId]);
         
         if (newAP >= 1000 && player.ap < 1000) {
             await pool.query('UPDATE players SET unlocked_avatar = 1 WHERE id = $1', [playerId]);
