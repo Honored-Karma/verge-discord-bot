@@ -323,7 +323,11 @@ export async function addCurrency(playerId, currency, amount, adminId) {
         if (!player) return false;
         
         const newAmount = player[currency] + amount;
-        await pool.query(`UPDATE players SET ${currency} = $1 WHERE id = $2`, [newAmount, playerId]);
+        if (currency === 'krw') {
+            await pool.query('UPDATE players SET krw = $1 WHERE id = $2', [newAmount, playerId]);
+        } else {
+            await pool.query('UPDATE players SET yen = $1 WHERE id = $2', [newAmount, playerId]);
+        }
         
         logAdminAction(adminId, 'ADD_CURRENCY', `Добавил ${amount} ${currency.toUpperCase()} игроку ${playerId}`);
         return newAmount;
@@ -337,7 +341,11 @@ export async function setCurrency(playerId, currency, amount, adminId) {
     try {
         if (currency !== 'krw' && currency !== 'yen') return false;
         
-        await pool.query(`UPDATE players SET ${currency} = $1 WHERE id = $2`, [amount, playerId]);
+        if (currency === 'krw') {
+            await pool.query('UPDATE players SET krw = $1 WHERE id = $2', [amount, playerId]);
+        } else {
+            await pool.query('UPDATE players SET yen = $1 WHERE id = $2', [amount, playerId]);
+        }
         
         logAdminAction(adminId, 'SET_CURRENCY', `Установил ${currency.toUpperCase()} на ${amount} для игрока ${playerId}`);
         return true;
@@ -360,8 +368,13 @@ export async function transferCurrency(fromId, toId, currency, amount) {
         const tax = Math.ceil(amount * 0.02);
         const received = amount - tax;
         
-        await pool.query(`UPDATE players SET ${currency} = ${currency} - $1 WHERE id = $2`, [amount, fromId]);
-        await pool.query(`UPDATE players SET ${currency} = ${currency} + $1 WHERE id = $2`, [received, toId]);
+        if (currency === 'krw') {
+            await pool.query('UPDATE players SET krw = krw - $1 WHERE id = $2', [amount, fromId]);
+            await pool.query('UPDATE players SET krw = krw + $1 WHERE id = $2', [received, toId]);
+        } else {
+            await pool.query('UPDATE players SET yen = yen - $1 WHERE id = $2', [amount, fromId]);
+            await pool.query('UPDATE players SET yen = yen + $1 WHERE id = $2', [received, toId]);
+        }
         
         return { success: true, tax, received };
     } catch (error) {
