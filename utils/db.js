@@ -23,8 +23,15 @@ async function initializeDatabase() {
                     last_train_timestamp INTEGER DEFAULT 0,
                     last_socialrp_timestamp INTEGER DEFAULT 0,
                     unlocked_avatar INTEGER DEFAULT 0,
-                    ap_multiplier REAL DEFAULT 100.0
+                    ap_multiplier REAL DEFAULT 100.0,
+                    sp_multiplier REAL DEFAULT 100.0
                 )
+            `);
+            
+            // Add sp_multiplier column if it doesn't exist (for existing databases)
+            await client.query(`
+                ALTER TABLE players 
+                ADD COLUMN IF NOT EXISTS sp_multiplier REAL DEFAULT 100.0
             `);
 
             await client.query(`
