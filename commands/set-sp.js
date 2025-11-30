@@ -45,7 +45,7 @@ export async function execute(interaction) {
     const amount = interaction.options.getInteger('amount');
     const playerId = targetUser.id;
     
-    const player = getPlayer(playerId);
+    const player = await getPlayer(playerId);
     
     if (!player) {
         const msg = await interaction.reply({
@@ -57,7 +57,7 @@ export async function execute(interaction) {
     }
     
     // Get all styles to show list
-    const allStyles = listStyles();
+    const allStyles = await listStyles();
     
     if (allStyles.length === 0) {
         const msg = await interaction.reply({
@@ -88,7 +88,7 @@ export async function execute(interaction) {
         }
     } else {
         // Input is a name - search by name
-        style = getStyleByName(styleInput);
+        style = await getStyleByName(styleInput);
     }
     
     if (!style) {
@@ -103,7 +103,7 @@ export async function execute(interaction) {
         return;
     }
     
-    const success = setSP(playerId, style.id, amount, interaction.user.id);
+    const success = await setSP(playerId, style.id, amount, interaction.user.id);
     
     if (success) {
         const rank = amount >= 2500 ? 'Мастер' : amount >= 1000 ? 'Эксперт' : amount >= 350 ? 'Владелец' : 'Новичок';
