@@ -322,7 +322,8 @@ export async function addCurrency(playerId, currency, amount, adminId) {
         const player = await getPlayer(playerId);
         if (!player) return false;
         
-        const newAmount = player[currency] + amount;
+        const currentAmount = Number(player[currency]) || 0;
+        const newAmount = currentAmount + Number(amount);
         if (currency === 'krw') {
             await pool.query('UPDATE players SET krw = $1 WHERE id = $2', [newAmount, playerId]);
         } else {
@@ -341,13 +342,14 @@ export async function setCurrency(playerId, currency, amount, adminId) {
     try {
         if (currency !== 'krw' && currency !== 'yen') return false;
         
+        const numAmount = Number(amount);
         if (currency === 'krw') {
-            await pool.query('UPDATE players SET krw = $1 WHERE id = $2', [amount, playerId]);
+            await pool.query('UPDATE players SET krw = $1 WHERE id = $2', [numAmount, playerId]);
         } else {
-            await pool.query('UPDATE players SET yen = $1 WHERE id = $2', [amount, playerId]);
+            await pool.query('UPDATE players SET yen = $1 WHERE id = $2', [numAmount, playerId]);
         }
         
-        logAdminAction(adminId, 'SET_CURRENCY', `Установил ${currency.toUpperCase()} на ${amount} для игрока ${playerId}`);
+        logAdminAction(adminId, 'SET_CURRENCY', `Установил ${currency.toUpperCase()} на ${numAmount} для игрока ${playerId}`);
         return true;
     } catch (error) {
         console.error('Error setting currency:', error);
@@ -363,16 +365,19 @@ export async function transferCurrency(fromId, toId, currency, amount) {
         const to = await getPlayer(toId);
         
         if (!from || !to) return { success: false, reason: 'Игрок не найден' };
-        if (from[currency] < amount) return { success: false, reason: 'Недостаточно средств' };
         
-        const tax = Math.ceil(amount * 0.02);
-        const received = amount - tax;
+        const fromBalance = Number(from[currency]) || 0;
+        const numAmount = Number(amount);
+        if (fromBalance < numAmount) return { success: false, reason: 'Недостаточно средств' };
+        
+        const tax = Math.ceil(numAmount * 0.02);
+        const received = numAmount - tax;
         
         if (currency === 'krw') {
-            await pool.query('UPDATE players SET krw = krw - $1 WHERE id = $2', [amount, fromId]);
+            await pool.query('UPDATE players SET krw = krw - $1 WHERE id = $2', [numAmount, fromId]);
             await pool.query('UPDATE players SET krw = krw + $1 WHERE id = $2', [received, toId]);
         } else {
-            await pool.query('UPDATE players SET yen = yen - $1 WHERE id = $2', [amount, fromId]);
+            await pool.query('UPDATE players SET yen = yen - $1 WHERE id = $2', [numAmount, fromId]);
             await pool.query('UPDATE players SET yen = yen + $1 WHERE id = $2', [received, toId]);
         }
         
@@ -466,23 +471,26 @@ export async function exchangeCurrency(playerId, currency, amount) {
         
         // Курс: 1 йен = 9.4 воны
         const EXCHANGE_RATE = 9.4;
+        const numAmount = Number(amount);
         
         if (currency === 'yen') {
             // Обменять йены на воны
-            if (player.yen < amount) return { success: false, reason: `Недостаточно йен! У вас только ${player.yen.toLocaleString('ru-RU')} ¥` };
+            const playerYen = Number(player.yen) || 0;
+            if (playerYen < numAmount) return { success: false, reason: `Недостаточно йен! У вас только ${playerYen.toLocaleString('ru-RU')} ¥` };
             
-            const krwReceived = Math.floor(amount * EXCHANGE_RATE);
-            await pool.query('UPDATE players SET yen = yen - $1, krw = krw + $2 WHERE id = $3', [amount, krwReceived, playerId]);
+            const krwReceived = Math.floor(numAmount * EXCHANGE_RATE);
+            await pool.query('UPDATE players SET yen = yen - $1, krw = krw + $2 WHERE id = $3', [numAmount, krwReceived, playerId]);
             
             return { success: true, received: krwReceived };
         } else if (currency === 'krw') {
             // Обменять воны на йены
-            if (player.krw < amount) return { success: false, reason: `Недостаточно вон! У вас только ${player.krw.toLocaleString('ru-RU')} ₩` };
+            const playerKrw = Number(player.krw) || 0;
+            if (playerKrw < numAmount) return { success: false, reason: `Недостаточно вон! У вас только ${playerKrw.toLocaleString('ru-RU')} ₩` };
             
-            const yenReceived = Math.floor(amount / EXCHANGE_RATE);
+            const yenReceived = Math.floor(numAmount / EXCHANGE_RATE);
             if (yenReceived === 0) return { success: false, reason: `Слишком мало вон! Минимум ${Math.ceil(EXCHANGE_RATE)} ₩` };
             
-            await pool.query('UPDATE players SET krw = krw - $1, yen = yen + $2 WHERE id = $3', [amount, yenReceived, playerId]);
+            await pool.query('UPDATE players SET krw = krw - $1, yen = yen + $2 WHERE id = $3', [numAmount, yenReceived, playerId]);
             
             return { success: true, received: yenReceived };
         }
