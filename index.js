@@ -3,6 +3,7 @@ import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readdirSync } from 'fs';
+import { connectDatabase, closeDatabase } from './utils/db.js';
 
 config();
 
@@ -82,7 +83,27 @@ if (!token) {
     process.exit(1);
 }
 
+// Connect to MongoDB
+console.log('🔌 Connecting to MongoDB...');
+await connectDatabase();
+console.log('✅ MongoDB connected successfully!');
+
 client.login(token).catch(error => {
     console.error('❌ Failed to login:', error);
     process.exit(1);
+});
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+    console.log('\n⏹️  Shutting down gracefully...');
+    await client.destroy();
+    await closeDatabase();
+    process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+    console.log('\n⏹️  Shutting down gracefully...');
+    await client.destroy();
+    await closeDatabase();
+    process.exit(0);
 });

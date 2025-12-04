@@ -1,166 +1,302 @@
-# Discord RPG Bot
+# 🤖 Verge - Discord RPG Bot
 
-A comprehensive Discord bot featuring training mechanics, AP/SP progression system, martial arts styles, inventory management, and admin tools.
+**Полнофункциональный Discord RPG бот с системой тренировок, боевых стилей, экономики и профилей!**
 
-## Features
+![Discord.js](https://img.shields.io/badge/discord.js-v14-blue?style=for-the-badge&logo=discord)
+![MongoDB](https://img.shields.io/badge/MongoDB-6.5.0-green?style=for-the-badge&logo=mongodb)
+![Node.js](https://img.shields.io/badge/Node.js-18+-darkgreen?style=for-the-badge&logo=node.js)
+![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 
-### Player Features
-- **Registration System**: Register with `/register` to start your journey
-- **Training System**: Submit training text (800+ characters) to earn 10 AP with 5-hour cooldown
-- **Social RP**: Earn 20 AP for social roleplay with 12-hour cooldown
-- **Profile System**: View detailed player profiles with AP/SP progress
-- **Martial Arts Styles**: Train in 8 default styles with mastery ranks (Novice → Owner → Expert → Master)
-- **Inventory**: Collect and view items
-- **Leaderboards**: Compete for top rankings in AP, SP, or balance
+---
 
-### Admin Features
-- **AP Management**: Set or add AP to players (`/set-ap`, `/add-ap`)
-- **SP Management**: Set or add SP for specific styles (`/set-sp`, `/add-sp`)
-- **Style Creation**: Add new martial arts styles (`/add-style`)
-- **Item Distribution**: Give items to players (`/give-item`)
-- **Action Logging**: All admin actions are logged to database and file
+## ✨ Особенности
 
-## Setup Instructions
+### 🎮 Игровая механика
+- **Регистрация персонажа** с уникальным именем и аватаром
+- **Система тренировок** для повышения AP (Attack Power)
+- **24 боевых стиля** с разными характеристиками
+- **Социальные ролевые сценарии** для заработка SP (Style Points)
+- **Система инвентаря** для хранения предметов
 
-### 1. Discord Bot Setup
+### 💰 Экономика
+- **Двойная валюта**: KRW (корейская вона) и YEN (японская иена)
+- **Обмен валют** с динамическим курсом
+- **Платежи между игроками** `/pay`
+- **Лидерборд** по AP, SP и богатству
 
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. Create a new application
-3. Go to the "Bot" section and create a bot
-4. Copy the bot token
-5. Go to "OAuth2" → "URL Generator"
-   - Select scopes: `bot`, `applications.commands`
-   - Select permissions: `Send Messages`, `Embed Links`, `Read Message History`
-6. Use the generated URL to invite the bot to your server
+### 👤 Профиль персонажа
+- **Подробный профиль** с всей статистикой
+- **Смена аватара** командой `/set-avatar`
+- **Отслеживание прогресса** в каждом стиле боя
+- **Просмотр инвентаря** и истории
 
-### 2. Configure Environment Variables
+### ⚙️ Администрирование
+- **Команды для админов** для управления экономикой
+- **Выдача стилей** и предметов
+- **Управление множителями** AP и SP
+- **Логирование действий**
 
-The bot uses Replit's integration system for Discord credentials. Make sure you have:
+---
 
-- `DISCORD_TOKEN` or `TOKEN`: Your bot token (automatically set by Discord integration)
-- `CLIENT_ID`: Your application/client ID
-- `GUILD_ID` (optional): Your server ID for faster command deployment during testing
-- `ADMIN_IDS` (optional): Comma-separated list of admin user IDs
+## 🚀 Быстрый старт
 
-You can set these in Replit's Secrets tab.
+### Требования
+- **Node.js** 18 или выше
+- **MongoDB Atlas** аккаунт (бесплатно)
+- **Discord Bot Token** с необходимыми permissions
 
-### 3. Deploy Commands
+### Установка
 
-Before running the bot, you need to register the slash commands:
-
+1. **Клонируйте репозиторий**
 ```bash
-npm run deploy
+git clone https://github.com/yourusername/verge-discord-bot.git
+cd verge-discord-bot
 ```
 
-This will register all commands to your Discord server. If you didn't set `GUILD_ID`, commands will be deployed globally (takes up to 1 hour).
+2. **Установите зависимости**
+```bash
+npm install
+```
 
-### 4. Run the Bot
+3. **Настройте переменные окружения**
+```bash
+cp .env.example .env
+```
 
+Отредактируйте `.env`:
+```env
+DISCORD_TOKEN=ваш_токен_бота
+CLIENT_ID=ID_вашего_бота
+MONGODB_URI=mongodb+srv://пользователь:пароль@кластер.mongodb.net/?appName=Verge
+```
+
+4. **Запустите бота**
 ```bash
 npm start
 ```
 
-The bot will connect to Discord and be ready to use!
-
-## Available Commands
-
-### User Commands
-- `/register` - Register yourself in the RPG system
-- `/train <text>` - Submit training text (800+ characters, 5h cooldown)
-- `/social-rp <text>` - Submit social RP (20 AP, 12h cooldown)
-- `/profile [user]` - View a player's profile
-- `/inventory [user]` - View inventory
-- `/styles-list` - View all available martial arts styles
-- `/leaderboard [sort_by] [limit]` - View top players
-
-### Admin Commands (Game Master role or ADMIN_IDS)
-- `/set-ap <user> <amount>` - Set player's AP to a specific value
-- `/add-ap <user> <amount>` - Add AP to a player
-- `/set-sp <user> <style> <amount>` - Set player's SP for a style
-- `/add-sp <user> <style> <amount>` - Add SP to a player for a style
-- `/add-style <name> <description>` - Create a new martial arts style
-- `/give-item <user> <item_id> [qty]` - Give an item to a player
-
-## Default Martial Arts Styles
-
-1. **Aikido: reverse** - The art of redirecting force and energy
-2. **Blood Taekwondo** - Aggressive striking style focused on devastating kicks
-3. **Muay Thai** - The art of eight limbs
-4. **Dark Jiu-Jitsu** - Grappling and submission techniques
-5. **Sun Kendo** - Sword mastery infused with radiant energy
-6. **Qi boxing** - Internal energy channeled through punches
-7. **Wolgwang Sword Style** - Moonlight blade techniques
-8. **Kyokushin Karate** - Full-contact striking and conditioning
-
-## Progression System
-
-### AP (Ability Points)
-- Earn AP through training and social RP
-- Every 100 AP unlocks a new technique
-- Reaching 1000 AP unlocks Avatar/Embodiment status
-
-### SP (Style Points)
-- Style-specific progression (managed by admins)
-- **Novice**: 0-349 SP
-- **Owner**: 350-999 SP
-- **Expert**: 1000-2499 SP
-- **Master**: 2500+ SP
-
-## Database
-
-The bot uses SQLite (better-sqlite3) for data storage. The database includes:
-- Player profiles and progression
-- Martial arts styles
-- Items and inventory
-- Admin action logs
-
-## Admin Actions Log
-
-All admin actions are logged to:
-- Database: `admin_actions` table
-- File: `logs/actions.log`
-
-## Default Items
-
-- **AP Tome (50)**: Grants 50 AP
-- **AP Tome (100)**: Grants 100 AP
-- **SP Scroll: Muay Thai**: Grants 30 SP in Muay Thai
-- **SP Scroll: Aikido**: Grants 30 SP in Aikido
-
-## Project Structure
-
-```
-discord-rpg-bot/
-├── commands/           # All slash commands
-├── utils/              # Utility functions
-│   ├── db.js          # Database connection
-│   ├── dataManager.js # CRUD operations
-│   ├── progressBar.js # Progress visualization
-│   ├── cooldowns.js   # Cooldown management
-│   └── embeds.js      # Discord embed helpers
-├── sql/               # Database schema
-├── data/              # Default items and data
-├── logs/              # Admin action logs
-├── index.js           # Main bot file
-└── deploy-commands.js # Command deployment script
+5. **Задеплойте команды в Discord** (один раз)
+```bash
+npm run deploy
 ```
 
-## Technologies
+---
 
-- **Node.js 18+** with ES modules
-- **discord.js v14+** for Discord API
-- **better-sqlite3** for database
-- **dotenv** for environment configuration
-- **ms** for time parsing
+## 📋 Доступные команды
 
-## Support
+### 👤 Профиль и персонаж
+| Команда | Описание |
+|---------|----------|
+| `/register` | Создать нового персонажа |
+| `/profile` | Просмотреть свой профиль (с пагинацией) |
+| `/set-avatar <url>` | Установить аватар персонажа |
+| `/inventory` | Просмотреть инвентарь |
 
-For issues or questions, please check:
-1. Bot token is correct in Secrets
-2. Bot has proper permissions in your server
-3. Commands are deployed (`npm run deploy`)
-4. Console logs for error messages
+### 🥋 Боевые стили
+| Команда | Описание |
+|---------|----------|
+| `/train <style>` | Тренироваться в стиле боя |
+| `/styles-list` | Список всех доступных стилей |
+| `/add-style` | Выучить новый стиль (админ) |
+| `/delete-style` | Удалить стиль (админ) |
 
-## License
+### 💪 Характеристики
+| Команда | Описание |
+|---------|----------|
+| `/add-ap <user> <amount>` | Добавить AP |
+| `/set-ap <user> <amount>` | Установить AP |
+| `/add-sp <user> <amount>` | Добавить SP |
+| `/set-sp <user> <amount>` | Установить SP |
+| `/add-currency <user> <krw> <yen>` | Добавить деньги |
 
-MIT
+### 💰 Экономика
+| Команда | Описание |
+|---------|----------|
+| `/pay <user> <krw/yen> <amount>` | Отправить деньги игроку |
+| `/exchange <from> <to> <amount>` | Обменять валюту |
+| `/leaderboard <type>` | Лидерборд (ap/sp/krw/yen) |
+
+### 🎭 Социальные сценарии
+| Команда | Описание |
+|---------|----------|
+| `/social-rp <action>` | Социальное ролевое действие |
+
+### 🎁 Предметы
+| Команда | Описание |
+|---------|----------|
+| `/use <item>` | Использовать предмет из инвентаря |
+| `/give-item <user> <item>` | Выдать предмет (админ) |
+
+### 🛡️ Администрирование
+| Команда | Описание |
+|---------|----------|
+| `/delete-user <user>` | Удалить игрока (админ) |
+| `/set-ap-multiplier <multiplier>` | Установить множитель AP |
+| `/set-sp-multiplier <multiplier>` | Установить множитель SP |
+| `/set-currency <user> <krw> <yen>` | Установить денежный баланс |
+| `/give-style <user> <style>` | Выдать стиль боя (админ) |
+
+---
+
+## 📁 Структура проекта
+
+```
+verge-discord-bot/
+├── commands/                 # Все 24+ слэш-команды
+│   ├── register.js
+│   ├── profile.js
+│   ├── train.js
+│   ├── set-avatar.js
+│   └── ... (и другие)
+├── utils/
+│   ├── db.js               # Подключение MongoDB
+│   ├── dataManager.js      # 30+ функций работы с БД
+│   ├── embeds.js           # Красивые embed-ы
+│   ├── cooldowns.js        # Система кулдаунов
+│   ├── adminCheck.js       # Проверка админских прав
+│   └── progressBar.js      # Визуализация прогресса
+├── data/
+│   └── default_items.json  # Дефолтные предметы
+├── sql/
+│   └── init.sql            # Инициализация БД (справка)
+├── .env.example            # Шаблон переменных окружения
+├── .gitignore              # Git ignore файл
+├── package.json            # Зависимости
+├── deploy-commands.js      # Регистрация команд в Discord
+└── index.js                # Главный файл бота
+```
+
+---
+
+## 🗄️ База данных
+
+Бот использует **MongoDB** с 5 основными коллекциями:
+
+1. **players** - Данные игроков (имя, AP, SP, валюта, аватар и т.д.)
+2. **styles** - Боевые стили (название, описание, требования)
+3. **player_sp** - SP в каждом стиле для каждого игрока
+4. **inventory** - Предметы в инвентаре
+5. **admin_actions** - Логирование действий администраторов
+
+База данных **автоматически инициализируется** при первом запуске!
+
+---
+
+## 🔧 Конфигурация
+
+### Требуемые permissions для бота в Discord
+- Read Messages/View Channels
+- Send Messages
+- Embed Links
+- Read Message History
+- Use Slash Commands
+
+### Переменные окружения (.env)
+```env
+# Discord
+DISCORD_TOKEN=токен_вашего_бота
+CLIENT_ID=ID_приложения_бота
+
+# MongoDB Atlas
+MONGODB_URI=mongodb+srv://пользователь:пароль@кластер.mongodb.net/?appName=Verge
+```
+
+---
+
+## 📊 Статистика
+
+- **24+ Команд** готовых к использованию
+- **30+ Функций** работы с БД
+- **8 Боевых стилей** по умолчанию (легко добавлять новые)
+- **MongoDB** для надёжного хранения данных
+- **100% на русском языке** 🇷🇺
+
+---
+
+## 🎨 Особенности интерфейса
+
+- ✅ Красивые **embed-ы** с цветными полями
+- ✅ **Пагинация** в профиле (навигационные кнопки)
+- ✅ **Визуальные прогресс-бары** для показа уровня
+- ✅ **Автоматические сообщения** удаляются через 30 сек
+- ✅ **Система кулдаунов** для баланса
+- ✅ **Эмодзи** на русском и английском
+
+---
+
+## 🐛 Известные проблемы и решения
+
+### "Unknown interaction" ошибка
+- Убедитесь, что бот отвечает в течение 3 секунд
+- Используйте `await interaction.deferReply()` для долгих операций
+
+### MongoDB connection error
+- Проверьте IP в MongoDB Atlas Network Access
+- Убедитесь, что пароль не содержит спецсимволы (или экранируйте их)
+
+### Команды не видны в Discord
+- Запустите `npm run deploy`
+- Дождитесь 5-15 минут для синхронизации
+
+---
+
+## 📚 Документация
+
+- [Discord.js Documentation](https://discord.js.org/)
+- [MongoDB Documentation](https://docs.mongodb.com/)
+- [Discord Developer Portal](https://discord.com/developers)
+
+---
+
+## 🤝 Примеры использования
+
+### Создание нового стиля
+```javascript
+await addStyle('Новый стиль', 'Описание стиля', 100, 50);
+```
+
+### Добавление предмета в инвентарь
+```javascript
+await addItemToInventory(playerId, 'Зелье здоровья', 5);
+```
+
+### Обновление профиля
+```javascript
+await setCharacterAvatar(playerId, 'https://example.com/avatar.jpg');
+```
+
+---
+
+## 📝 Лицензия
+
+MIT License - смотрите [LICENSE](LICENSE) файл для подробностей
+
+---
+
+## 👥 Автор
+
+Создано с ❤️ для Discord сообщества
+
+---
+
+## 🎯 Планы развития
+
+- [ ] Веб-панель администратора
+- [ ] Система достижений
+- [ ] PvP боевая система
+- [ ] Клан система
+- [ ] Магазин предметов
+- [ ] Эвенты и квесты
+
+---
+
+## 💬 Вопросы и поддержка
+
+Если у вас есть вопросы или проблемы:
+1. Проверьте раздел **Известные проблемы**
+2. Откройте **Issue** на GitHub
+3. Напишите в Discord сообщество
+
+---
+
+**Спасибо за использование Verge! Приятной игры! 🎮**

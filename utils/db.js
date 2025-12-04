@@ -1,96 +1,83 @@
-import pkg from 'pg';
+import { MongoClient } from 'mongodb';
+import { config } from 'dotenv';
 
-const { Pool } = pkg;
+config();
 
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL
-});
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+    console.error('❌ MONGODB_URI not found in environment variables!');
+    process.exit(1);
+}
+
+let client;
+let db;
+
+async function connectDatabase() {
+    try {
+        client = new MongoClient(MONGODB_URI);
+        await client.connect();
+        db = client.db('discord_bot');
+        
+        console.log('✅ Connected to MongoDB');
+        await initializeDatabase();
+    } catch (error) {
+        console.error('❌ Error connecting to MongoDB:', error);
+        process.exit(1);
+    }
+}
 
 async function initializeDatabase() {
     try {
-        const client = await pool.connect();
-        try {
-            // Create tables one by one with IF NOT EXISTS
-            await client.query(`
-                CREATE TABLE IF NOT EXISTS players (
-                    id TEXT PRIMARY KEY,
-                    username TEXT NOT NULL,
-                    character_name TEXT,
-                    character_avatar TEXT,
-                    krw BIGINT DEFAULT 0,
-                    yen BIGINT DEFAULT 0,
-                    ap INTEGER DEFAULT 0,
-                    last_train_timestamp INTEGER DEFAULT 0,
-                    last_socialrp_timestamp INTEGER DEFAULT 0,
-                    unlocked_avatar INTEGER DEFAULT 0,
-                    ap_multiplier REAL DEFAULT 100.0,
-                    sp_multiplier REAL DEFAULT 100.0
-                )
-            `);
-            
-            // Add sp_multiplier column if it doesn't exist (for existing databases)
-            await client.query(`
-                ALTER TABLE players 
-                ADD COLUMN IF NOT EXISTS sp_multiplier REAL DEFAULT 100.0
-            `);
+        // Get all collection names
+        const collections = await db.listCollections().toArray();
+        const collectionNames = collections.map(c => c.name);
 
-            await client.query(`
-                CREATE TABLE IF NOT EXISTS styles (
-                    id SERIAL PRIMARY KEY,
-                    name TEXT UNIQUE NOT NULL,
-                    created_by TEXT,
-                    created_at INTEGER NOT NULL
-                )
-            `);
-
-            await client.query(`
-                CREATE TABLE IF NOT EXISTS player_sp (
-                    player_id TEXT NOT NULL,
-                    style_id INTEGER NOT NULL,
-                    sp INTEGER DEFAULT 0,
-                    PRIMARY KEY (player_id, style_id),
-                    FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE,
-                    FOREIGN KEY (style_id) REFERENCES styles(id) ON DELETE CASCADE
-                )
-            `);
-
-            await client.query(`
-                CREATE TABLE IF NOT EXISTS inventory (
-                    id SERIAL PRIMARY KEY,
-                    player_id TEXT NOT NULL,
-                    item_name TEXT NOT NULL,
-                    qty INTEGER DEFAULT 1,
-                    FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
-                )
-            `);
-
-            await client.query(`
-                CREATE TABLE IF NOT EXISTS admin_actions (
-                    id SERIAL PRIMARY KEY,
-                    admin_id TEXT NOT NULL,
-                    action TEXT NOT NULL,
-                    details TEXT,
-                    timestamp INTEGER NOT NULL
-                )
-            `);
-
-            // Create indexes
-            await client.query('CREATE INDEX IF NOT EXISTS idx_player_sp_player_id ON player_sp(player_id)');
-            await client.query('CREATE INDEX IF NOT EXISTS idx_admin_actions_admin_id ON admin_actions(admin_id)');
-            await client.query('CREATE INDEX IF NOT EXISTS idx_admin_actions_timestamp ON admin_actions(timestamp)');
-            await client.query('CREATE INDEX IF NOT EXISTS idx_inventory_player_id ON inventory(player_id)');
-
-            console.log('✅ Database initialized successfully');
-        } finally {
-            client.release();
+        // Create collections if they don't exist
+        if (!collectionNames.includes('players')) {
+            await db.createCollection('players');
+            await db.collection('players').createIndex({ id: 1 }, { unique: true });
         }
+
+        if (!collectionNames.includes('styles')) {
+            await db.createCollection('styles');
+            await db.collection('styles').createIndex({ name: 1 }, { unique: true });
+        }
+
+        if (!collectionNames.includes('player_sp')) {
+            await db.createCollection('player_sp');
+            await db.collection('player_sp').createIndex({ player_id: 1, style_id: 1 }, { unique: true });
+        }
+
+        if (!collectionNames.includes('inventory')) {
+            await db.createCollection('inventory');
+            await db.collection('inventory').createIndex({ player_id: 1 });
+        }
+
+        if (!collectionNames.includes('admin_actions')) {
+            await db.createCollection('admin_actions');
+            await db.collection('admin_actions').createIndex({ admin_id: 1 });
+            await db.collection('admin_actions').createIndex({ timestamp: 1 });
+        }
+
+        console.log('✅ Database initialized successfully');
     } catch (error) {
         console.error('❌ Error initializing database:', error);
         throw error;
     }
 }
 
-// Initialize database on module load
-await initializeDatabase();
+// Helper function to get database
+export function getDB() {
+    return db;
+}
 
-export default pool;
+export async function closeDatabase() {
+    if (client) {
+        await client.close();
+        console.log('Database connection closed');
+    }
+}
+
+export { connectDatabase };
+export default db;
