@@ -18,7 +18,11 @@ export async function logCommand({ client, guildId, channelId, userId, userTag, 
             extra: extra || null
         };
 
-        await db.collection('command_logs').insertOne(entry);
+        // Optionally save to DB (default: true). Set LOGS_SAVE_TO_DB=false to disable DB writes.
+        const saveToDb = process.env.LOGS_SAVE_TO_DB ? (process.env.LOGS_SAVE_TO_DB.toLowerCase() !== 'false' && process.env.LOGS_SAVE_TO_DB !== '0') : true;
+        if (saveToDb) {
+            await db.collection('command_logs').insertOne(entry);
+        }
 
         // Send log embed to enabled log channels
         if (client) {

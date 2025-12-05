@@ -38,5 +38,22 @@ export function hasCommandPermission(member, commandName) {
     const allowedRoleIds = process.env.LIMITED_ADMIN_ROLE_IDS ? process.env.LIMITED_ADMIN_ROLE_IDS.split(',').map(r => r.trim()) : [];
     if (allowedRoleIds.length === 0) return false;
 
-    return member.roles.cache.some(role => allowedRoleIds.includes(role.id));
+    // member.roles may be a RoleManager with a cache, or an array of role IDs (from interaction.member payload).
+    try {
+        if (member.roles) {
+            // If roles is a manager with cache
+            if (member.roles.cache && typeof member.roles.cache.some === 'function') {
+                return member.roles.cache.some(role => allowedRoleIds.includes(role.id));
+            }
+
+            // If roles is an array (raw payload), check directly
+            if (Array.isArray(member.roles)) {
+                return member.roles.some(rid => allowedRoleIds.includes(String(rid)));
+            }
+        }
+    } catch (e) {
+        // fallback
+    }
+
+    return false;
 }
