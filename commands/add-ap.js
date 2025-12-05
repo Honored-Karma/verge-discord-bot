@@ -64,6 +64,7 @@ export async function execute(interaction) {
         // Log admin action
         try {
             await logCommand({
+                client: interaction.client,
                 guildId: interaction.guildId,
                 channelId: interaction.channelId,
                 userId: interaction.user.id,

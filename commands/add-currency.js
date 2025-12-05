@@ -76,6 +76,7 @@ export async function execute(interaction) {
         autoDeleteMessageShort(msg);
         try {
             await logCommand({
+                client: interaction.client,
                 guildId: interaction.guildId,
                 channelId: interaction.channelId,
                 userId: interaction.user.id,
