@@ -15,3 +15,28 @@ export function isAdmin(member) {
     
     return false;
 }
+
+// Check whether a member has permission to run a specific admin-style command.
+// This allows configured role IDs (LIMITED_ADMIN_ROLE_IDS) to run certain commands.
+export function hasCommandPermission(member, commandName) {
+    if (!member) return false;
+
+    // Full admins pass immediately
+    if (isAdmin(member)) return true;
+
+    // Commands that we allow limited roles to use
+    const limitedCommands = [
+        'add-ap',
+        'add-sp',
+        'give-style',
+        'add-currency',
+        'give-item'
+    ];
+
+    if (!limitedCommands.includes(commandName)) return false;
+
+    const allowedRoleIds = process.env.LIMITED_ADMIN_ROLE_IDS ? process.env.LIMITED_ADMIN_ROLE_IDS.split(',').map(r => r.trim()) : [];
+    if (allowedRoleIds.length === 0) return false;
+
+    return member.roles.cache.some(role => allowedRoleIds.includes(role.id));
+}

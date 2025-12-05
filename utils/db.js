@@ -60,6 +60,13 @@ async function initializeDatabase() {
             await db.collection('admin_actions').createIndex({ timestamp: 1 });
         }
 
+        if (!collectionNames.includes('command_logs')) {
+            await db.createCollection('command_logs');
+            await db.collection('command_logs').createIndex({ timestamp: 1 });
+            await db.collection('command_logs').createIndex({ command: 1 });
+            await db.collection('command_logs').createIndex({ user_id: 1 });
+        }
+
         console.log('✅ Database initialized successfully');
     } catch (error) {
         console.error('❌ Error initializing database:', error);

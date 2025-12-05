@@ -1,7 +1,8 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, giveItem } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
-import { isAdmin } from '../utils/adminCheck.js';
+import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
+import { logCommand } from '../utils/logs.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
@@ -21,7 +22,7 @@ export const data = new SlashCommandBuilder()
             .setRequired(false));
 
 export async function execute(interaction) {
-    if (!isAdmin(interaction.member)) {
+    if (!hasCommandPermission(interaction.member, 'give-item')) {
         return interaction.reply({
             embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
             fetchReply: true
@@ -72,6 +73,18 @@ export async function execute(interaction) {
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
+        try {
+            await logCommand({
+                guildId: interaction.guildId,
+                channelId: interaction.channelId,
+                userId: interaction.user.id,
+                userTag: interaction.user.tag,
+                command: 'give-item',
+                targetId: playerId,
+                targetTag: `${name} <@${playerId}>`,
+                extra: { itemName, qty }
+            });
+        } catch (e) { console.error('logCommand error', e); }
     } else {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось выдать предмет.')],

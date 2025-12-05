@@ -1,7 +1,8 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, getStyleByName, addSP, listStyles } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
-import { isAdmin } from '../utils/adminCheck.js';
+import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
+import { logCommand } from '../utils/logs.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
@@ -21,7 +22,7 @@ export const data = new SlashCommandBuilder()
             .setRequired(true));
 
 export async function execute(interaction) {
-    if (!isAdmin(interaction.member)) {
+    if (!hasCommandPermission(interaction.member, 'add-sp')) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
             fetchReply: true
@@ -104,6 +105,18 @@ export async function execute(interaction) {
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
+        try {
+            await logCommand({
+                guildId: interaction.guildId,
+                channelId: interaction.channelId,
+                userId: interaction.user.id,
+                userTag: interaction.user.tag,
+                command: 'add-sp',
+                targetId: playerId,
+                targetTag: `${player.character_name || player.username} <@${playerId}>`,
+                extra: { amount, style: style.name }
+            });
+        } catch (e) { console.error('logCommand error', e); }
     } else {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось обновить SP.')],

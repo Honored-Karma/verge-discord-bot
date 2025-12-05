@@ -1,7 +1,8 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, getStyleByName, setSP } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
-import { isAdmin } from '../utils/adminCheck.js';
+import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
+import { logCommand } from '../utils/logs.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
@@ -21,7 +22,7 @@ export const data = new SlashCommandBuilder()
             .setRequired(false));
 
 export async function execute(interaction) {
-    if (!isAdmin(interaction.member)) {
+    if (!hasCommandPermission(interaction.member, 'give-style')) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторами.')],
             fetchReply: true
@@ -87,6 +88,18 @@ export async function execute(interaction) {
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
+        try {
+            await logCommand({
+                guildId: interaction.guildId,
+                channelId: interaction.channelId,
+                userId: interaction.user.id,
+                userTag: interaction.user.tag,
+                command: 'give-style',
+                targetId: playerId,
+                targetTag: `${name} <@${playerId}>`,
+                extra: { style: styleName, initialSP }
+            });
+        } catch (e) { console.error('logCommand error', e); }
     } else {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось выдать стиль.')],
