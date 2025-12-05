@@ -67,6 +67,11 @@ async function initializeDatabase() {
             await db.collection('command_logs').createIndex({ user_id: 1 });
         }
 
+        if (!collectionNames.includes('log_channels')) {
+            await db.createCollection('log_channels');
+            await db.collection('log_channels').createIndex({ channel_id: 1 }, { unique: true });
+        }
+
         console.log('✅ Database initialized successfully');
     } catch (error) {
         console.error('❌ Error initializing database:', error);

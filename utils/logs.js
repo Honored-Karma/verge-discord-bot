@@ -20,37 +20,44 @@ export async function logCommand({ client, guildId, channelId, userId, userTag, 
 
         await db.collection('command_logs').insertOne(entry);
 
-        // Send log embed to logs channel if configured
-        const logsChannelId = process.env.LOGS_CHANNEL_ID;
-        if (logsChannelId && client) {
+        // Send log embed to enabled log channels
+        if (client) {
             try {
-                const logsChannel = await client.channels.fetch(logsChannelId);
-                if (logsChannel && logsChannel.isTextBased()) {
-                    const embed = new EmbedBuilder()
-                        .setColor('#FFA500')
-                        .setTitle(`📋 Command Log: /${command}`)
-                        .addFields(
-                            { name: '👤 Executor', value: userTag || `<@${userId}>`, inline: true },
-                            { name: '⏰ Time', value: `<t:${Math.floor(entry.timestamp.getTime() / 1000)}:F>`, inline: true },
-                            { name: '💬 Channel', value: channelId ? `<#${channelId}>` : 'N/A', inline: true }
-                        );
-                    
-                    if (targetTag) {
-                        embed.addFields({ name: '🎯 Target', value: targetTag, inline: true });
+                const logChannels = await db.collection('log_channels').find({ guild_id: guildId, enabled: true }).toArray();
+                
+                for (const logChannelDoc of logChannels) {
+                    try {
+                        const logsChannel = await client.channels.fetch(logChannelDoc.channel_id);
+                        if (logsChannel && logsChannel.isTextBased()) {
+                            const embed = new EmbedBuilder()
+                                .setColor('#FFA500')
+                                .setTitle(`📋 Command Log: /${command}`)
+                                .addFields(
+                                    { name: '👤 Executor', value: userTag || `<@${userId}>`, inline: true },
+                                    { name: '⏰ Time', value: `<t:${Math.floor(entry.timestamp.getTime() / 1000)}:F>`, inline: true },
+                                    { name: '💬 Channel', value: channelId ? `<#${channelId}>` : 'N/A', inline: true }
+                                );
+                            
+                            if (targetTag) {
+                                embed.addFields({ name: '🎯 Target', value: targetTag, inline: true });
+                            }
+                            
+                            if (extra) {
+                                const extraStr = Object.entries(extra)
+                                    .map(([k, v]) => `**${k}**: ${v}`)
+                                    .join('\n');
+                                if (extraStr) embed.addFields({ name: '📝 Details', value: extraStr, inline: false });
+                            }
+                            
+                            embed.setTimestamp();
+                            await logsChannel.send({ embeds: [embed] });
+                        }
+                    } catch (err) {
+                        console.error(`Failed to send log to channel ${logChannelDoc.channel_id}:`, err);
                     }
-                    
-                    if (extra) {
-                        const extraStr = Object.entries(extra)
-                            .map(([k, v]) => `**${k}**: ${v}`)
-                            .join('\n');
-                        if (extraStr) embed.addFields({ name: '📝 Details', value: extraStr, inline: false });
-                    }
-                    
-                    embed.setTimestamp();
-                    await logsChannel.send({ embeds: [embed] });
                 }
             } catch (err) {
-                console.error('Failed to send log to logs channel:', err);
+                console.error('Failed to fetch log channels:', err);
             }
         }
 

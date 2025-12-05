@@ -1,12 +1,4 @@
 import { getDB } from './db.js';
-import { appendFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const logPath = join(__dirname, '..', 'logs', 'actions.log');
 
 function logAdminAction(adminId, action, details) {
     const timestamp = Math.floor(Date.now() / 1000);
@@ -18,9 +10,6 @@ function logAdminAction(adminId, action, details) {
             details,
             timestamp
         }).catch(err => console.error('Error logging to DB:', err));
-        
-        const logEntry = `[${new Date().toISOString()}] Admin ${adminId}: ${action} - ${details}\n`;
-        appendFileSync(logPath, logEntry);
     } catch (error) {
         console.error('Error logging admin action:', error);
     }
