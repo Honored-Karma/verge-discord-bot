@@ -2,6 +2,7 @@ import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, giveItem } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
+import { resolveMember } from '../utils/memberHelper.js';
 import { logCommand } from '../utils/logs.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 
@@ -22,7 +23,8 @@ export const data = new SlashCommandBuilder()
             .setRequired(false));
 
 export async function execute(interaction) {
-    if (!hasCommandPermission(interaction.member, 'give-item')) {
+    const member = await resolveMember(interaction);
+    if (!hasCommandPermission(member, 'give-item')) {
         return interaction.reply({
             embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
             fetchReply: true

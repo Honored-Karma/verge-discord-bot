@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
+import { resolveMember } from '../utils/memberHelper.js';
 import { getDB } from '../utils/db.js';
 
 export const data = new SlashCommandBuilder()
@@ -20,7 +21,8 @@ export async function execute(interaction) {
     }
 
     // Permission: admin or allowed limited role
-    if (!isAdmin(interaction.member) && !hasCommandPermission(interaction.member, 'add-ap')) {
+    const member = await resolveMember(interaction);
+    if (!isAdmin(member) && !hasCommandPermission(member, 'add-ap')) {
         const msg = await interaction.reply({ embeds: [createErrorEmbed('Доступ запрещен', 'Недостаточно прав.')], ephemeral: true, fetchReply: true });
         return;
     }
