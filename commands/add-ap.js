@@ -16,7 +16,16 @@ export const data = new SlashCommandBuilder()
     .addIntegerOption(option =>
         option.setName('amount')
             .setDescription('Количество AP для добавления (может быть отрицательным)')
-            .setRequired(true));
+            .setRequired(true))
+    .addIntegerOption(option =>
+        option.setName('slot')
+            .setDescription('Слот: 1 или 2 (по умолчанию активный)')
+            .setRequired(false)
+            .addChoices(
+                { name: 'Слот 1', value: 1 },
+                { name: 'Слот 2', value: 2 }
+            )
+    );
 
 export async function execute(interaction) {
     const member = await resolveMember(interaction);
@@ -40,20 +49,25 @@ export async function execute(interaction) {
     }
     
     const targetUser = interaction.options.getUser('user');
+    const userId = targetUser.id;
+    const slot = interaction.options.getInteger('slot');
+    let usedSlot = slot;
+    if (!usedSlot) {
+        const { getActiveSlot } = await import('../utils/dataManager.js');
+        usedSlot = await getActiveSlot(userId);
+    }
+    if (usedSlot !== 1 && usedSlot !== 2) usedSlot = 1;
+    const playerId = usedSlot === 1 ? userId : `${userId}_${usedSlot}`;
     const amount = interaction.options.getInteger('amount');
-    const playerId = targetUser.id;
-    
     const player = await getPlayer(playerId);
-    
     if (!player) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Не зарегистрирован', `Игрок не зарегистрирован.`)],
+            embeds: [createErrorEmbed('Пустой слот', `В этом слоте нет персонажа. Используйте /register, чтобы создать нового персонажа в этом слоте.`)],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
         return;
     }
-    
     const newAP = await addAP(playerId, amount, 'admin');
     
     if (newAP !== false) {

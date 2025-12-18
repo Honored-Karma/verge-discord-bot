@@ -20,7 +20,16 @@ export const data = new SlashCommandBuilder()
     .addIntegerOption(option =>
         option.setName('initial_sp')
             .setDescription('Начальное SP (по умолчанию: 0)')
-            .setRequired(false));
+            .setRequired(false))
+    .addIntegerOption(option =>
+        option.setName('slot')
+            .setDescription('Слот: 1 или 2 (по умолчанию активный)')
+            .setRequired(false)
+            .addChoices(
+                { name: 'Слот 1', value: 1 },
+                { name: 'Слот 2', value: 2 }
+            )
+    );
 
 export async function execute(interaction) {
     const member = await resolveMember(interaction);
@@ -43,13 +52,19 @@ export async function execute(interaction) {
         return;
     }
     
-    const targetUser = interaction.options.getUser('user');
-    const styleName = interaction.options.getString('style_name');
-    let initialSP = interaction.options.getInteger('initial_sp');
-    if (initialSP === null) initialSP = 1;
-    const playerId = targetUser.id;
-    
-    const player = await getPlayer(playerId);
+        const targetUser = interaction.options.getUser('user');
+        const userId = targetUser.id;
+        let slot = interaction.options.getInteger('slot');
+        if (!slot) {
+            const { getActiveSlot } = await import('../utils/dataManager.js');
+            slot = await getActiveSlot(userId);
+        }
+        if (slot !== 1 && slot !== 2) slot = 1;
+        const playerId = slot === 1 ? userId : `${userId}_${slot}`;
+        const styleName = interaction.options.getString('style_name');
+        let initialSP = interaction.options.getInteger('initial_sp');
+        if (initialSP === null) initialSP = 1;
+        const player = await getPlayer(playerId);
     
     if (!player) {
         const msg = await interaction.reply({

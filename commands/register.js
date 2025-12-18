@@ -39,7 +39,8 @@ export async function execute(interaction) {
     const avatarAttachment = interaction.options.getAttachment('avatar');
 
     const requestedSlot = interaction.options.getInteger('slot');
-    const slot = requestedSlot && requestedSlot >= 1 ? requestedSlot : await getActiveSlot(playerId);
+    let slot = requestedSlot && requestedSlot >= 1 ? requestedSlot : await getActiveSlot(playerId);
+    if (slot > 2) slot = 2;
 
     // Check if this slot already has a character
     const existingPlayer = await getPlayer(`${playerId}_${slot}`);

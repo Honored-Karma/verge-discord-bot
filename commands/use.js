@@ -26,15 +26,16 @@ export async function execute(interaction) {
         return;
     }
 
-    const playerId = interaction.user.id;
+    const userId = interaction.user.id;
+    const { getActiveSlot } = await import('../utils/dataManager.js');
+    const activeSlot = await getActiveSlot(userId);
+    const playerId = activeSlot === 1 ? userId : `${userId}_${activeSlot}`;
     const itemName = interaction.options.getString('item_name');
     const qty = interaction.options.getInteger('quantity') || 1;
-    
     const player = await getPlayer(playerId);
-    
     if (!player) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Не зарегистрирован', 'Сначала зарегистрируйтесь командой `/register`!')],
+            embeds: [createErrorEmbed('Пустой слот', 'В этом слоте нет персонажа. Используйте /register, чтобы создать нового персонажа в этом слоте.')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

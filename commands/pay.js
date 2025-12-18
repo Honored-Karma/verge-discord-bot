@@ -34,12 +34,14 @@ export async function execute(interaction) {
         return;
     }
 
-    const fromId = interaction.user.id;
+    const userId = interaction.user.id;
+    const { getActiveSlot } = await import('../utils/dataManager.js');
+    const activeSlot = await getActiveSlot(userId);
+    const fromId = activeSlot === 1 ? userId : `${userId}_${activeSlot}`;
     const toUser = interaction.options.getUser('user');
     const toId = toUser.id;
     const currency = interaction.options.getString('currency');
     const amount = interaction.options.getInteger('amount');
-    
     if (fromId === toId) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Нельзя переводить себе!')],

@@ -1,4 +1,36 @@
+
 import { getDB } from './db.js';
+
+// Получить активный слот пользователя (по умолчанию 1)
+export async function getActiveSlot(userId) {
+    try {
+        const db = getDB();
+        const player = await db.collection('players').findOne({ id: userId });
+        if (player && player.active_slot) {
+            if (player.active_slot > 2) return 2;
+            return player.active_slot;
+        }
+        return 1;
+    } catch (error) {
+        console.error('Error getting active slot:', error);
+        return 1;
+    }
+}
+
+// Установить активный слот пользователя
+export async function setActiveSlot(userId, slot) {
+    try {
+        const db = getDB();
+        const res = await db.collection('players').updateOne(
+            { id: userId },
+            { $set: { active_slot: slot } }
+        );
+        return res.modifiedCount > 0;
+    } catch (error) {
+        console.error('Error setting active slot:', error);
+        return false;
+    }
+}
 
 function logAdminAction(adminId, action, details) {
     const timestamp = Math.floor(Date.now() / 1000);
@@ -26,11 +58,15 @@ export async function getPlayer(playerId) {
     }
 }
 
-export async function createPlayer(playerId, username, characterName, characterAvatar = null) {
+export async function createPlayer(playerId, username, characterName, characterAvatar = null, slot = 1) {
     try {
         const db = getDB();
+        let id = playerId;
+        if (slot && slot !== 1) {
+            id = `${playerId}_${slot}`;
+        }
         await db.collection('players').insertOne({
-            id: playerId,
+            id,
             username,
             character_name: characterName,
             character_avatar: characterAvatar,

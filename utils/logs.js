@@ -43,14 +43,17 @@ export async function logCommand({ client, guildId, channelId, userId, userTag, 
                                 );
                             
                             if (targetTag) {
-                                embed.addFields({ name: '🎯 Target', value: targetTag, inline: true });
+                                embed.addFields({ name: '🎯 Target', value: targetTag.length > 1024 ? targetTag.slice(0, 1021) + '...' : targetTag, inline: true });
                             }
                             
                             if (extra) {
                                 const extraStr = Object.entries(extra)
                                     .map(([k, v]) => `**${k}**: ${v}`)
                                     .join('\n');
-                                if (extraStr) embed.addFields({ name: '📝 Details', value: extraStr, inline: false });
+                                if (extraStr) {
+                                    const safeExtraStr = extraStr.length > 1024 ? extraStr.slice(0, 1021) + '...' : extraStr;
+                                    embed.addFields({ name: '📝 Details', value: safeExtraStr, inline: false });
+                                }
                             }
                             
                             embed.setTimestamp();

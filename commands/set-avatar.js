@@ -9,7 +9,16 @@ export const data = new SlashCommandBuilder()
     .addStringOption(option =>
         option.setName('url')
             .setDescription('URL аватара (изображение)')
-            .setRequired(true));
+            .setRequired(true))
+    .addIntegerOption(option =>
+        option.setName('slot')
+            .setDescription('Слот: 1 или 2 (по умолчанию активный)')
+            .setRequired(false)
+            .addChoices(
+                { name: 'Слот 1', value: 1 },
+                { name: 'Слот 2', value: 2 }
+            )
+    );
 
 export async function execute(interaction) {
     const globalCooldown = checkGlobalCooldown(interaction.user.id);
@@ -23,13 +32,19 @@ export async function execute(interaction) {
     }
 
     const userId = interaction.user.id;
+    let slot = interaction.options.getInteger('slot');
+    if (!slot) {
+        const { getActiveSlot } = await import('../utils/dataManager.js');
+        slot = await getActiveSlot(userId);
+    }
+    if (slot !== 1 && slot !== 2) slot = 1;
+    const playerId = slot === 1 ? userId : `${userId}_${slot}`;
     const avatarUrl = interaction.options.getString('url');
-
     // Проверяем, что пользователь зарегистрирован
-    const player = await getPlayer(userId);
+    const player = await getPlayer(playerId);
     if (!player) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Не зарегистрирован', 'Вы не зарегистрированы. Используйте `/register`!')],
+            embeds: [createErrorEmbed('Пустой слот', 'В этом слоте нет персонажа. Используйте /register, чтобы создать нового персонажа в этом слоте.')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

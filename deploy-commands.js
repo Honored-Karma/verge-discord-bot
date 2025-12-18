@@ -17,8 +17,11 @@ const commandFiles = readdirSync(commandsPath).filter(file => file.endsWith('.js
 for (const file of commandFiles) {
     const filePath = join(commandsPath, file);
     const command = await import(`file://${filePath}`);
-    
     if ('data' in command && 'execute' in command) {
+        if (commands.some(cmd => cmd.name === command.data.name)) {
+            console.warn(`⚠️  Duplicate command detected: ${command.data.name}. Skipping.`);
+            continue;
+        }
         commands.push(command.data.toJSON());
         console.log(`✅ Loaded command for deployment: ${command.data.name}`);
     } else {
@@ -45,23 +48,43 @@ const rest = new REST().setToken(token);
 (async () => {
     try {
         console.log(`🔄 Started refreshing ${commands.length} application (/) commands.`);
-        
         let data;
-        
         if (guildId) {
+            // Удаляем все старые гильдейские команды
+            console.log(`📍 Removing old guild commands from: ${guildId}`);
+            const oldGuildCommands = await rest.get(Routes.applicationGuildCommands(clientId, guildId));
+            for (const cmd of oldGuildCommands) {
+                await rest.delete(Routes.applicationGuildCommand(clientId, guildId, cmd.id));
+                console.log(`🗑️ Deleted old guild command: ${cmd.name}`);
+            }
+            // Удаляем все старые глобальные команды
+            console.log('🌍 Removing old global commands');
+            const oldGlobalCommands = await rest.get(Routes.applicationCommands(clientId));
+            for (const cmd of oldGlobalCommands) {
+                await rest.delete(Routes.applicationCommand(clientId, cmd.id));
+                console.log(`🗑️ Deleted old global command: ${cmd.name}`);
+            }
+            // Деплоим новые
             console.log(`📍 Deploying to guild: ${guildId}`);
             data = await rest.put(
                 Routes.applicationGuildCommands(clientId, guildId),
                 { body: commands }
             );
         } else {
+            // Удаляем все старые глобальные команды
+            console.log('🌍 Removing old global commands');
+            const oldGlobalCommands = await rest.get(Routes.applicationCommands(clientId));
+            for (const cmd of oldGlobalCommands) {
+                await rest.delete(Routes.applicationCommand(clientId, cmd.id));
+                console.log(`🗑️ Deleted old global command: ${cmd.name}`);
+            }
+            // Деплоим новые
             console.log('🌍 Deploying globally (this may take up to 1 hour to propagate)');
             data = await rest.put(
                 Routes.applicationCommands(clientId),
                 { body: commands }
             );
         }
-        
         console.log(`✅ Successfully reloaded ${data.length} application (/) commands.`);
     } catch (error) {
         console.error('❌ Error deploying commands:', error);

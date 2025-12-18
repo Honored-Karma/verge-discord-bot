@@ -9,7 +9,16 @@ export const data = new SlashCommandBuilder()
     .addUserOption(option =>
         option.setName('user')
             .setDescription('Пользователь для просмотра (оставьте пустым для себя)')
-            .setRequired(false));
+            .setRequired(false))
+    .addIntegerOption(option =>
+        option.setName('slot')
+            .setDescription('Слот: 1 или 2 (по умолчанию активный)')
+            .setRequired(false)
+            .addChoices(
+                { name: 'Слот 1', value: 1 },
+                { name: 'Слот 2', value: 2 }
+            )
+    );
 
 export async function execute(interaction) {
     const globalCooldown = checkGlobalCooldown(interaction.user.id);
@@ -23,48 +32,54 @@ export async function execute(interaction) {
     }
 
     const targetUser = interaction.options.getUser('user') || interaction.user;
-    const playerId = targetUser.id;
-    
-    const player = await getPlayer(playerId);
-    
+    const userId = targetUser.id;
+    let slot = interaction.options.getInteger('slot');
+    if (!slot) {
+        const { getActiveSlot } = await import('../utils/dataManager.js');
+        slot = await getActiveSlot(userId);
+    }
+    if (slot !== 1 && slot !== 2) slot = 1;
+    const slotPlayerId = slot === 1 ? userId : `${userId}_${slot}`;
+    const player = await getPlayer(slotPlayerId);
+
     if (!player) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Не зарегистрирован', `Игрок не зарегистрирован. Используйте \`/register\` для начала!`)],
+            embeds: [createErrorEmbed('Пустой слот', `В этом слоте нет персонажа. Используйте /register, чтобы создать нового персонажа в этом слоте.`)],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
         return;
     }
-    
+
     const embed = createProfileMainPage(player, targetUser);
     const buttons = createProfileButtons(0);
-    
-    const response = await interaction.reply({ 
-        embeds: [embed], 
+
+    const response = await interaction.reply({
+        embeds: [embed],
         components: [buttons],
         fetchReply: true
     });
-    
+
     const collector = response.createMessageComponentCollector({ time: 300000 });
-    
+
     let currentPage = 0;
     let stylesPage = 0;
-    
+
     collector.on('collect', async i => {
         if (i.user.id !== interaction.user.id) {
             return i.reply({ content: 'Это не ваш профиль!', flags: 64 });
         }
-        
-        const styles = await getAllPlayerSP(playerId);
+
+        const styles = await getAllPlayerSP(slotPlayerId);
         let newEmbed, newButtons;
-        
+
         if (i.customId === 'profile_main') {
             currentPage = 0;
             newEmbed = createProfileMainPage(player, targetUser);
             newButtons = [createProfileButtons(0)];
         } else if (i.customId === 'profile_apsp') {
             currentPage = 1;
-            const totalSP = await getTotalSP(playerId);
+            const totalSP = await getTotalSP(slotPlayerId);
             newEmbed = createProfileAPSPPage(player, targetUser, totalSP);
             newButtons = [createProfileButtons(1)];
         } else if (i.customId === 'profile_styles') {
@@ -91,7 +106,7 @@ export async function execute(interaction) {
             newEmbed = createProfileBalancePage(player, targetUser);
             newButtons = [createProfileButtons(3)];
         }
-        
+
         await i.update({ embeds: [newEmbed], components: newButtons });
     });
     

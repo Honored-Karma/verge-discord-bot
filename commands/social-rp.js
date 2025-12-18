@@ -3,6 +3,7 @@ import { getPlayer, addAP } from '../utils/dataManager.js';
 import { checkCooldown, checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 import { createSocialRPEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { progressBar, getAPProgress } from '../utils/progressBar.js';
+import { logCommand } from '../utils/logs.js';
 
 const SOCIALRP_COOLDOWN = 12 * 60 * 60 * 1000;
 const SOCIALRP_AP_REWARD = 10;
@@ -26,14 +27,25 @@ export async function execute(interaction) {
         return;
     }
 
-    const playerId = interaction.user.id;
+    const userId = interaction.user.id;
+    const { getActiveSlot } = await import('../utils/dataManager.js');
+    const activeSlot = await getActiveSlot(userId);
+    const playerId = activeSlot === 1 ? userId : `${userId}_${activeSlot}`;
     const rpText = interaction.options.getString('text');
-    
+    // Логирование текста социалки
+    await logCommand({
+        client: interaction.client,
+        guildId: interaction.guildId,
+        channelId: interaction.channelId,
+        userId: playerId,
+        userTag: interaction.user.username,
+        command: 'social-rp',
+        extra: { text: rpText }
+    });
     let player = await getPlayer(playerId);
-    
     if (!player) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Не зарегистрирован', 'Сначала зарегистрируйтесь командой `/register`!')],
+            embeds: [createErrorEmbed('Пустой слот', 'В этом слоте нет персонажа. Используйте /register, чтобы создать нового персонажа в этом слоте.')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

@@ -10,7 +10,16 @@ export const data = new SlashCommandBuilder()
     .addUserOption(option =>
         option.setName('user')
             .setDescription('Игрок для удаления')
-            .setRequired(true));
+            .setRequired(true))
+    .addIntegerOption(option =>
+        option.setName('slot')
+            .setDescription('Слот для удаления (1 или 2, по умолчанию 1)')
+            .setRequired(false)
+            .addChoices(
+                { name: 'Слот 1', value: 1 },
+                { name: 'Слот 2', value: 2 }
+            )
+    );
 
 export async function execute(interaction) {
     if (!isAdmin(interaction.member)) {
@@ -33,25 +42,23 @@ export async function execute(interaction) {
     }
     
     const targetUser = interaction.options.getUser('user');
-    const playerId = targetUser.id;
-    
+    let slot = interaction.options.getInteger('slot');
+    if (slot !== 1 && slot !== 2) slot = 1;
+    const playerId = slot === 1 ? targetUser.id : `${targetUser.id}_${slot}`;
     const player = await getPlayer(playerId);
-    
     if (!player) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Не найден', `Игрок **${targetUser.username}** не зарегистрирован.`)],
+            embeds: [createErrorEmbed('Не найден', `В слоте ${slot} у игрока **${targetUser.username}** нет персонажа.`)],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
         return;
     }
-    
     const success = await deletePlayer(playerId, interaction.user.id);
-    
     if (success) {
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('Профиль удален', 
-                `Профиль **${player.character_name}** успешно удален.\nИгрок может переучеться командой \`/register\`.`)],
+                `Профиль **${player.character_name}** из слота **${slot}** успешно удален.\nИгрок может переучесться командой \`/register\`.`)],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

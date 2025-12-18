@@ -3,6 +3,7 @@ import { getPlayer, createPlayer, addAP } from '../utils/dataManager.js';
 import { checkCooldown, validateTrainingText, checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 import { createTrainEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { progressBar, getAPProgress } from '../utils/progressBar.js';
+import { logCommand } from '../utils/logs.js';
 
 const TRAIN_COOLDOWN = 5 * 60 * 60 * 1000;
 const TRAIN_AP_REWARD = 10;
@@ -26,15 +27,26 @@ export async function execute(interaction) {
         return;
     }
 
-    const playerId = interaction.user.id;
+    const userId = interaction.user.id;
+    const { getActiveSlot } = await import('../utils/dataManager.js');
+    const activeSlot = await getActiveSlot(userId);
+    const playerId = activeSlot === 1 ? userId : `${userId}_${activeSlot}`;
     const username = interaction.user.username;
     const trainingText = interaction.options.getString('text');
-    
+    // Логирование текста тренировки
+    await logCommand({
+        client: interaction.client,
+        guildId: interaction.guildId,
+        channelId: interaction.channelId,
+        userId: playerId,
+        userTag: username,
+        command: 'train',
+        extra: { text: trainingText }
+    });
     let player = await getPlayer(playerId);
-    
     if (!player) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Не зарегистрирован', 'Сначала зарегистрируйтесь командой `/register`!')],
+            embeds: [createErrorEmbed('Пустой слот', 'В этом слоте нет персонажа. Используйте /register, чтобы создать нового персонажа в этом слоте.')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

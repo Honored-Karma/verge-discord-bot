@@ -126,29 +126,38 @@ export function createStylesNavigationButtons(page = 0, totalPages = 1) {
 }
 
 export function createProfileMainPage(player, user) {
+    // Определяем номер слота по id
+    let slotNumber = 1;
+    if (player.id && typeof player.id === 'string' && player.id.includes('_')) {
+        const parts = player.id.split('_');
+        if (parts.length === 2 && !isNaN(Number(parts[1]))) {
+            slotNumber = Number(parts[1]);
+        }
+    }
     const embed = new EmbedBuilder()
         .setColor(0x0099FF)
         .setTitle(`📋 Профиль — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .setImage('https://s.iimg.su/s/22/gqWynCdxyhjnJyLDeFjmUbuQHLhpUklQ3Eih04WP.jpg')
         .setTimestamp();
-    
+
+    embed.addFields({ name: '🟦 Активный слот', value: `Слот №${slotNumber}`, inline: false });
     embed.addFields({ name: '⚡ Очки способностей (AP)', value: `${player.ap} AP`, inline: true });
     embed.addFields({ name: '🎯 Техники', value: `${Math.floor(player.ap / 100)}`, inline: true });
-    
+
     if (player.unlocked_avatar) {
         embed.addFields({ name: '🌟 Статус', value: 'Avatar/Embodiment разблокирован', inline: false });
     }
-    
+
     if (player.krw > 0 || player.yen > 0) {
         let currencyText = '';
         if (player.krw > 0) currencyText += `💵 **${player.krw.toLocaleString('ru-RU')}** KRW\n`;
         if (player.yen > 0) currencyText += `💴 **${player.yen.toLocaleString('ru-RU')}** ¥`;
         embed.addFields({ name: '💰 Валюта', value: currencyText || 'Нет валюты', inline: false });
     }
-    
+
     embed.setFooter({ text: `ID: ${player.id} • Страница 1/3` });
-    
+
     return embed;
 }
 
