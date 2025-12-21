@@ -126,9 +126,11 @@ export function createStylesNavigationButtons(page = 0, totalPages = 1) {
 }
 
 export function createProfileMainPage(player, user) {
-    // Определяем номер слота по id
+    // Получаем номер слота из аргумента, если передан
     let slotNumber = 1;
-    if (player.id && typeof player.id === 'string' && player.id.includes('_')) {
+    if (arguments.length > 2 && (arguments[2] === 1 || arguments[2] === 2)) {
+        slotNumber = arguments[2];
+    } else if (player.id && typeof player.id === 'string' && player.id.includes('_')) {
         const parts = player.id.split('_');
         if (parts.length === 2 && !isNaN(Number(parts[1]))) {
             slotNumber = Number(parts[1]);

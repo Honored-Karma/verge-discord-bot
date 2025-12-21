@@ -51,7 +51,7 @@ export async function execute(interaction) {
         return;
     }
 
-    const embed = createProfileMainPage(player, targetUser);
+    const embed = createProfileMainPage(player, targetUser, slot);
     const buttons = createProfileButtons(0);
 
     const response = await interaction.reply({
