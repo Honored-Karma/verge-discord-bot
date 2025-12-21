@@ -11,7 +11,7 @@ export async function execute(interaction) {
     if (!isAdmin(interaction.member)) {
         return interaction.reply({
             embeds: [createErrorEmbed('Доступ запрещен', 'Только администраторы могут управлять логированием.')],
-            ephemeral: true
+            flags: 64
         });
     }
 
@@ -19,7 +19,7 @@ export async function execute(interaction) {
     if (!db) {
         return interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'База данных недоступна.')],
-            ephemeral: true
+            flags: 64
         });
     }
 
@@ -30,7 +30,7 @@ export async function execute(interaction) {
         if (result.deletedCount === 0) {
             return interaction.reply({
                 embeds: [createErrorEmbed('Не включено', 'Логирование в этом канале не было включено.')],
-                ephemeral: true
+                flags: 64
             });
         }
 
@@ -39,13 +39,13 @@ export async function execute(interaction) {
                 '✅ Логирование отключено',
                 `Логи команд больше не будут отправляться в <#${channelId}>.`
             )],
-            ephemeral: true
+            flags: 64
         });
     } catch (error) {
         console.error('Error disabling logs:', error);
         await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось отключить логирование.')],
-            ephemeral: true
+            flags: 64
         });
     }
 }

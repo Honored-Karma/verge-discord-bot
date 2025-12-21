@@ -65,6 +65,11 @@ export async function createPlayer(playerId, username, characterName, characterA
         if (slot && slot !== 1) {
             id = `${playerId}_${slot}`;
         }
+
+        // If player already exists, treat as success (avoid duplicate-key race conditions)
+        const existing = await db.collection('players').findOne({ id });
+        if (existing) return true;
+
         await db.collection('players').insertOne({
             id,
             username,
@@ -81,6 +86,12 @@ export async function createPlayer(playerId, username, characterName, characterA
         });
         return true;
     } catch (error) {
+        // If another process inserted the same id simultaneously, treat as success
+        try {
+            if (error && error.code === 11000) {
+                return true;
+            }
+        } catch (e) {}
         console.error('Error creating player:', error);
         return false;
     }

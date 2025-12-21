@@ -16,14 +16,14 @@ export async function execute(interaction) {
 
     // Only allow running in the designated logs channel
     if (logsChannel && interaction.channelId !== logsChannel) {
-        const msg = await interaction.reply({ embeds: [createErrorEmbed('Недоступно в этом канале', `Эту команду можно запускать только в канале логов <#${logsChannel}>.`)], ephemeral: true, fetchReply: true });
+        const msg = await interaction.reply({ embeds: [createErrorEmbed('Недоступно в этом канале', `Эту команду можно запускать только в канале логов <#${logsChannel}>.`)], flags: 64, fetchReply: true });
         return;
     }
 
     // Permission: admin or allowed limited role
     const member = await resolveMember(interaction);
     if (!isAdmin(member) && !hasCommandPermission(member, 'add-ap')) {
-        const msg = await interaction.reply({ embeds: [createErrorEmbed('Доступ запрещен', 'Недостаточно прав.')], ephemeral: true, fetchReply: true });
+        const msg = await interaction.reply({ embeds: [createErrorEmbed('Доступ запрещен', 'Недостаточно прав.')], flags: 64, fetchReply: true });
         return;
     }
 
@@ -33,7 +33,7 @@ export async function execute(interaction) {
 
     const db = getDB();
     if (!db) {
-        return interaction.reply({ embeds: [createErrorEmbed('Ошибка', 'База данных недоступна.')], ephemeral: true });
+        return interaction.reply({ embeds: [createErrorEmbed('Ошибка', 'База данных недоступна.')], flags: 64 });
     }
 
     const query = {};
@@ -44,7 +44,7 @@ export async function execute(interaction) {
     const rows = await db.collection('command_logs').find(query).sort({ timestamp: -1 }).limit(limit).toArray();
 
     if (!rows || rows.length === 0) {
-        return interaction.reply({ content: 'Нет записей.', ephemeral: true });
+        return interaction.reply({ content: 'Нет записей.', flags: 64 });
     }
 
     const lines = rows.map(r => {
@@ -71,9 +71,9 @@ export async function execute(interaction) {
 
     for (let i = 0; i < outputs.length; i++) {
         if (i === 0) {
-            await interaction.reply({ content: outputs[i], ephemeral: true });
+            await interaction.reply({ content: outputs[i], flags: 64 });
         } else {
-            await interaction.followUp({ content: outputs[i], ephemeral: true });
+            await interaction.followUp({ content: outputs[i], flags: 64 });
         }
     }
 }

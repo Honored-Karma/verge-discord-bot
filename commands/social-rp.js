@@ -4,6 +4,7 @@ import { checkCooldown, checkGlobalCooldown, autoDeleteMessageShort } from '../u
 import { createSocialRPEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { progressBar, getAPProgress } from '../utils/progressBar.js';
 import { logCommand } from '../utils/logs.js';
+import { makePlayerKey } from '../utils/playerKey.js';
 
 const SOCIALRP_COOLDOWN = 12 * 60 * 60 * 1000;
 const SOCIALRP_AP_REWARD = 10;
@@ -30,7 +31,7 @@ export async function execute(interaction) {
     const userId = interaction.user.id;
     const { getActiveSlot } = await import('../utils/dataManager.js');
     const activeSlot = await getActiveSlot(userId);
-    const playerId = activeSlot === 1 ? userId : `${userId}_${activeSlot}`;
+    const playerId = makePlayerKey(userId, activeSlot);
     const rpText = interaction.options.getString('text');
     // Логирование текста социалки
     await logCommand({

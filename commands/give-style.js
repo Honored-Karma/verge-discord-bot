@@ -4,6 +4,7 @@ import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
 import { resolveMember } from '../utils/memberHelper.js';
 import { logCommand } from '../utils/logs.js';
+import { makePlayerKey } from '../utils/playerKey.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
@@ -60,7 +61,7 @@ export async function execute(interaction) {
             slot = await getActiveSlot(userId);
         }
         if (slot !== 1 && slot !== 2) slot = 1;
-        const playerId = slot === 1 ? userId : `${userId}_${slot}`;
+        const playerId = makePlayerKey(userId, slot);
         const styleName = interaction.options.getString('style_name');
         let initialSP = interaction.options.getInteger('initial_sp');
         if (initialSP === null) initialSP = 1;

@@ -42,12 +42,14 @@ export async function execute(interaction) {
     let slot = requestedSlot && requestedSlot >= 1 ? requestedSlot : await getActiveSlot(playerId);
     if (slot > 2) slot = 2;
 
-    // Check if this slot already has a character
-    const existingPlayer = await getPlayer(`${playerId}_${slot}`);
+    // Check if this slot already has a character (slot 1 uses plain playerId)
+    const checkId = (slot && slot !== 1) ? `${playerId}_${slot}` : playerId;
+    const existingPlayer = await getPlayer(checkId);
 
     if (existingPlayer) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Уже зарегистрирован', `В слоте ${slot} уже есть персонаж (${existingPlayer.character_name || existingPlayer.username}). Переключитесь на другой слот или удалите персонажа.`)],
+            flags: 64,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -57,6 +59,7 @@ export async function execute(interaction) {
     if (characterName.length < 2 || characterName.length > 32) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Некорректное имя', 'Имя персонажа должно быть от 2 до 32 символов.')],
+            flags: 64,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -78,12 +81,14 @@ export async function execute(interaction) {
         const msg = await interaction.reply({
             embeds: [createRegisterEmbed('Регистрация завершена', 
                 `Добро пожаловать, **${characterName}**! Создан персонаж в слоте **${slot}**.\n\nУдачи в приключениях! 🚀`)],
+            flags: 64,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
     } else {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка регистрации', 'Произошла ошибка при регистрации. Попробуйте снова.')],
+            flags: 64,
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

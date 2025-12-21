@@ -4,6 +4,7 @@ import { checkCooldown, validateTrainingText, checkGlobalCooldown, autoDeleteMes
 import { createTrainEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { progressBar, getAPProgress } from '../utils/progressBar.js';
 import { logCommand } from '../utils/logs.js';
+import { makePlayerKey } from '../utils/playerKey.js';
 
 const TRAIN_COOLDOWN = 5 * 60 * 60 * 1000;
 const TRAIN_AP_REWARD = 10;
@@ -30,7 +31,7 @@ export async function execute(interaction) {
     const userId = interaction.user.id;
     const { getActiveSlot } = await import('../utils/dataManager.js');
     const activeSlot = await getActiveSlot(userId);
-    const playerId = activeSlot === 1 ? userId : `${userId}_${activeSlot}`;
+    const playerId = makePlayerKey(userId, activeSlot);
     const username = interaction.user.username;
     const trainingText = interaction.options.getString('text');
     // Логирование текста тренировки

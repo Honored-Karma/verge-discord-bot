@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getActiveSlot, getPlayer } from '../utils/dataManager.js';
+import { makePlayerKey } from '../utils/playerKey.js';
 import { createInfoEmbed, createErrorEmbed } from '../utils/embeds.js';
 
 export const data = new SlashCommandBuilder()
@@ -11,7 +12,7 @@ export async function execute(interaction) {
     let description = '';
     let found = false;
     for (let slot = 1; slot <= 2; slot++) {
-        const playerId = slot === 1 ? userId : `${userId}_${slot}`;
+        const playerId = makePlayerKey(userId, slot);
         const player = await getPlayer(playerId);
         if (player) {
             found = true;
@@ -22,8 +23,8 @@ export async function execute(interaction) {
     }
     if (!found) {
         // Если нет ни одного персонажа, сразу отправляем красный эмбед и завершаем выполнение
-        await interaction.reply({ embeds: [createErrorEmbed('Нет персонажей', 'У вас нет ни одного персонажа в слотах. Используйте /register для создания.')], ephemeral: true });
+        await interaction.reply({ embeds: [createErrorEmbed('Нет персонажей', 'У вас нет ни одного персонажа в слотах. Используйте /register для создания.')], flags: 64 });
         return;
     }
-    await interaction.reply({ embeds: [createInfoEmbed('Ваши слоты', description)], ephemeral: true });
+    await interaction.reply({ embeds: [createInfoEmbed('Ваши слоты', description)], flags: 64 });
 }

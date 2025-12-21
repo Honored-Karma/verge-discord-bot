@@ -46,6 +46,29 @@ client.once(Events.ClientReady, readyClient => {
 
 client.on(Events.InteractionCreate, async interaction => {
     if (!interaction.isChatInputCommand()) return;
+    // Wrap reply/followUp to convert deprecated `ephemeral: true` into flags: 64
+    try {
+        const origReply = interaction.reply.bind(interaction);
+        interaction.reply = (options) => {
+            if (options && options.ephemeral) {
+                options.flags = (options.flags || 0) | 64;
+                delete options.ephemeral;
+            }
+            return origReply(options);
+        };
+        if (interaction.followUp) {
+            const origFollow = interaction.followUp.bind(interaction);
+            interaction.followUp = (options) => {
+                if (options && options.ephemeral) {
+                    options.flags = (options.flags || 0) | 64;
+                    delete options.ephemeral;
+                }
+                return origFollow(options);
+            };
+        }
+    } catch (e) {
+        // noop
+    }
     
     const command = client.commands.get(interaction.commandName);
     

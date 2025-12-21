@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, useItem } from '../utils/dataManager.js';
+import { makePlayerKey } from '../utils/playerKey.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 
@@ -29,7 +30,7 @@ export async function execute(interaction) {
     const userId = interaction.user.id;
     const { getActiveSlot } = await import('../utils/dataManager.js');
     const activeSlot = await getActiveSlot(userId);
-    const playerId = activeSlot === 1 ? userId : `${userId}_${activeSlot}`;
+    const playerId = makePlayerKey(userId, activeSlot);
     const itemName = interaction.options.getString('item_name');
     const qty = interaction.options.getInteger('quantity') || 1;
     const player = await getPlayer(playerId);
