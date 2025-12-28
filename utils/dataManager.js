@@ -58,6 +58,20 @@ export async function getPlayer(playerId) {
     }
 }
 
+export async function updatePlayer(playerId, updates) {
+    try {
+        const db = getDB();
+        const res = await db.collection('players').updateOne(
+            { id: playerId },
+            { $set: updates }
+        );
+        return res.matchedCount > 0;
+    } catch (error) {
+        console.error('Error updating player:', error);
+        return false;
+    }
+}
+
 export async function createPlayer(playerId, username, characterName, characterAvatar = null, slot = 1) {
     try {
         const db = getDB();

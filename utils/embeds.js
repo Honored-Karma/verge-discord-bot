@@ -144,6 +144,9 @@ export function createProfileMainPage(player, user) {
         .setTimestamp();
 
     embed.addFields({ name: '🟦 Активный слот', value: `Слот №${slotNumber}`, inline: false });
+    if (player.rank) {
+        embed.addFields({ name: '👑 Ранг', value: player.rank, inline: false });
+    }
     embed.addFields({ name: '⚡ Очки способностей (AP)', value: `${player.ap} AP`, inline: true });
     embed.addFields({ name: '🎯 Техники', value: `${Math.floor(player.ap / 100)}`, inline: true });
 
