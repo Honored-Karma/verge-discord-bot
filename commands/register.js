@@ -42,6 +42,20 @@ export async function execute(interaction) {
     let slot = requestedSlot && requestedSlot >= 1 ? requestedSlot : await getActiveSlot(playerId);
     if (slot > 2) slot = 2;
 
+    // Slot policy: slot 1 must exist before slot 2 can be created.
+    if (slot !== 1) {
+        const slot1Player = await getPlayer(playerId);
+        if (!slot1Player) {
+            const msg = await interaction.reply({
+                embeds: [createErrorEmbed('Сначала создайте слот 1', 'Нельзя создать персонажа в слоте 2, пока не создан персонаж в слоте 1.\n\nИспользуйте: `/register slot:1`')],
+                flags: 64,
+                fetchReply: true
+            });
+            autoDeleteMessageShort(msg);
+            return;
+        }
+    }
+
     // Check if this slot already has a character (slot 1 uses plain playerId)
     const checkId = (slot && slot !== 1) ? `${playerId}_${slot}` : playerId;
     const existingPlayer = await getPlayer(checkId);

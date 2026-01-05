@@ -2,13 +2,14 @@ import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, setActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
+import { makePlayerKey } from '../utils/playerKey.js';
 
 export const data = new SlashCommandBuilder()
     .setName('slot')
     .setDescription('Переключить активный слот персонажа')
     .addIntegerOption(option =>
         option.setName('number')
-            .setDescription('Номер слота (1, 2, ...)')
+            .setDescription('Номер слота (1 или 2)')
             .setRequired(true)
     );
 
@@ -21,15 +22,15 @@ export async function execute(interaction) {
     }
 
     const slot = interaction.options.getInteger('number');
-    if (!slot || slot < 1) {
-        const msg = await interaction.reply({ embeds: [createErrorEmbed('Ошибка', 'Неверный номер слота.')], fetchReply: true });
+    if (slot !== 1 && slot !== 2) {
+        const msg = await interaction.reply({ embeds: [createErrorEmbed('Ошибка', 'Неверный номер слота. Доступно: 1 или 2.')], fetchReply: true });
         autoDeleteMessageShort(msg);
         return;
     }
 
     const userId = interaction.user.id;
     // Try to get target character (if exists)
-    const target = await getPlayer(`${userId}_${slot}`);
+    const target = await getPlayer(makePlayerKey(userId, slot));
 
     const ok = await setActiveSlot(userId, slot);
     if (!ok) {

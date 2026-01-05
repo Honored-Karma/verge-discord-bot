@@ -2,6 +2,7 @@ import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, exchangeCurrency } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
+import { makePlayerKey } from '../utils/playerKey.js';
 
 export const data = new SlashCommandBuilder()
     .setName('exchange')
@@ -30,7 +31,10 @@ export async function execute(interaction) {
         return;
     }
 
-    const playerId = interaction.user.id;
+    const userId = interaction.user.id;
+    const { getActiveSlot } = await import('../utils/dataManager.js');
+    const activeSlot = await getActiveSlot(userId);
+    const playerId = makePlayerKey(userId, activeSlot);
     const currency = interaction.options.getString('currency');
     const amount = interaction.options.getInteger('amount');
     
@@ -47,7 +51,7 @@ export async function execute(interaction) {
     
     if (!player) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Не зарегистрирован', 'Сначала зарегистрируйтесь командой `/register`!')],
+            embeds: [createErrorEmbed('Пустой слот', 'В этом слоте нет персонажа. Используйте /register, чтобы создать персонажа в этом слоте.')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

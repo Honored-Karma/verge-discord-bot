@@ -2,6 +2,7 @@ import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, transferCurrency } from '../utils/dataManager.js';
 import { createPayEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
+import { makePlayerKey } from '../utils/playerKey.js';
 
 export const data = new SlashCommandBuilder()
     .setName('pay')
@@ -35,21 +36,25 @@ export async function execute(interaction) {
     }
 
     const userId = interaction.user.id;
-    const { getActiveSlot } = await import('../utils/dataManager.js');
-    const activeSlot = await getActiveSlot(userId);
-    const fromId = activeSlot === 1 ? userId : `${userId}_${activeSlot}`;
     const toUser = interaction.options.getUser('user');
-    const toId = toUser.id;
-    const currency = interaction.options.getString('currency');
-    const amount = interaction.options.getInteger('amount');
-    if (fromId === toId) {
+
+    // Нельзя переводить самому себе (включая другие слоты)
+    if (userId === toUser.id) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Ошибка', 'Нельзя переводить себе!')],
+            embeds: [createErrorEmbed('Ошибка', 'Нельзя переводить самому себе!')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
         return;
     }
+
+    const { getActiveSlot } = await import('../utils/dataManager.js');
+    const fromSlot = await getActiveSlot(userId);
+    const toSlot = await getActiveSlot(toUser.id);
+    const fromId = makePlayerKey(userId, fromSlot);
+    const toId = makePlayerKey(toUser.id, toSlot);
+    const currency = interaction.options.getString('currency');
+    const amount = interaction.options.getInteger('amount');
     
     if (amount <= 0) {
         const msg = await interaction.reply({
