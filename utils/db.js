@@ -39,6 +39,11 @@ async function initializeDatabase() {
             await db.collection('players').createIndex({ id: 1 }, { unique: true });
         }
 
+        if (!collectionNames.includes('user_settings')) {
+            await db.createCollection('user_settings');
+            await db.collection('user_settings').createIndex({ id: 1 }, { unique: true });
+        }
+
         if (!collectionNames.includes('styles')) {
             await db.createCollection('styles');
             await db.collection('styles').createIndex({ name: 1 }, { unique: true });

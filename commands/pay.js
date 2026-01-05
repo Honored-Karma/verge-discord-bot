@@ -22,7 +22,15 @@ export const data = new SlashCommandBuilder()
     .addIntegerOption(option =>
         option.setName('amount')
             .setDescription('Сумма перевода')
-            .setRequired(true));
+            .setRequired(true))
+    .addIntegerOption(option =>
+        option.setName('slot')
+            .setDescription('Слот получателя: 1 или 2 (по умолчанию активный слот получателя)')
+            .setRequired(false)
+            .addChoices(
+                { name: 'Слот 1', value: 1 },
+                { name: 'Слот 2', value: 2 }
+            ));
 
 export async function execute(interaction) {
     const globalCooldown = checkGlobalCooldown(interaction.user.id);
@@ -50,7 +58,8 @@ export async function execute(interaction) {
 
     const { getActiveSlot } = await import('../utils/dataManager.js');
     const fromSlot = await getActiveSlot(userId);
-    const toSlot = await getActiveSlot(toUser.id);
+    const requestedToSlot = interaction.options.getInteger('slot');
+    const toSlot = (requestedToSlot === 1 || requestedToSlot === 2) ? requestedToSlot : await getActiveSlot(toUser.id);
     const fromId = makePlayerKey(userId, fromSlot);
     const toId = makePlayerKey(toUser.id, toSlot);
     const currency = interaction.options.getString('currency');

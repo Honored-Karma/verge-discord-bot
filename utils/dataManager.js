@@ -1,15 +1,42 @@
 
 import { getDB } from './db.js';
 
+function normalizeSlot(slot) {
+    const s = Number(slot);
+    if (s === 2) return 2;
+    return 1;
+}
+
 // Получить активный слот пользователя (по умолчанию 1)
+// Храним активный слот в отдельной коллекции user_settings, чтобы это работало даже если у пользователя есть только слот 2.
 export async function getActiveSlot(userId) {
     try {
         const db = getDB();
-        const player = await db.collection('players').findOne({ id: userId });
-        if (player && player.active_slot) {
-            if (player.active_slot > 2) return 2;
-            return player.active_slot;
+
+        // Primary source of truth
+        const settings = await db.collection('user_settings').findOne({ id: userId });
+        if (settings && settings.active_slot) {
+            return normalizeSlot(settings.active_slot);
         }
+
+        // Back-compat: migrate from legacy storage in players.active_slot (slot 1 doc)
+        const playerSlot1 = await db.collection('players').findOne({ id: userId });
+        if (playerSlot1 && playerSlot1.active_slot) {
+            const slot = normalizeSlot(playerSlot1.active_slot);
+            await db.collection('user_settings').updateOne(
+                { id: userId },
+                { $set: { active_slot: slot } },
+                { upsert: true }
+            );
+            return slot;
+        }
+
+        // Legacy edge case: user may historically have only slot 2 character
+        const playerSlot2 = await db.collection('players').findOne({ id: `${userId}_2` });
+        if (playerSlot2) {
+            return 2;
+        }
+
         return 1;
     } catch (error) {
         console.error('Error getting active slot:', error);
@@ -21,11 +48,15 @@ export async function getActiveSlot(userId) {
 export async function setActiveSlot(userId, slot) {
     try {
         const db = getDB();
-        const res = await db.collection('players').updateOne(
+        const normalized = normalizeSlot(slot);
+        const res = await db.collection('user_settings').updateOne(
             { id: userId },
-            { $set: { active_slot: slot } }
+            { $set: { active_slot: normalized } },
+            { upsert: true }
         );
-        return res.modifiedCount > 0;
+
+        // Treat "already set" as success too (modifiedCount may be 0)
+        return (res.matchedCount > 0) || (res.upsertedCount > 0) || (res.modifiedCount > 0);
     } catch (error) {
         console.error('Error setting active slot:', error);
         return false;
@@ -587,6 +618,35 @@ export async function deletePlayer(playerId, adminId) {
         await db.collection('player_sp').deleteMany({ player_id: playerId });
         await db.collection('inventory').deleteMany({ player_id: playerId });
         await db.collection('players').deleteOne({ id: playerId });
+
+        // Keep active slot consistent after deletions.
+        // Example: slot1 deleted but slot2 exists -> switch active slot to 2.
+        const baseUserId = String(playerId).split('_')[0];
+        const slot1Id = baseUserId;
+        const slot2Id = `${baseUserId}_2`;
+
+        const slot1Exists = !!(await db.collection('players').findOne({ id: slot1Id }, { projection: { id: 1 } }));
+        const slot2Exists = !!(await db.collection('players').findOne({ id: slot2Id }, { projection: { id: 1 } }));
+
+        const settings = await db.collection('user_settings').findOne({ id: baseUserId });
+        const currentActive = settings && settings.active_slot ? normalizeSlot(settings.active_slot) : 1;
+
+        if (!slot1Exists && !slot2Exists) {
+            // No characters left -> clear active slot state
+            await db.collection('user_settings').deleteOne({ id: baseUserId });
+        } else if (currentActive === 1 && !slot1Exists && slot2Exists) {
+            await db.collection('user_settings').updateOne(
+                { id: baseUserId },
+                { $set: { active_slot: 2 } },
+                { upsert: true }
+            );
+        } else if (currentActive === 2 && !slot2Exists && slot1Exists) {
+            await db.collection('user_settings').updateOne(
+                { id: baseUserId },
+                { $set: { active_slot: 1 } },
+                { upsert: true }
+            );
+        }
         
         logAdminAction(adminId, 'DELETE_PLAYER', `Удалил игрока ${playerId} (${player.character_name})`);
         return true;
