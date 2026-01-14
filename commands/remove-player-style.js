@@ -1,25 +1,22 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { getPlayer, getStyleByName, addSP, listStyles, getAllPlayerSP } from '../utils/dataManager.js';
+import { getPlayer, getAllPlayerSP } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
 import { resolveMember } from '../utils/memberHelper.js';
 import { logCommand } from '../utils/logs.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
+import { getDB } from '../utils/db.js';
 
 export const data = new SlashCommandBuilder()
-    .setName('add-sp')
-    .setDescription('[АДМИН] Добавить SP игроку для стиля')
+    .setName('remove-player-style')
+    .setDescription('[АДМИН] Удалить стиль у конкретного игрока (не глобально)')
     .addUserOption(option =>
         option.setName('user')
-            .setDescription('Игрок для изменения')
+            .setDescription('Игрок')
             .setRequired(true))
     .addStringOption(option =>
         option.setName('style')
-            .setDescription('Номер стиля (1, 2, 3...) или название стиля')
-            .setRequired(true))
-    .addIntegerOption(option =>
-        option.setName('amount')
-            .setDescription('Количество SP для добавления')
+            .setDescription('Номер стиля у игрока (с 1) или имя стиля')
             .setRequired(true))
     .addIntegerOption(option =>
         option.setName('slot')
@@ -33,7 +30,7 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
     const member = await resolveMember(interaction);
-    if (!hasCommandPermission(member, 'add-sp')) {
+    if (!hasCommandPermission(member, 'give-style') && !isAdmin(member)) { // allow same limited roles as give-style
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
             fetchReply: true
@@ -51,10 +48,9 @@ export async function execute(interaction) {
         autoDeleteMessageShort(msg);
         return;
     }
-    
+
     const targetUser = interaction.options.getUser('user');
     const styleInput = interaction.options.getString('style');
-    const amount = interaction.options.getInteger('amount');
     const userId = targetUser.id;
     let slot = interaction.options.getInteger('slot');
     if (!slot) {
@@ -63,26 +59,21 @@ export async function execute(interaction) {
     }
     if (slot !== 1 && slot !== 2) slot = 1;
     const playerId = slot === 1 ? userId : `${userId}_${slot}`;
+
     const player = await getPlayer(playerId);
-    
     if (!player) {
         const msg = await interaction.reply({
-                embeds: [createErrorEmbed('Пустой слот', `В этом слоте нет персонажа. Используйте /register, чтобы создать нового персонажа в этом слоте.`)],
+            embeds: [createErrorEmbed('Пустой слот', `В этом слоте нет персонажа. Используйте /register, чтобы создать нового персонажа в этом слоте.`)],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
         return;
     }
-    
-    // Resolve by player's OWN styles for numeric input; enforce ownership for name input
-    const playerStyles = await getAllPlayerSP(playerId); // sorted by SP desc (matches profile)
 
-    // Fallback info if user has no styles
+    const playerStyles = await getAllPlayerSP(playerId);
     if (!playerStyles || playerStyles.length === 0) {
-        const allStyles = await listStyles();
-        const allList = allStyles.map((s, i) => `${i + 1}) ${s.name}`).join('\n');
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Нет стилей у игрока', `У игрока нет изученных стилей. Сначала выдайте стиль командой \`/give-style\`.\n\nВсе стили:\n${allList}`)],
+            embeds: [createErrorEmbed('Нет стилей у игрока', 'У игрока нет изученных стилей для удаления.')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -90,16 +81,11 @@ export async function execute(interaction) {
     }
 
     let style = null;
-
     if (/^\d+$/.test(styleInput)) {
-        const idx = parseInt(styleInput, 10) - 1; // 1-based -> 0-based
-        if (idx >= 0 && idx < playerStyles.length) {
-            style = playerStyles[idx];
-        }
+        const idx = parseInt(styleInput, 10) - 1; // 1-based
+        if (idx >= 0 && idx < playerStyles.length) style = playerStyles[idx];
     } else {
-        // By name: ensure the player owns it
-        const byName = playerStyles.find(s => s.name.toLowerCase() === styleInput.toLowerCase());
-        if (byName) style = byName;
+        style = playerStyles.find(s => s.name.toLowerCase() === styleInput.toLowerCase());
     }
 
     if (!style) {
@@ -112,34 +98,35 @@ export async function execute(interaction) {
         return;
     }
 
-    const newSP = await addSP(playerId, style.id, amount, interaction.user.id);
-    
-    if (newSP !== false) {
-        const rank = newSP >= 2500 ? 'Мастер' : newSP >= 1000 ? 'Эксперт' : newSP >= 350 ? 'Владелец' : 'Новичок';
+    try {
+        const db = getDB();
+        await db.collection('player_sp').deleteOne({ player_id: playerId, style_id: style.id });
+    } catch (e) {
         const msg = await interaction.reply({
-            embeds: [createSuccessEmbed('SP обновлено', 
-                `Добавлено **${amount} SP** к стилю **${style.name}** игроку **${player.character_name || player.username}**\n\nНовый баланс: **${newSP} SP** (${rank})`)],
+            embeds: [createErrorEmbed('Ошибка', 'Не удалось удалить стиль у игрока.')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
-        try {
-            await logCommand({
-                client: interaction.client,
-                guildId: interaction.guildId,
-                channelId: interaction.channelId,
-                userId: interaction.user.id,
-                userTag: interaction.user.tag,
-                command: 'add-sp',
-                targetId: playerId,
-                targetTag: `${player.character_name || player.username} <@${playerId}>`,
-                extra: { amount, style: style.name }
-            });
-        } catch (e) { console.error('logCommand error', e); }
-    } else {
-        const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Ошибка', 'Не удалось обновить SP.')],
-            fetchReply: true
-        });
-        autoDeleteMessageShort(msg);
+        return;
     }
+
+    const msg = await interaction.reply({
+        embeds: [createSuccessEmbed('Стиль удален у игрока', `У игрока ${player.character_name || player.username} удален стиль **${style.name}**.`)],
+        fetchReply: true
+    });
+    autoDeleteMessageShort(msg);
+
+    try {
+        await logCommand({
+            client: interaction.client,
+            guildId: interaction.guildId,
+            channelId: interaction.channelId,
+            userId: interaction.user.id,
+            userTag: interaction.user.tag,
+            command: 'remove-player-style',
+            targetId: playerId,
+            targetTag: `${player.character_name || player.username} <@${playerId}>`,
+            extra: { style: style.name }
+        });
+    } catch (e) {}
 }
