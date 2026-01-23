@@ -6,7 +6,7 @@ import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.
 
 export const data = new SlashCommandBuilder()
     .setName('set-currency')
-    .setDescription('[АДМИН] Установить валюту игрока')
+    .setDescription('[АДМИН/ГМ] Установить валюту игрока')
     .addUserOption(option =>
         option.setName('user')
             .setDescription('Игрок')
