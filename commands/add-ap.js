@@ -15,7 +15,7 @@ export const data = new SlashCommandBuilder()
             .setRequired(true))
     .addIntegerOption(option =>
         option.setName('amount')
-            .setDescription('Количество AP для добавления (может быть отрицательным)')
+            .setDescription('Количество AP (может быть отрицательным)')
             .setRequired(true))
     .addIntegerOption(option =>
         option.setName('slot')

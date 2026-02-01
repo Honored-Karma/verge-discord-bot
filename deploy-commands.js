@@ -70,6 +70,7 @@ const rest = new REST().setToken(token);
                 Routes.applicationGuildCommands(clientId, guildId),
                 { body: commands }
             );
+            console.log(`✅ Successfully deployed to guild!`);
         } else {
             // Удаляем все старые глобальные команды
             console.log('🌍 Removing old global commands');
