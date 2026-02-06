@@ -1,7 +1,8 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, setAPMultiplier, getActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
-import { isAdmin } from '../utils/adminCheck.js';
+import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
+import { resolveMember } from '../utils/memberHelper.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 import { makePlayerKey } from '../utils/playerKey.js';
 
@@ -28,14 +29,15 @@ export const data = new SlashCommandBuilder()
             ));
 
 export async function execute(interaction) {
-    if (!isAdmin(interaction.member)) {
-        const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторами.')],
-            fetchReply: true
-        });
-        autoDeleteMessageShort(msg);
-        return;
-    }
+const member = await resolveMember(interaction);
+if (!hasCommandPermission(member, 'set-ap')) {
+    const msg = await interaction.reply({
+        embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторами.')],
+        fetchReply: true
+    });
+    autoDeleteMessageShort(msg);
+    return;
+}
 
     const globalCooldown = checkGlobalCooldown(interaction.user.id);
     if (globalCooldown.onCooldown) {

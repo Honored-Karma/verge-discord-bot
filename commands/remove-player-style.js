@@ -29,15 +29,15 @@ export const data = new SlashCommandBuilder()
     );
 
 export async function execute(interaction) {
-    const member = await resolveMember(interaction);
-    if (!hasCommandPermission(member, 'give-style') && !isAdmin(member)) { // allow same limited roles as give-style
-        const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
-            fetchReply: true
-        });
-        autoDeleteMessageShort(msg);
-        return;
-    }
+const member = await resolveMember(interaction);
+if (!hasCommandPermission(member, 'remove-player-style') && !isAdmin(member)) {
+    const msg = await interaction.reply({
+        embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
+        fetchReply: true
+    });
+    autoDeleteMessageShort(msg);
+    return;
+}
 
     const globalCooldown = checkGlobalCooldown(interaction.user.id);
     if (globalCooldown.onCooldown) {

@@ -16,6 +16,7 @@ export function isAdmin(member) {
     return false;
 }
 
+
 // Check whether a member has permission to run a specific admin-style command.
 // This allows configured role IDs (LIMITED_ADMIN_ROLE_IDS) to run certain commands.
 export function hasCommandPermission(member, commandName) {
@@ -24,35 +25,60 @@ export function hasCommandPermission(member, commandName) {
     // Full admins pass immediately
     if (isAdmin(member)) return true;
 
-    // Commands that we allow limited roles to use
-    const limitedCommands = [
+    // Commands that limited admin roles can use
+    const limitedAdminCommands = [
         'add-ap',
         'add-sp',
-        'give-style',
         'add-currency',
+        'deduct-currency',
+        'set-ap',
+        'set-sp',
+        'set-currency',
         'give-item'
     ];
 
-    if (!limitedCommands.includes(commandName)) return false;
+    // Commands that style-giver roles can use
+    const styleGiverCommands = [
+        'give-style',
+        'remove-player-style'
+    ];
 
-    const allowedRoleIds = process.env.LIMITED_ADMIN_ROLE_IDS ? process.env.LIMITED_ADMIN_ROLE_IDS.split(',').map(r => r.trim()) : [];
-    if (allowedRoleIds.length === 0) return false;
-
-    // member.roles may be a RoleManager with a cache, or an array of role IDs (from interaction.member payload).
-    try {
-        if (member.roles) {
-                // If roles is a manager with cache
-                if (member.roles.cache && typeof member.roles.cache.some === 'function') {
-                    return member.roles.cache.some(role => allowedRoleIds.includes(role.id) || allowedRoleIds.includes(role.name));
+    // Check limited admin commands
+    if (limitedAdminCommands.includes(commandName)) {
+        const allowedRoleIds = process.env.LIMITED_ADMIN_ROLE_IDS ? process.env.LIMITED_ADMIN_ROLE_IDS.split(',').map(r => r.trim()) : [];
+        if (allowedRoleIds.length > 0) {
+            try {
+                if (member.roles) {
+                    if (member.roles.cache && typeof member.roles.cache.some === 'function') {
+                        return member.roles.cache.some(role => allowedRoleIds.includes(role.id) || allowedRoleIds.includes(role.name));
+                    }
+                    if (Array.isArray(member.roles)) {
+                        return member.roles.some(rid => allowedRoleIds.includes(String(rid)));
+                    }
                 }
-
-                // If roles is an array (raw payload), check directly (IDs or names)
-                if (Array.isArray(member.roles)) {
-                    return member.roles.some(rid => allowedRoleIds.includes(String(rid)));
-                }
+            } catch (e) {
+                // fallback
             }
-    } catch (e) {
-        // fallback
+        }
+    }
+
+    // Check style-giver commands
+    if (styleGiverCommands.includes(commandName)) {
+        const allowedRoleIds = process.env.GIVE_STYLE_ROLE_IDS ? process.env.GIVE_STYLE_ROLE_IDS.split(',').map(r => r.trim()) : [];
+        if (allowedRoleIds.length > 0) {
+            try {
+                if (member.roles) {
+                    if (member.roles.cache && typeof member.roles.cache.some === 'function') {
+                        return member.roles.cache.some(role => allowedRoleIds.includes(role.id) || allowedRoleIds.includes(role.name));
+                    }
+                    if (Array.isArray(member.roles)) {
+                        return member.roles.some(rid => allowedRoleIds.includes(String(rid)));
+                    }
+                }
+            } catch (e) {
+                // fallback
+            }
+        }
     }
 
     return false;

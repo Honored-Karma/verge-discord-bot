@@ -1,7 +1,8 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, getStyleByName, setSP, listStyles } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
-import { isAdmin } from '../utils/adminCheck.js';
+import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
+import { resolveMember } from '../utils/memberHelper.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
@@ -30,14 +31,15 @@ export const data = new SlashCommandBuilder()
     );
 
 export async function execute(interaction) {
-    if (!isAdmin(interaction.member)) {
-        const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
-            fetchReply: true
-        });
-        autoDeleteMessageShort(msg);
-        return;
-    }
+const member = await resolveMember(interaction);
+if (!hasCommandPermission(member, 'set-sp')) {
+    const msg = await interaction.reply({
+        embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
+        fetchReply: true
+    });
+    autoDeleteMessageShort(msg);
+    return;
+}
 
     const globalCooldown = checkGlobalCooldown(interaction.user.id);
     if (globalCooldown.onCooldown) {
