@@ -140,7 +140,8 @@ export function createProfileMainPage(player, user) {
         .setColor(0x0099FF)
         .setTitle(`📋 Профиль — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
-        .setImage('https://s.iimg.su/s/22/gqWynCdxyhjnJyLDeFjmUbuQHLhpUklQ3Eih04WP.jpg')
+        // Картинка для профиля берётся из локального вложения profile-main.png
+        .setImage('attachment://profile-main.png')
         .setTimestamp();
 
     embed.addFields({ name: '🟦 Активный слот', value: `Слот №${slotNumber}`, inline: false });

@@ -57,6 +57,10 @@ export async function execute(interaction) {
     const response = await interaction.reply({
         embeds: [embed],
         components: [buttons],
+        files: [{
+            attachment: './assets/profile-main.png',
+            name: 'profile-main.png'
+        }],
         fetchReply: true
     });
 
