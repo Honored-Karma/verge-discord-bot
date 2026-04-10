@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { listStyles, getStylePlayerCount } from '../utils/dataManager.js';
-import { createStylesListEmbed, createStylesNavigationButtons } from '../utils/embeds.js';
+import { createCooldownEmbed, createStylesListEmbed, createStylesNavigationButtons } from '../utils/embeds.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
@@ -10,8 +10,9 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
     const globalCooldown = checkGlobalCooldown(interaction.user.id);
     if (globalCooldown.onCooldown) {
+        const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
         const msg = await interaction.reply({
-            content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
+            embeds: [createCooldownEmbed('Styles List', retryAt)],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -85,9 +86,4 @@ export async function execute(interaction) {
     collector.on('end', () => {
         response.edit({ components: [] }).catch(() => {});
     });
-    
-    // Auto-delete after 20 seconds
-    setTimeout(() => {
-        response.delete().catch(() => {});
-    }, 20000);
 }

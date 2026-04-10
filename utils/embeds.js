@@ -1,10 +1,26 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 
+const BANNERS = {
+    default: 'https://s.iimg.su/s/22/uPwMsKAxzFj3zv2fzk1VVgPLssmMEosDzMeKuRk4.jpg',
+    error: 'https://s.iimg.su/s/22/uohed4ixYWCczdInGXb1odpCeZrFRlMjrQQGq8qI.jpg',
+    cooldown: 'https://s.iimg.su/s/22/uClf58LxwwC7ZyuLlAWkzTJ3TD4tsoH4fjoKN653.jpg',
+    profile: 'https://s.iimg.su/s/22/ufkWBu0xWZJ35E1dhmIFfmTwEoXZtvP8zOPqXpsI.jpg',
+    progress: 'https://s.iimg.su/s/22/uClf58LxwwC7ZyuLlAWkzTJ3TD4tsoH4fjoKN653.jpg',
+    balance: 'https://s.iimg.su/s/22/uLqXmUuxOHQ7fpQo0nDeYZzNFsHDabcjaeMIG1cz.jpg',
+    styles: 'https://s.iimg.su/s/22/ufK5WxvxJvic3v3sAKeMNidyrlIjH9veHktCaMW1.jpg',
+    inventory: 'https://s.iimg.su/s/22/umRJkWkxFm1Vz7bFaeY7yfOl5Vwj7cuvVJ7OS5Sz.jpg',
+    train: 'https://s.iimg.su/s/22/ufkWBu0xWZJ35E1dhmIFfmTwEoXZtvP8zOPqXpsI.jpg',
+    social: 'https://s.iimg.su/s/22/u8s3xB1xoVgeQgI8hXTRd6MZ88M8XiFCWKQfVaAj.jpg',
+    pay: 'https://s.iimg.su/s/22/uFdH3S7x2AJgL3HbTz3lECdHIvTFBrlq6A1a6f0n.jpg',
+    stylesList: 'https://s.iimg.su/s/22/uexBneExAdoahYKkvzj43zvE9k0z7Dgaq7j2HlEk.jpg'
+};
+
 export function createSuccessEmbed(title, description) {
     return new EmbedBuilder()
         .setColor(0x0099FF)
         .setTitle(`✅ ${title}`)
         .setDescription(description)
+        .setImage(BANNERS.default)
         .setTimestamp();
 }
 
@@ -13,7 +29,7 @@ export function createErrorEmbed(title, description) {
         .setColor(0xFF0000)
         .setTitle(`❌ ${title}`)
         .setDescription(description)
-        .setImage('https://s.iimg.su/s/22/uohed4ixYWCczdInGXb1odpCeZrFRlMjrQQGq8qI.jpg')
+        .setImage(BANNERS.error)
         .setTimestamp();
 }
 
@@ -22,6 +38,7 @@ export function createInfoEmbed(title, description) {
         .setColor(0x0099FF)
         .setTitle(title)
         .setDescription(description)
+        .setImage(BANNERS.default)
         .setTimestamp();
 }
 
@@ -30,6 +47,7 @@ export function createCooldownEmbed(actionName, unixTimestamp) {
         .setColor(0xF1C40F)
         .setTitle(`⏳ ${actionName}: cooldown`)
         .setDescription(`Следующее действие будет доступно <t:${unixTimestamp}:R>.\nТочное время: <t:${unixTimestamp}:F>`)
+        .setImage(BANNERS.cooldown)
         .setTimestamp();
 }
 
@@ -88,7 +106,7 @@ export function createTrainEmbed(title, description) {
         .setColor(0x0099FF)
         .setTitle(`✅ ${title}`)
         .setDescription(description)
-        .setImage('https://s.iimg.su/s/22/ufkWBu0xWZJ35E1dhmIFfmTwEoXZtvP8zOPqXpsI.jpg')
+        .setImage(BANNERS.train)
         .setTimestamp();
 }
 
@@ -97,7 +115,7 @@ export function createSocialRPEmbed(title, description) {
         .setColor(0x0099FF)
         .setTitle(`✅ ${title}`)
         .setDescription(description)
-        .setImage('https://s.iimg.su/s/22/u8s3xB1xoVgeQgI8hXTRd6MZ88M8XiFCWKQfVaAj.jpg')
+        .setImage(BANNERS.social)
         .setTimestamp();
 }
 
@@ -106,7 +124,7 @@ export function createPayEmbed(title, description) {
         .setColor(0x0099FF)
         .setTitle(`✅ ${title}`)
         .setDescription(description)
-        .setImage('https://s.iimg.su/s/22/uFdH3S7x2AJgL3HbTz3lECdHIvTFBrlq6A1a6f0n.jpg')
+        .setImage(BANNERS.pay)
         .setTimestamp();
 }
 
@@ -115,7 +133,7 @@ export function createInventoryEmbed(title, description) {
         .setColor(0x0099FF)
         .setTitle(title)
         .setDescription(description)
-        .setImage('https://s.iimg.su/s/22/umRJkWkxFm1Vz7bFaeY7yfOl5Vwj7cuvVJ7OS5Sz.jpg')
+        .setImage(BANNERS.inventory)
         .setTimestamp();
 }
 
@@ -124,7 +142,7 @@ export function createRegisterEmbed(title, description) {
         .setColor(0x0099FF)
         .setTitle(`✅ ${title}`)
         .setDescription(description)
-        .setImage('https://s.iimg.su/s/22/uPwMsKAxzFj3zv2fzk1VVgPLssmMEosDzMeKuRk4.jpg')
+        .setImage(BANNERS.default)
         .setTimestamp();
 }
 
@@ -133,7 +151,7 @@ export function createStylesListEmbed(title, description, page = 1, totalPages =
         .setColor(0x0099FF)
         .setTitle(title)
         .setDescription(description)
-        .setImage('https://s.iimg.su/s/22/uexBneExAdoahYKkvzj43zvE9k0z7Dgaq7j2HlEk.jpg')
+        .setImage(BANNERS.stylesList)
         .setTimestamp();
     
     if (totalPages > 1) {
@@ -175,19 +193,18 @@ export function createProfileMainPage(player, user) {
         }
     }
     const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
-        .setTitle(`📋 Профиль — ${player.character_name || player.username}`)
+        .setColor(0x5865F2)
+        .setTitle(`🧬 Профиль — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
-        // Картинка для профиля берётся из локального вложения profile-main.png
-        .setImage('attachment://profile-main.png')
+        .setImage(BANNERS.profile)
         .setTimestamp();
 
-    embed.addFields({ name: '🟦 Активный слот', value: `Слот №${slotNumber}`, inline: false });
-    if (player.rank) {
-        embed.addFields({ name: '👑 Ранг', value: player.rank, inline: false });
-    }
+    embed.addFields({ name: '🟦 Активный слот', value: `Слот №${slotNumber}`, inline: true });
+    embed.addFields({ name: '🏢 Организация', value: player.organization || 'Не указана', inline: true });
+    embed.addFields({ name: '👑 Ранг', value: player.rank || 'Нет ранга', inline: true });
     embed.addFields({ name: '⚡ Очки способностей (AP)', value: `${player.ap} AP`, inline: true });
     embed.addFields({ name: '🎯 Техники', value: `${Math.floor(player.ap / 100)}`, inline: true });
+    embed.addFields({ name: '📈 AP / SP', value: `${player.ap_multiplier || 100}% / ${player.sp_multiplier || 100}%`, inline: true });
 
     if (player.unlocked_avatar) {
         embed.addFields({ name: '🌟 Статус', value: 'Avatar/Embodiment разблокирован', inline: false });
@@ -200,17 +217,17 @@ export function createProfileMainPage(player, user) {
         embed.addFields({ name: '💰 Валюта', value: currencyText || 'Нет валюты', inline: false });
     }
 
-    embed.setFooter({ text: `ID: ${player.id} • Страница 1/3` });
+    embed.setFooter({ text: `ID: ${player.id} • Страница 1/4` });
 
     return embed;
 }
 
 export function createProfileAPSPPage(player, user, totalSP = 0) {
     const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0x5865F2)
         .setTitle(`📊 Прогресс — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
-        .setImage('https://s.iimg.su/s/22/uClf58LxwwC7ZyuLlAWkzTJ3TD4tsoH4fjoKN653.jpg')
+        .setImage(BANNERS.progress)
         .setTimestamp();
     
     const nextMilestone = Math.ceil(player.ap / 100) * 100;
@@ -227,7 +244,7 @@ export function createProfileAPSPPage(player, user, totalSP = 0) {
     embed.addFields({ name: '🥋 Всего SP', value: `${totalSP} SP`, inline: true });
     embed.addFields({ name: '🎯 Техник разблокировано', value: `${Math.floor(player.ap / 100)}`, inline: true });
     
-    embed.setFooter({ text: `ID: ${player.id} • Страница 2/3` });
+    embed.setFooter({ text: `ID: ${player.id} • Страница 2/4` });
     
     return embed;
 }
@@ -237,7 +254,7 @@ export function createProfileBalancePage(player, user) {
         .setColor(0x0099FF)
         .setTitle(`💰 Баланс — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
-        .setImage('https://s.iimg.su/s/22/uLqXmUuxOHQ7fpQo0nDeYZzNFsHDabcjaeMIG1cz.jpg')
+        .setImage(BANNERS.balance)
         .setTimestamp();
     
     let balanceText = '';
@@ -264,7 +281,7 @@ export function createProfileStylesPage(player, styles, user, page = 0) {
         .setColor(0x0099FF)
         .setTitle(`🥋 Боевые стили — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
-        .setImage('https://s.iimg.su/s/22/ufK5WxvxJvic3v3sAKeMNidyrlIjH9veHktCaMW1.jpg')
+        .setImage(BANNERS.styles)
         .setTimestamp();
     
     if (!styles || styles.length === 0) {
@@ -364,6 +381,10 @@ export function createProfileButtons(page) {
             new ButtonBuilder()
                 .setCustomId('profile_balance')
                 .setLabel('Баланс')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('profile_history')
+                .setLabel('История')
                 .setStyle(ButtonStyle.Secondary)
         );
     } else if (page === 1) {
@@ -384,6 +405,10 @@ export function createProfileButtons(page) {
             new ButtonBuilder()
                 .setCustomId('profile_balance')
                 .setLabel('Баланс')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('profile_history')
+                .setLabel('История')
                 .setStyle(ButtonStyle.Secondary)
         );
     } else if (page === 2) {
@@ -404,6 +429,34 @@ export function createProfileButtons(page) {
             new ButtonBuilder()
                 .setCustomId('profile_balance')
                 .setLabel('Баланс')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('profile_history')
+                .setLabel('История')
+                .setStyle(ButtonStyle.Secondary)
+        );
+    } else if (page === 3) {
+        row.addComponents(
+            new ButtonBuilder()
+                .setCustomId('profile_main')
+                .setLabel('Основная')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('profile_apsp')
+                .setLabel('AP/SP')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('profile_styles')
+                .setLabel('Стили')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('profile_balance')
+                .setLabel('Баланс')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(true),
+            new ButtonBuilder()
+                .setCustomId('profile_history')
+                .setLabel('История')
                 .setStyle(ButtonStyle.Secondary)
         );
     } else {
@@ -423,12 +476,35 @@ export function createProfileButtons(page) {
             new ButtonBuilder()
                 .setCustomId('profile_balance')
                 .setLabel('Баланс')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('profile_history')
+                .setLabel('История')
                 .setStyle(ButtonStyle.Primary)
                 .setDisabled(true)
         );
     }
     
     return row;
+}
+
+export function createProfileHistoryPage(player, user, history = []) {
+    const historyText = history.length > 0
+        ? history.map((entry) => {
+            const deltaSign = entry.delta >= 0 ? '+' : '';
+            const timestamp = Math.floor(new Date(entry.changed_at).getTime() / 1000);
+            return `• ${entry.type.toUpperCase()} ${deltaSign}${entry.delta} • <t:${timestamp}:R>`;
+        }).join('\n')
+        : 'Изменений пока нет';
+
+    return new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle(`🕓 История изменений — ${player.character_name || player.username}`)
+        .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
+        .setDescription(historyText)
+        .setImage(BANNERS.progress)
+        .setFooter({ text: `ID: ${player.id} • Страница 4/4` })
+        .setTimestamp();
 }
 
 export function createStyleNavigationButtons(currentPage, totalPages) {

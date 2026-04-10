@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { ActionRowBuilder, EmbedBuilder, SlashCommandBuilder, StringSelectMenuBuilder } from 'discord.js';
 
 export const data = new SlashCommandBuilder()
     .setName('help')
@@ -28,11 +28,41 @@ export async function execute(interaction) {
         all: createAllCommandsHelp()
     };
 
-    const embed = helpEmbeds[category] || helpEmbeds.main;
+    const selected = helpEmbeds[category] || helpEmbeds.main;
+    const menu = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+            .setCustomId('help_category_select')
+            .setPlaceholder('Выберите раздел справки')
+            .addOptions(
+                { label: 'Основное', value: 'main', emoji: '📋' },
+                { label: 'Профиль', value: 'profile', emoji: '👤' },
+                { label: 'Тренировка', value: 'training', emoji: '🥋' },
+                { label: 'Экономика', value: 'economy', emoji: '💰' },
+                { label: 'Админ', value: 'admin', emoji: '🛡️' },
+                { label: 'Полный список', value: 'all', emoji: '📚' }
+            )
+    );
 
-    await interaction.reply({
-        embeds: [embed],
-        flags: 64
+    const message = await interaction.reply({
+        embeds: [selected],
+        components: [menu],
+        flags: 64,
+        fetchReply: true
+    });
+
+    const collector = message.createMessageComponentCollector({ time: 180000 });
+    collector.on('collect', async i => {
+        if (i.user.id !== interaction.user.id) {
+            return i.reply({ content: 'Это меню не для вас.', flags: 64 });
+        }
+        if (!i.isStringSelectMenu() || i.customId !== 'help_category_select') return;
+        const next = i.values[0];
+        const embed = helpEmbeds[next] || helpEmbeds.main;
+        await i.update({ embeds: [embed], components: [menu] });
+    });
+
+    collector.on('end', async () => {
+        await interaction.editReply({ components: [] }).catch(() => {});
     });
 }
 
@@ -41,6 +71,7 @@ function createMainHelp() {
         .setColor('#0099ff')
         .setTitle('📖 Гайд по Verge RPG Bot')
         .setDescription('**Быстрая справка по основным командам**')
+        .setImage('https://s.iimg.su/s/22/uPwMsKAxzFj3zv2fzk1VVgPLssmMEosDzMeKuRk4.jpg')
         .addFields(
             {
                 name: '👤 Профиль и персонаж',
@@ -75,6 +106,7 @@ function createProfileHelp() {
     return new EmbedBuilder()
         .setColor('#00ff00')
         .setTitle('👤 Команды профиля и персонажа')
+        .setImage('https://s.iimg.su/s/22/ufkWBu0xWZJ35E1dhmIFfmTwEoXZtvP8zOPqXpsI.jpg')
         .addFields(
             {
                 name: '/register',
@@ -104,6 +136,7 @@ function createTrainingHelp() {
     return new EmbedBuilder()
         .setColor('#ff9900')
         .setTitle('🥋 Команды тренировки и боевых стилей')
+        .setImage('https://s.iimg.su/s/22/u8s3xB1xoVgeQgI8hXTRd6MZ88M8XiFCWKQfVaAj.jpg')
         .addFields(
             {
                 name: '/train <style>',
@@ -128,6 +161,7 @@ function createEconomyHelp() {
     return new EmbedBuilder()
         .setColor('#ffcc00')
         .setTitle('💰 Команды экономики и валюты')
+        .setImage('https://s.iimg.su/s/22/uFdH3S7x2AJgL3HbTz3lECdHIvTFBrlq6A1a6f0n.jpg')
         .addFields(
             {
                 name: '/pay <user> <krw/yen> <amount>',
@@ -158,6 +192,7 @@ function createAdminHelp() {
         .setColor('#ff0000')
         .setTitle('🛡️ Админские команды')
         .setDescription('⚠️ Эти команды доступны только администраторам!')
+        .setImage('https://s.iimg.su/s/22/uohed4ixYWCczdInGXb1odpCeZrFRlMjrQQGq8qI.jpg')
         .addFields(
             {
                 name: '/add-ap <user> <amount>',
@@ -232,6 +267,7 @@ function createAllCommandsHelp() {
     return new EmbedBuilder()
         .setColor('#00ffff')
         .setTitle('📚 Полный список всех команд (24+)')
+        .setImage('https://s.iimg.su/s/22/uexBneExAdoahYKkvzj43zvE9k0z7Dgaq7j2HlEk.jpg')
         .addFields(
             {
                 name: '👤 Профиль (4)',

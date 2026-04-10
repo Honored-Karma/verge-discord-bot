@@ -1,6 +1,6 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder } from 'discord.js';
 import { getPlayer, transferCurrency } from '../utils/dataManager.js';
-import { createPayEmbed, createErrorEmbed } from '../utils/embeds.js';
+import { createCooldownEmbed, createPayEmbed, createErrorEmbed, createInfoEmbed } from '../utils/embeds.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 import { makePlayerKey } from '../utils/playerKey.js';
 
@@ -35,8 +35,9 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
     const globalCooldown = checkGlobalCooldown(interaction.user.id);
     if (globalCooldown.onCooldown) {
+        const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
         const msg = await interaction.reply({
-            content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
+            embeds: [createCooldownEmbed('Pay', retryAt)],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -95,26 +96,75 @@ export async function execute(interaction) {
         return;
     }
     
-    const result = await transferCurrency(fromId, toId, currency, amount);
-    
-    if (!result.success) {
-        const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Ошибка перевода', result.reason)],
-            fetchReply: true
-        });
-        autoDeleteMessageShort(msg);
-        return;
-    }
-    
     const currencySymbol = currency === 'krw' ? '₩' : '¥';
-    const currencyName = currency === 'krw' ? 'KRW' : 'Йен';
-    
-    const embed = createPayEmbed('Перевод выполнен!', 
-        `💸 Вы перевели **${amount.toLocaleString('ru-RU')} ${currencySymbol}** игроку **${toPlayer.character_name || toPlayer.username}**\n\n` +
-        `**Налог (2%):** ${result.tax.toLocaleString('ru-RU')} ${currencySymbol}\n` +
-        `**Получатель получил:** ${result.received.toLocaleString('ru-RU')} ${currencySymbol}`
+    const taxPreview = Math.ceil(amount * 0.02);
+    const receivedPreview = amount - taxPreview;
+
+    const confirmRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('pay_confirm')
+            .setLabel('Подтвердить')
+            .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+            .setCustomId('pay_cancel')
+            .setLabel('Отмена')
+            .setStyle(ButtonStyle.Secondary)
     );
-    
-    const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
-    autoDeleteMessageShort(msg);
+
+    const previewEmbed = createInfoEmbed(
+        '💸 Подтвердите перевод',
+        `Получатель: **${toPlayer.character_name || toPlayer.username}**\n` +
+        `Сумма: **${amount.toLocaleString('ru-RU')} ${currencySymbol}**\n` +
+        `Налог (2%): **${taxPreview.toLocaleString('ru-RU')} ${currencySymbol}**\n` +
+        `Получит: **${receivedPreview.toLocaleString('ru-RU')} ${currencySymbol}**`
+    );
+
+    const msg = await interaction.reply({
+        embeds: [previewEmbed],
+        components: [confirmRow],
+        fetchReply: true
+    });
+
+    const collector = msg.createMessageComponentCollector({ time: 90000 });
+    collector.on('collect', async i => {
+        if (i.user.id !== interaction.user.id) {
+            return i.reply({ content: 'Это подтверждение не для вас.', flags: 64 });
+        }
+
+        if (i.customId === 'pay_cancel') {
+            collector.stop('cancelled');
+            return i.update({
+                embeds: [createInfoEmbed('Отменено', 'Перевод был отменен.')],
+                components: []
+            });
+        }
+
+        if (i.customId === 'pay_confirm') {
+            const result = await transferCurrency(fromId, toId, currency, amount);
+            if (!result.success) {
+                collector.stop('failed');
+                return i.update({
+                    embeds: [createErrorEmbed('Ошибка перевода', result.reason)],
+                    components: []
+                });
+            }
+
+            const doneEmbed = createPayEmbed(
+                'Перевод выполнен!',
+                `💸 Вы перевели **${amount.toLocaleString('ru-RU')} ${currencySymbol}** игроку **${toPlayer.character_name || toPlayer.username}**\n\n` +
+                `**Налог (2%):** ${result.tax.toLocaleString('ru-RU')} ${currencySymbol}\n` +
+                `**Получатель получил:** ${result.received.toLocaleString('ru-RU')} ${currencySymbol}`
+            );
+            collector.stop('confirmed');
+            return i.update({ embeds: [doneEmbed], components: [] });
+        }
+    });
+
+    collector.on('end', async (_collected, reason) => {
+        if (['confirmed', 'cancelled', 'failed'].includes(reason)) return;
+        await interaction.editReply({
+            embeds: [createInfoEmbed('Время вышло', 'Подтверждение перевода истекло.')],
+            components: []
+        }).catch(() => {});
+    });
 }

@@ -9,6 +9,7 @@ export async function execute(interaction) {
         .setColor(0x5865F2)
         .setTitle('📊 Ранговая система и зарплаты')
         .setDescription('Зарплата начисляется **раз в неделю** автоматически.')
+        .setImage('https://s.iimg.su/s/22/uAHetLrx0gHhdpdgNEk0sz5rXNryIiakpM4NOC2i.jpg')
         .addFields(
             {
                 name: '🏢 TENRYU (F-S, YEN/месяц)',
