@@ -42,7 +42,8 @@ export function autoDeleteMessageShort(message) {
 export function checkCooldown(lastTimestamp, cooldownMs) {
     const now = Math.floor(Date.now() / 1000);
     const cooldownSeconds = cooldownMs / 1000;
-    const elapsed = now - lastTimestamp;
+    const normalizedLastTimestamp = Number(lastTimestamp || 0);
+    const elapsed = now - normalizedLastTimestamp;
     
     if (elapsed < cooldownSeconds) {
         const remaining = cooldownSeconds - elapsed;

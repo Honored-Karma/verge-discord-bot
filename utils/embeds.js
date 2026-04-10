@@ -25,6 +25,44 @@ export function createInfoEmbed(title, description) {
         .setTimestamp();
 }
 
+export function createCooldownEmbed(actionName, unixTimestamp) {
+    return new EmbedBuilder()
+        .setColor(0xF1C40F)
+        .setTitle(`⏳ ${actionName}: cooldown`)
+        .setDescription(`Следующее действие будет доступно <t:${unixTimestamp}:R>.\nТочное время: <t:${unixTimestamp}:F>`)
+        .setTimestamp();
+}
+
+export function createModernProfileEmbed(player, user, history = []) {
+    const rankValue = player.rank || 'Нет ранга';
+    const apMultiplier = Number(player.ap_multiplier || 100);
+    const spMultiplier = Number(player.sp_multiplier || 100);
+    const historyText = history.length > 0
+        ? history.map((entry) => {
+            const deltaSign = entry.delta >= 0 ? '+' : '';
+            const timestamp = Math.floor(new Date(entry.changed_at).getTime() / 1000);
+            return `• ${entry.type.toUpperCase()} ${deltaSign}${entry.delta} (<t:${timestamp}:R>)`;
+        }).join('\n')
+        : 'Изменений пока нет';
+
+    return new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle(`🧬 Профиль: ${player.character_name || player.username}`)
+        .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
+        .addFields(
+            { name: '🏢 Организация', value: player.organization || 'Не указана', inline: true },
+            { name: '👑 Ранг', value: rankValue, inline: true },
+            { name: '⚡ AP', value: `${player.ap || 0}`, inline: true },
+            { name: '🥋 SP (total)', value: `${player.total_sp || 0}`, inline: true },
+            { name: '💰 KRW', value: `${Number(player.krw || 0).toLocaleString('ru-RU')}`, inline: true },
+            { name: '💴 YEN', value: `${Number(player.yen || 0).toLocaleString('ru-RU')}`, inline: true },
+            { name: '📈 Множители', value: `AP: **${apMultiplier}%**\nSP: **${spMultiplier}%**`, inline: true },
+            { name: '🕓 Последние изменения', value: historyText, inline: false }
+        )
+        .setFooter({ text: `ID: ${player.id}` })
+        .setTimestamp();
+}
+
 export function createLeaderboardEmbed(title, description, sortBy) {
     const embed = new EmbedBuilder()
         .setColor(0x0099FF)

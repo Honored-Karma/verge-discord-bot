@@ -1,10 +1,63 @@
 
 import { getDB } from './db.js';
 
+const PLAYER_DEFAULTS = {
+    character_avatar: null,
+    character_name: null,
+    krw: 0,
+    yen: 0,
+    ap: 0,
+    rank: null,
+    organization: null,
+    last_train_timestamp: 0,
+    last_socialrp_timestamp: 0,
+    unlocked_avatar: 0,
+    ap_multiplier: 100,
+    sp_multiplier: 100,
+    last_ap_change_at: 0,
+    last_sp_change_at: 0,
+    last_salary_paid_at: 0
+};
+
+function normalizePlayerDocument(player) {
+    if (!player) return null;
+    return {
+        ...PLAYER_DEFAULTS,
+        ...player,
+        krw: Number(player.krw || 0),
+        yen: Number(player.yen || 0),
+        ap: Number(player.ap || 0),
+        ap_multiplier: Number(player.ap_multiplier || 100),
+        sp_multiplier: Number(player.sp_multiplier || 100),
+        unlocked_avatar: Number(player.unlocked_avatar || 0),
+        last_train_timestamp: Number(player.last_train_timestamp || 0),
+        last_socialrp_timestamp: Number(player.last_socialrp_timestamp || 0),
+        last_ap_change_at: Number(player.last_ap_change_at || 0),
+        last_sp_change_at: Number(player.last_sp_change_at || 0),
+        last_salary_paid_at: Number(player.last_salary_paid_at || 0)
+    };
+}
+
 function normalizeSlot(slot) {
     const s = Number(slot);
     if (s === 2) return 2;
     return 1;
+}
+
+function getRankBonusPercent(rank) {
+    const normalized = String(rank || '').trim().toUpperCase();
+    const map = { S: 20, A: 15, B: 10, C: 5 };
+    return map[normalized] || 0;
+}
+
+function getActivityBonusPercent(player) {
+    const now = Math.floor(Date.now() / 1000);
+    const lastTrain = Number(player.last_train_timestamp || 0);
+    const lastSocial = Number(player.last_socialrp_timestamp || 0);
+    const latest = Math.max(lastTrain, lastSocial);
+    if (!latest) return 0;
+    // Bonus for active players (activity in last 7 days)
+    return (now - latest) <= (7 * 24 * 60 * 60) ? 5 : 0;
 }
 
 // Получить активный слот пользователя (по умолчанию 1)
@@ -78,11 +131,28 @@ function logAdminAction(adminId, action, details) {
     }
 }
 
+async function addProgressionHistory(playerId, type, oldValue, newValue, source = 'system') {
+    try {
+        const db = getDB();
+        await db.collection('progression_history').insertOne({
+            player_id: playerId,
+            type,
+            old_value: oldValue,
+            new_value: newValue,
+            delta: newValue - oldValue,
+            source,
+            changed_at: new Date()
+        });
+    } catch (error) {
+        console.error('Error adding progression history:', error);
+    }
+}
+
 export async function getPlayer(playerId) {
     try {
         const db = getDB();
         const player = await db.collection('players').findOne({ id: playerId });
-        return player || null;
+        return normalizePlayerDocument(player);
     } catch (error) {
         console.error('Error getting player:', error);
         return null;
@@ -127,7 +197,11 @@ export async function createPlayer(playerId, username, characterName, characterA
             last_socialrp_timestamp: 0,
             unlocked_avatar: 0,
             ap_multiplier: 100.0,
-            sp_multiplier: 100.0
+            sp_multiplier: 100.0,
+            last_ap_change_at: 0,
+            last_sp_change_at: 0,
+            rank: null,
+            organization: null
         });
         return true;
     } catch (error) {
@@ -148,12 +222,13 @@ export async function addAP(playerId, amount, actionType = 'train') {
         const player = await getPlayer(playerId);
         if (!player) return false;
         
-        const multiplier = (player.ap_multiplier || 100) / 100;
-        const adjustedAmount = Math.round(amount * multiplier);
+        const dynamicBonus = getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
+        const effectiveMultiplier = (player.ap_multiplier || 100) + dynamicBonus;
+        const adjustedAmount = Math.round(amount * (effectiveMultiplier / 100));
         const newAP = player.ap + adjustedAmount;
         const timestamp = Math.floor(Date.now() / 1000);
         
-        const updateObj = { ap: newAP };
+        const updateObj = { ap: newAP, last_ap_change_at: timestamp };
         if (actionType === 'train') {
             updateObj.last_train_timestamp = timestamp;
         } else if (actionType === 'socialrp') {
@@ -181,6 +256,8 @@ export async function addAP(playerId, amount, actionType = 'train') {
                 await giveItem(playerId, '+Техника', 1, 'system');
             }
         }
+
+        await addProgressionHistory(playerId, 'ap', player.ap, newAP, actionType);
         
         return newAP;
     } catch (error) {
@@ -192,7 +269,9 @@ export async function addAP(playerId, amount, actionType = 'train') {
 export async function setAP(playerId, amount, adminId) {
     try {
         const db = getDB();
-        const updateObj = { ap: amount };
+        const player = await getPlayer(playerId);
+        if (!player) return false;
+        const updateObj = { ap: amount, last_ap_change_at: Math.floor(Date.now() / 1000) };
         if (amount >= 1000) {
             updateObj.unlocked_avatar = 1;
         }
@@ -203,6 +282,7 @@ export async function setAP(playerId, amount, adminId) {
         );
         
         logAdminAction(adminId, 'SET_AP', `Установил AP на ${amount} для игрока ${playerId}`);
+        await addProgressionHistory(playerId, 'ap', player.ap, amount, 'set-ap');
         return true;
     } catch (error) {
         console.error('Error setting AP:', error);
@@ -270,8 +350,9 @@ export async function addSP(playerId, styleId, amount, adminId) {
         const player = await getPlayer(playerId);
         if (!player) return false;
         
-        const multiplier = (player.sp_multiplier || 100) / 100;
-        const adjustedAmount = Math.round(amount * multiplier);
+        const dynamicBonus = getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
+        const effectiveMultiplier = (player.sp_multiplier || 100) + dynamicBonus;
+        const adjustedAmount = Math.round(amount * (effectiveMultiplier / 100));
         
         const currentSP = await getSP(playerId, styleId);
         const newSP = currentSP + adjustedAmount;
@@ -281,8 +362,15 @@ export async function addSP(playerId, styleId, amount, adminId) {
             { $set: { player_id: playerId, style_id: styleId, sp: newSP } },
             { upsert: true }
         );
+
+        const timestamp = Math.floor(Date.now() / 1000);
+        await db.collection('players').updateOne(
+            { id: playerId },
+            { $set: { last_sp_change_at: timestamp } }
+        );
         
         logAdminAction(adminId, 'ADD_SP', `Добавил ${amount} SP (×${player.sp_multiplier}% = ${adjustedAmount}) стиль ${styleId} игроку ${playerId}`);
+        await addProgressionHistory(playerId, 'sp', currentSP, newSP, 'add-sp');
         return newSP;
     } catch (error) {
         console.error('Error adding SP:', error);
@@ -298,6 +386,12 @@ export async function setSP(playerId, styleId, amount, adminId) {
             { player_id: playerId, style_id: styleId },
             { $set: { player_id: playerId, style_id: styleId, sp: amount } },
             { upsert: true }
+        );
+
+        const timestamp = Math.floor(Date.now() / 1000);
+        await db.collection('players').updateOne(
+            { id: playerId },
+            { $set: { last_sp_change_at: timestamp } }
         );
         
         logAdminAction(adminId, 'SET_SP', `Установил SP на ${amount} (стиль ${styleId}) для игрока ${playerId}`);
@@ -486,7 +580,7 @@ export async function getLeaderboard(sortBy = 'ap', limit = 10) {
         }
         
         const result = await db.collection('players').aggregate(pipeline).toArray();
-        return result;
+        return result.map((player) => normalizePlayerDocument(player));
     } catch (error) {
         console.error('Error getting leaderboard:', error);
         return [];
@@ -686,6 +780,20 @@ export async function setAPMultiplier(playerId, multiplier, adminId) {
     } catch (error) {
         console.error('Error setting AP multiplier:', error);
         return false;
+    }
+}
+
+export async function getRecentProgressionHistory(playerId, limit = 5) {
+    try {
+        const db = getDB();
+        return await db.collection('progression_history')
+            .find({ player_id: playerId })
+            .sort({ changed_at: -1 })
+            .limit(limit)
+            .toArray();
+    } catch (error) {
+        console.error('Error getting progression history:', error);
+        return [];
     }
 }
 

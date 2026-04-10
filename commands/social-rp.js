@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, addAP } from '../utils/dataManager.js';
 import { checkCooldown, checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
-import { createSocialRPEmbed, createErrorEmbed } from '../utils/embeds.js';
+import { createSocialRPEmbed, createErrorEmbed, createCooldownEmbed } from '../utils/embeds.js';
 import { progressBar, getAPProgress } from '../utils/progressBar.js';
 import { logCommand } from '../utils/logs.js';
 import { makePlayerKey } from '../utils/playerKey.js';
@@ -20,8 +20,9 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
     const globalCooldown = checkGlobalCooldown(interaction.user.id);
     if (globalCooldown.onCooldown) {
+        const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
         const msg = await interaction.reply({
-            content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
+            embeds: [createCooldownEmbed('Social RP', retryAt)],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -64,8 +65,9 @@ export async function execute(interaction) {
     
     const cooldownCheck = checkCooldown(player.last_socialrp_timestamp, SOCIALRP_COOLDOWN);
     if (cooldownCheck.onCooldown) {
+        const retryAt = Math.floor(Date.now() / 1000) + Math.ceil(cooldownCheck.remaining / 1000);
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Кулдаун', `Следующее взаимодействие доступно через **${cooldownCheck.remainingFormatted}**`)],
+            embeds: [createCooldownEmbed('Social RP', retryAt)],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -83,10 +85,8 @@ export async function execute(interaction) {
         return;
     }
     
-    // Get updated player data to show multiplier
-    const updatedPlayer = await getPlayer(playerId);
-    const multiplier = updatedPlayer.ap_multiplier || 100;
-    const actualAPGained = Math.round(SOCIALRP_AP_REWARD * multiplier / 100);
+    const actualAPGained = Math.max(0, newAP - (player.ap || 0));
+    const multiplier = Math.round((actualAPGained / SOCIALRP_AP_REWARD) * 100);
     
     const apProgress = getAPProgress(newAP);
     const progressText = progressBar(apProgress.current, apProgress.max, 20);
@@ -97,7 +97,8 @@ export async function execute(interaction) {
         `Множитель: **${multiplier}%**\n` +
         `Итого получено: **+${actualAPGained} AP**\n\n` +
         `**Всего AP:** ${newAP}\n` +
-        `**Техник разблокировано:** ${apProgress.techniques}\n\n` +
+        `**Техник разблокировано:** ${apProgress.techniques}\n` +
+        `**Следующее взаимодействие:** <t:${Math.floor((Date.now() + SOCIALRP_COOLDOWN) / 1000)}:R>\n\n` +
         `**Прогресс к следующей технике:**\n${progressText}`
     );
     

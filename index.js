@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readdirSync } from 'fs';
 import { connectDatabase, closeDatabase } from './utils/db.js';
+import { startWeeklySalaryScheduler } from './services/salaryService.js';
 
 config();
 
@@ -42,6 +43,7 @@ for (const file of commandFiles) {
 client.once(Events.ClientReady, readyClient => {
     console.log(`🤖 Bot is ready! Logged in as ${readyClient.user.tag}`);
     console.log(`📊 Serving ${client.guilds.cache.size} server(s)`);
+    startWeeklySalaryScheduler(client);
 });
 
 client.on(Events.InteractionCreate, async interaction => {
