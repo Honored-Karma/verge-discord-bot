@@ -3,13 +3,6 @@ import { config } from 'dotenv';
 
 config();
 
-const MONGODB_URI = process.env.MONGODB_URI;
-
-if (!MONGODB_URI) {
-    console.error('❌ MONGODB_URI not found in environment variables!');
-    process.exit(1);
-}
-
 let client;
 let db;
 
@@ -40,7 +33,13 @@ async function backfillPlayerDefaults() {
 
 async function connectDatabase() {
     try {
-        client = new MongoClient(MONGODB_URI);
+        const mongoUri = process.env.MONGODB_URI;
+        if (!mongoUri) {
+            console.error('❌ MONGODB_URI not found in environment variables!');
+            process.exit(1);
+        }
+
+        client = new MongoClient(mongoUri);
         await client.connect();
         db = client.db('discord_bot');
         
