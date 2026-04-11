@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder } from 'discord.js';
 import { getPlayer, getAllPlayerSP, getTotalSP, getRecentProgressionHistory } from '../utils/dataManager.js';
 import {
     createProfileMainPage,
@@ -12,6 +12,7 @@ import {
     createCooldownEmbed
 } from '../utils/embeds.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
+import { generateProfileImage } from '../utils/profileRenderer.js';
 
 export const data = new SlashCommandBuilder()
     .setName('profile')
@@ -63,11 +64,54 @@ export async function execute(interaction) {
     }
 
     const history = await getRecentProgressionHistory(slotPlayerId, 8);
-    const mainEmbed = createProfileMainPage(player, targetUser, slot);
+    const styles = await getAllPlayerSP(slotPlayerId);
+    const totalSP = await getTotalSP(slotPlayerId);
+
+    // ── Build HUD canvas image ───────────────────────────────────
+    const topStyles = styles.slice(0, 3);
+    const level = Math.floor(player.ap / 100);
+    const xp = player.ap % 100;
+    const xpToNextLevel = 100;
+
+    let hudBuffer;
+    try {
+        hudBuffer = await generateProfileImage({
+            characterName: player.character_name || player.username,
+            avatarUrl: player.character_avatar || targetUser.displayAvatarURL({ extension: 'png', size: 512 }),
+            level,
+            xp,
+            xpToNextLevel,
+            styles: topStyles,
+            attributeName: 'AP',
+            attributeValue: player.ap,
+            orgName: player.organization || null,
+            orgRank: player.rank || null,
+        });
+    } catch (err) {
+        console.error('Profile HUD render error:', err);
+        // Fallback to text embed
+        hudBuffer = null;
+    }
+
+    let mainEmbed;
+    const files = [];
+    if (hudBuffer) {
+        const attachment = new AttachmentBuilder(hudBuffer, { name: 'profile-hud.png' });
+        files.push(attachment);
+        mainEmbed = new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle(`🧬 Профиль — ${player.character_name || player.username}`)
+            .setImage('attachment://profile-hud.png')
+            .setFooter({ text: `ID: ${player.id} • Слот №${slot}` })
+            .setTimestamp();
+    } else {
+        mainEmbed = createProfileMainPage(player, targetUser, slot);
+    }
     const buttons = createProfileButtons(0);
 
     const response = await interaction.reply({
         embeds: [mainEmbed],
+        files,
         components: [buttons],
         fetchReply: true
     });
@@ -83,9 +127,21 @@ export async function execute(interaction) {
         const styles = await getAllPlayerSP(slotPlayerId);
         let newEmbed;
         let newButtons;
+        let newFiles = [];
 
         if (i.customId === 'profile_main') {
-            newEmbed = createProfileMainPage(player, targetUser, slot);
+            if (hudBuffer) {
+                const att = new AttachmentBuilder(hudBuffer, { name: 'profile-hud.png' });
+                newFiles = [att];
+                newEmbed = new EmbedBuilder()
+                    .setColor(0x5865F2)
+                    .setTitle(`🧬 Профиль — ${player.character_name || player.username}`)
+                    .setImage('attachment://profile-hud.png')
+                    .setFooter({ text: `ID: ${player.id} • Слот №${slot}` })
+                    .setTimestamp();
+            } else {
+                newEmbed = createProfileMainPage(player, targetUser, slot);
+            }
             newButtons = [createProfileButtons(0)];
         } else if (i.customId === 'profile_apsp') {
             const totalSP = await getTotalSP(slotPlayerId);
@@ -119,7 +175,7 @@ export async function execute(interaction) {
             newButtons = [createProfileButtons(4)];
         }
 
-        await i.update({ embeds: [newEmbed], components: newButtons });
+        await i.update({ embeds: [newEmbed], files: newFiles, components: newButtons });
     });
 
     collector.on('end', () => {
