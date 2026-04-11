@@ -1,4 +1,4 @@
-import { Client, Collection, Events, GatewayIntentBits } from 'discord.js';
+import { Client, Collection, Events, GatewayIntentBits, REST, Routes } from 'discord.js';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -22,6 +22,13 @@ const client = new Client({
 
 client.commands = new Collection();
 
+const token = process.env.DISCORD_TOKEN || process.env.TOKEN;
+
+if (!token) {
+    console.error('❌ No Discord token found! Please set DISCORD_TOKEN or TOKEN in your secrets.');
+    process.exit(1);
+}
+
 const commandsPath = join(__dirname, 'commands');
 const commandFiles = readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
@@ -40,9 +47,36 @@ for (const file of commandFiles) {
     }
 }
 
-client.once(Events.ClientReady, readyClient => {
+client.once(Events.ClientReady, async readyClient => {
     console.log(`🤖 Bot is ready! Logged in as ${readyClient.user.tag}`);
     console.log(`📊 Serving ${client.guilds.cache.size} server(s)`);
+
+    // Auto-deploy slash commands on startup
+    try {
+        const commandsJSON = [];
+        for (const [, cmd] of client.commands) {
+            commandsJSON.push(cmd.data.toJSON());
+        }
+
+        const rest = new REST().setToken(token);
+        const clientId = process.env.CLIENT_ID;
+        const guildId = process.env.GUILD_ID;
+
+        if (clientId) {
+            if (guildId) {
+                await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: commandsJSON });
+                console.log(`✅ Deployed ${commandsJSON.length} commands to guild ${guildId}`);
+            } else {
+                await rest.put(Routes.applicationCommands(clientId), { body: commandsJSON });
+                console.log(`✅ Deployed ${commandsJSON.length} commands globally`);
+            }
+        } else {
+            console.warn('⚠️  CLIENT_ID not set — skipping command deployment');
+        }
+    } catch (deployError) {
+        console.error('❌ Failed to deploy commands:', deployError);
+    }
+
     startWeeklySalaryScheduler(client);
 });
 
@@ -104,13 +138,6 @@ client.on(Events.Error, error => {
 process.on('unhandledRejection', error => {
     console.error('❌ Unhandled promise rejection:', error);
 });
-
-const token = process.env.DISCORD_TOKEN || process.env.TOKEN;
-
-if (!token) {
-    console.error('❌ No Discord token found! Please set DISCORD_TOKEN or TOKEN in your secrets.');
-    process.exit(1);
-}
 
 // Connect to MongoDB
 console.log('🔌 Connecting to MongoDB...');
