@@ -1,6 +1,6 @@
 import { Client, Collection, Events, GatewayIntentBits, REST, Routes } from 'discord.js';
 import { config } from 'dotenv';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { readdirSync } from 'fs';
 import { connectDatabase, closeDatabase } from './utils/db.js';
@@ -34,16 +34,20 @@ const commandFiles = readdirSync(commandsPath).filter(file => file.endsWith('.js
 
 for (const file of commandFiles) {
     const filePath = join(commandsPath, file);
-    const command = await import(`file://${filePath}`);
-    if ('data' in command && 'execute' in command) {
-        if (client.commands.has(command.data.name)) {
-            console.warn(`⚠️  Duplicate command detected: ${command.data.name}. Skipping.`);
-            continue;
+    try {
+        const command = await import(pathToFileURL(filePath).href);
+        if ('data' in command && 'execute' in command) {
+            if (client.commands.has(command.data.name)) {
+                console.warn(`⚠️  Duplicate command detected: ${command.data.name}. Skipping.`);
+                continue;
+            }
+            client.commands.set(command.data.name, command);
+            console.log(`✅ Loaded command: ${command.data.name}`);
+        } else {
+            console.log(`⚠️  Warning: ${file} is missing required "data" or "execute" property.`);
         }
-        client.commands.set(command.data.name, command);
-        console.log(`✅ Loaded command: ${command.data.name}`);
-    } else {
-        console.log(`⚠️  Warning: ${file} is missing required "data" or "execute" property.`);
+    } catch (err) {
+        console.error(`❌ Failed to load command ${file}:`, err);
     }
 }
 

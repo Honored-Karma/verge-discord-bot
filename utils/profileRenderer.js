@@ -13,7 +13,6 @@ let fontRegistered = false;
 
 function ensureFont() {
     if (fontRegistered) return;
-    // Try to load Orbitron / Michroma if bundled in assets/fonts/
     const candidates = [
         join(ASSETS_DIR, 'fonts', 'Orbitron-Bold.ttf'),
         join(ASSETS_DIR, 'fonts', 'Michroma-Regular.ttf'),
@@ -26,7 +25,6 @@ function ensureFont() {
             return;
         }
     }
-    // Fallback – no custom font file found; we'll use sans-serif via canvas default
     fontRegistered = true;
 }
 
@@ -39,25 +37,39 @@ function fontStr(size, weight = 'bold') {
 const W = 1024;
 const H = 580;
 
-// ── Layout coordinates derived from the template image ───────────────
+// ══════════════════════════════════════════════════════════════════════
+// Layout zones — pixel positions matched to beb.jpg template
+// ══════════════════════════════════════════════════════════════════════
 const LAYOUT = {
-    // Avatar hexagonal frame (left side)
-    avatar: { cx: 235, cy: 230, size: 170 },
-    // XP progress bar (below avatar)
-    xpBar: { x: 80, y: 440, w: 360, h: 18 },
-    // Level text (above XP bar)
-    level: { x: 260, y: 430 },
-    // Styles grid (top-right, up to 3 rows)
-    styles: { x: 545, y: 70, lineHeight: 38, maxItems: 3 },
-    // SP values (right of styles)
-    sp: { x: 860, y: 70, lineHeight: 38, maxItems: 3 },
-    // Attribute section
-    attribute: { x: 680, y: 265 },
-    // Organization + Rank (bottom-right)
-    org: { x: 740, y: 430 },
-    rank: { x: 740, y: 470 },
-    // Character name (top of avatar area)
-    name: { x: 235, y: 60 },
+    // Avatar — rectangular frame on the left side of the template
+    avatar: { x: 90, y: 90, w: 280, h: 280 },
+
+    // Character name — centered above avatar frame
+    name: { x: 230, y: 55 },
+
+    // XP progress bar — bottom-left, the horizontal track on the template
+    xpBar: { x: 78, y: 435, w: 365, h: 16 },
+    // Level text — just above the XP bar
+    level: { x: 260, y: 418 },
+
+    // Styles grid (top-right): 3 rows for style names
+    // Each row has a style name on the left and SP value on the right
+    stylesHeader: { x: 490, y: 50, w: 480, h: 28 },    // "СТИЛИ" / "SP" header zone
+    styleRows: [
+        { nameX: 500, spX: 940, y: 92 },
+        { nameX: 500, spX: 940, y: 130 },
+        { nameX: 500, spX: 940, y: 168 },
+    ],
+
+    // AP / Attribute — middle-right section
+    attrZone: { x: 480, y: 210, w: 500, h: 100 },
+    attrLabel: { x: 680, y: 240 },
+    attrValue: { x: 680, y: 280 },
+
+    // Organization & Rank — bottom-right section
+    orgZone: { x: 510, y: 370, w: 470, h: 110 },
+    orgName: { x: 730, y: 410 },
+    orgRank: { x: 730, y: 450 },
 };
 
 // ── Helper: draw text with black outer glow ──────────────────────────
@@ -67,7 +79,7 @@ function drawGlowText(ctx, text, x, y, {
     align = 'center',
     baseline = 'middle',
     shadowBlur = 5,
-    shadowColor = 'rgba(0,0,0,0.9)',
+    shadowColor = 'rgba(0,0,0,0.95)',
     maxWidth = undefined,
 } = {}) {
     ctx.save();
@@ -87,20 +99,12 @@ function drawGlowText(ctx, text, x, y, {
     ctx.restore();
 }
 
-// ── Helper: create hexagonal clip path ───────────────────────────────
-function hexClip(ctx, cx, cy, r) {
-    ctx.beginPath();
-    // Irregular hexagon / rhombus shape matching the template
-    const squeeze = 0.75; // Vertical squeeze factor for the rhombus look
-    for (let i = 0; i < 6; i++) {
-        const angle = (Math.PI / 3) * i - Math.PI / 2;
-        const px = cx + r * Math.cos(angle);
-        const py = cy + r * squeeze * Math.sin(angle);
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.clip();
+// ── Helper: draw a dark overlay rectangle to cover template text ─────
+function coverZone(ctx, x, y, w, h) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(12, 0, 20, 0.75)';
+    ctx.fillRect(x, y, w, h);
+    ctx.restore();
 }
 
 // ── Helper: fetch image from URL with timeout ────────────────────────
@@ -121,17 +125,17 @@ async function fetchImage(url, timeoutMs = 5000) {
 // ── Helper: generate placeholder avatar ──────────────────────────────
 function createPlaceholderAvatar(size = 256) {
     const c = createCanvas(size, size);
-    const ctx = c.getContext('2d');
-    const gradient = ctx.createLinearGradient(0, 0, size, size);
+    const cx = c.getContext('2d');
+    const gradient = cx.createLinearGradient(0, 0, size, size);
     gradient.addColorStop(0, '#2C003E');
     gradient.addColorStop(1, '#5B0080');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, size, size);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = `bold ${Math.floor(size * 0.4)}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('?', size / 2, size / 2);
+    cx.fillStyle = gradient;
+    cx.fillRect(0, 0, size, size);
+    cx.fillStyle = '#FFFFFF';
+    cx.font = `bold ${Math.floor(size * 0.4)}px sans-serif`;
+    cx.textAlign = 'center';
+    cx.textBaseline = 'middle';
+    cx.fillText('?', size / 2, size / 2);
     return c;
 }
 
@@ -147,7 +151,7 @@ function drawXPBar(ctx, x, y, w, h, ratio) {
 
     // Filled portion with neon purple glow
     if (clamped > 0) {
-        const fillW = Math.max(h, w * clamped); // at least round-cap width
+        const fillW = Math.max(h, w * clamped);
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         ctx.shadowColor = '#B026FF';
@@ -178,8 +182,6 @@ function roundRect(ctx, x, y, w, h, r) {
 // Main export
 // ══════════════════════════════════════════════════════════════════════
 /**
- * Generates a HUD profile image buffer (PNG).
- *
  * @param {object} data
  * @param {string}  data.characterName
  * @param {string|null} data.avatarUrl
@@ -201,9 +203,9 @@ export async function generateProfileImage(data) {
 
     // ── 1. Base layer ────────────────────────────────────────────────
     const bgPath = join(ASSETS_DIR, 'beb.jpg');
-    let bg;
     if (existsSync(bgPath)) {
-        bg = await loadImage(bgPath);
+        const bg = await loadImage(bgPath);
+        ctx.drawImage(bg, 0, 0, W, H);
     } else {
         // Fallback: procedural dark-purple HUD gradient
         const grad = ctx.createLinearGradient(0, 0, W, H);
@@ -212,84 +214,42 @@ export async function generateProfileImage(data) {
         grad.addColorStop(1, '#0D001A');
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, W, H);
-
-        // Draw decorative border
         ctx.strokeStyle = '#B026FF';
         ctx.lineWidth = 3;
         ctx.shadowColor = '#B026FF';
         ctx.shadowBlur = 15;
         ctx.strokeRect(30, 20, W - 60, H - 40);
         ctx.shadowBlur = 0;
-
-        // Inner border
-        ctx.strokeStyle = 'rgba(176, 38, 255, 0.3)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(40, 30, W - 80, H - 60);
-
-        // Corner accents
-        drawCornerAccent(ctx, 30, 20, 1, 1);
-        drawCornerAccent(ctx, W - 30, 20, -1, 1);
-        drawCornerAccent(ctx, 30, H - 20, 1, -1);
-        drawCornerAccent(ctx, W - 30, H - 20, -1, -1);
-
-        // Grid lines
-        ctx.strokeStyle = 'rgba(176, 38, 255, 0.08)';
-        ctx.lineWidth = 1;
-        for (let gx = 50; gx < W; gx += 30) {
-            ctx.beginPath();
-            ctx.moveTo(gx, 30);
-            ctx.lineTo(gx, H - 30);
-            ctx.stroke();
-        }
-        for (let gy = 30; gy < H; gy += 30) {
-            ctx.beginPath();
-            ctx.moveTo(40, gy);
-            ctx.lineTo(W - 40, gy);
-            ctx.stroke();
-        }
-    }
-    if (bg) {
-        ctx.drawImage(bg, 0, 0, W, H);
     }
 
-    // ── 2. Avatar with hex clip ──────────────────────────────────────
-    const { cx, cy, size: avatarR } = LAYOUT.avatar;
+    // ── 2. Avatar — rectangular clip inside the frame ────────────────
+    const av = LAYOUT.avatar;
     let avatarImg = null;
     if (data.avatarUrl) {
         avatarImg = await fetchImage(data.avatarUrl);
     }
     if (!avatarImg) {
-        avatarImg = createPlaceholderAvatar(avatarR * 2);
+        avatarImg = createPlaceholderAvatar(512);
     }
 
     ctx.save();
-    hexClip(ctx, cx, cy, avatarR);
-    const drawSize = avatarR * 2;
-    ctx.drawImage(avatarImg, cx - avatarR, cy - avatarR, drawSize, drawSize);
-    ctx.restore();
-
-    // Hex border glow
-    ctx.save();
-    ctx.strokeStyle = '#B026FF';
-    ctx.lineWidth = 3;
-    ctx.shadowColor = '#B026FF';
-    ctx.shadowBlur = 10;
     ctx.beginPath();
-    const squeeze = 0.75;
-    for (let i = 0; i < 6; i++) {
-        const angle = (Math.PI / 3) * i - Math.PI / 2;
-        const px = cx + avatarR * Math.cos(angle);
-        const py = cy + avatarR * squeeze * Math.sin(angle);
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.stroke();
+    ctx.rect(av.x, av.y, av.w, av.h);
+    ctx.clip();
+    // Draw avatar covering the frame area (cover-fit)
+    const imgW = avatarImg.width || av.w;
+    const imgH = avatarImg.height || av.h;
+    const scale = Math.max(av.w / imgW, av.h / imgH);
+    const drawW = imgW * scale;
+    const drawH = imgH * scale;
+    const drawX = av.x + (av.w - drawW) / 2;
+    const drawY = av.y + (av.h - drawH) / 2;
+    ctx.drawImage(avatarImg, drawX, drawY, drawW, drawH);
     ctx.restore();
 
-    // ── 3. Character Name ────────────────────────────────────────────
+    // ── 3. Character Name — above avatar frame ──────────────────────
     drawGlowText(ctx, data.characterName || 'Unknown', LAYOUT.name.x, LAYOUT.name.y, {
-        font: fontStr(26),
+        font: fontStr(22),
         shadowBlur: 8,
     });
 
@@ -300,93 +260,96 @@ export async function generateProfileImage(data) {
     const xpRatio = xpMax > 0 ? xp / xpMax : 0;
 
     drawGlowText(ctx, `LVL ${level}`, LAYOUT.level.x, LAYOUT.level.y, {
-        font: fontStr(18),
+        font: fontStr(14),
         shadowBlur: 6,
     });
 
     drawXPBar(ctx, LAYOUT.xpBar.x, LAYOUT.xpBar.y, LAYOUT.xpBar.w, LAYOUT.xpBar.h, xpRatio);
 
-    // XP text on bar
     drawGlowText(ctx, `${xp} / ${xpMax} XP`, LAYOUT.xpBar.x + LAYOUT.xpBar.w / 2, LAYOUT.xpBar.y + LAYOUT.xpBar.h / 2, {
-        font: fontStr(11),
+        font: fontStr(10),
         shadowBlur: 4,
     });
 
-    // ── 5. Styles (top-right, up to 3) ──────────────────────────────
+    // ── 5. Styles & SP — top-right grid (cover template labels) ─────
+    // Cover the "СТИЛИ (1-3)" / "SP (1-3)" header text
+    coverZone(ctx, LAYOUT.stylesHeader.x, LAYOUT.stylesHeader.y, LAYOUT.stylesHeader.w, LAYOUT.stylesHeader.h);
+
+    // Header row
+    drawGlowText(ctx, 'СТИЛИ', 600, LAYOUT.stylesHeader.y + 14, {
+        font: fontStr(14),
+        color: '#C8A0FF',
+    });
+    drawGlowText(ctx, 'SP', 920, LAYOUT.stylesHeader.y + 14, {
+        font: fontStr(14),
+        color: '#C8A0FF',
+    });
+
     const styles = (data.styles || []).slice(0, 3);
-    for (let i = 0; i < styles.length; i++) {
-        const sy = LAYOUT.styles.y + i * LAYOUT.styles.lineHeight;
-        drawGlowText(ctx, styles[i].name || '—', LAYOUT.styles.x, sy, {
-            font: fontStr(17),
-            align: 'left',
-            maxWidth: 280,
-        });
-        // SP value on the right
-        const spY = LAYOUT.sp.y + i * LAYOUT.sp.lineHeight;
-        drawGlowText(ctx, `${styles[i].sp || 0} SP`, LAYOUT.sp.x, spY, {
-            font: fontStr(16),
-            align: 'right',
-        });
-    }
-    // Fill empty rows with dashes
-    for (let i = styles.length; i < 3; i++) {
-        const sy = LAYOUT.styles.y + i * LAYOUT.styles.lineHeight;
-        drawGlowText(ctx, '—', LAYOUT.styles.x, sy, {
-            font: fontStr(17),
-            align: 'left',
-            color: 'rgba(255,255,255,0.35)',
-        });
+    for (let i = 0; i < 3; i++) {
+        const row = LAYOUT.styleRows[i];
+        // Cover template decoration for this row
+        coverZone(ctx, 490, row.y - 14, 480, 30);
+
+        if (i < styles.length) {
+            drawGlowText(ctx, styles[i].name || '—', row.nameX, row.y, {
+                font: fontStr(16),
+                align: 'left',
+                maxWidth: 380,
+            });
+            drawGlowText(ctx, `${styles[i].sp || 0}`, row.spX, row.y, {
+                font: fontStr(16),
+                align: 'right',
+                color: '#E0C0FF',
+            });
+        } else {
+            drawGlowText(ctx, '—', row.nameX, row.y, {
+                font: fontStr(16),
+                align: 'left',
+                color: 'rgba(255,255,255,0.3)',
+            });
+            drawGlowText(ctx, '0', row.spX, row.y, {
+                font: fontStr(16),
+                align: 'right',
+                color: 'rgba(255,255,255,0.3)',
+            });
+        }
     }
 
-    // ── 6. Attribute Section ─────────────────────────────────────────
-    const attrLabel = data.attributeName || 'Нет';
-    const attrValue = data.attributeValue ?? 0;
-    drawGlowText(ctx, `AP | ${attrLabel}`, LAYOUT.attribute.x, LAYOUT.attribute.y, {
-        font: fontStr(24),
+    // ── 6. AP / Attribute — middle-right section ─────────────────────
+    coverZone(ctx, LAYOUT.attrZone.x, LAYOUT.attrZone.y, LAYOUT.attrZone.w, LAYOUT.attrZone.h);
+
+    const attrName = data.attributeName || 'AP';
+    const attrVal = data.attributeValue ?? 0;
+
+    drawGlowText(ctx, `${attrName} | АТРИБУТ`, LAYOUT.attrLabel.x, LAYOUT.attrLabel.y, {
+        font: fontStr(22),
         shadowBlur: 7,
     });
-    drawGlowText(ctx, `${attrValue}`, LAYOUT.attribute.x, LAYOUT.attribute.y + 36, {
-        font: fontStr(30),
-        shadowBlur: 8,
+    drawGlowText(ctx, `${attrVal}`, LAYOUT.attrValue.x, LAYOUT.attrValue.y, {
+        font: fontStr(34),
+        shadowBlur: 10,
         color: '#E0C0FF',
     });
 
-    // ── 7. Organization & Rank ──────────────────────────────────────
+    // ── 7. Organization & Rank — bottom-right section ────────────────
+    coverZone(ctx, LAYOUT.orgZone.x, LAYOUT.orgZone.y, LAYOUT.orgZone.w, LAYOUT.orgZone.h);
+
     const orgText = data.orgName || 'Нет организации';
     const rankText = data.orgRank || 'Нет ранга';
-    drawGlowText(ctx, orgText, LAYOUT.org.x, LAYOUT.org.y, {
+
+    drawGlowText(ctx, orgText, LAYOUT.orgName.x, LAYOUT.orgName.y, {
         font: fontStr(20),
         shadowBlur: 6,
-        maxWidth: 300,
+        maxWidth: 400,
     });
-    drawGlowText(ctx, rankText, LAYOUT.rank.x, LAYOUT.rank.y, {
-        font: fontStr(16),
+    drawGlowText(ctx, `Ранг: ${rankText}`, LAYOUT.orgRank.x, LAYOUT.orgRank.y, {
+        font: fontStr(15),
         color: '#C8A0FF',
         shadowBlur: 5,
-        maxWidth: 300,
+        maxWidth: 400,
     });
 
     // ── Encode to PNG buffer ─────────────────────────────────────────
     return canvas.toBuffer('image/png');
-}
-
-// ── Decorative corner accent for fallback background ─────────────────
-function drawCornerAccent(ctx, x, y, dx, dy) {
-    const len = 25;
-    ctx.save();
-    ctx.strokeStyle = '#B026FF';
-    ctx.lineWidth = 2;
-    ctx.shadowColor = '#B026FF';
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.moveTo(x, y + dy * len);
-    ctx.lineTo(x, y);
-    ctx.lineTo(x + dx * len, y);
-    ctx.stroke();
-    // Dot
-    ctx.beginPath();
-    ctx.arc(x, y, 3, 0, Math.PI * 2);
-    ctx.fillStyle = '#B026FF';
-    ctx.fill();
-    ctx.restore();
 }
