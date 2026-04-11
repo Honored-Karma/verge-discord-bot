@@ -82,10 +82,11 @@ export async function execute(interaction) {
             xp,
             xpToNextLevel,
             styles: topStyles,
-            attributeName: 'AP',
+            attributeName: player.attribute_name || null,
             attributeValue: player.ap,
             orgName: player.organization || null,
             orgRank: player.rank || null,
+            playerId: player.id,
         });
     } catch (err) {
         console.error('Profile HUD render error:', err);

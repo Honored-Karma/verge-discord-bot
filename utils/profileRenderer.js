@@ -33,52 +33,13 @@ function fontStr(size, weight = 'bold') {
     return `${weight} ${size}px "${FONT_FAMILY}", sans-serif`;
 }
 
-// ── Canvas Dimensions (match beb.jpg) ────────────────────────────────
-const W = 1024;
-const H = 580;
-
-// ══════════════════════════════════════════════════════════════════════
-// Layout zones — pixel positions matched to beb.jpg template
-// ══════════════════════════════════════════════════════════════════════
-const LAYOUT = {
-    // Avatar — rectangular frame on the left side of the template
-    avatar: { x: 90, y: 90, w: 280, h: 280 },
-
-    // Character name — centered above avatar frame
-    name: { x: 230, y: 55 },
-
-    // XP progress bar — bottom-left, the horizontal track on the template
-    xpBar: { x: 78, y: 435, w: 365, h: 16 },
-    // Level text — just above the XP bar
-    level: { x: 260, y: 418 },
-
-    // Styles grid (top-right): 3 rows for style names
-    // Each row has a style name on the left and SP value on the right
-    stylesHeader: { x: 490, y: 50, w: 480, h: 28 },    // "СТИЛИ" / "SP" header zone
-    styleRows: [
-        { nameX: 500, spX: 940, y: 92 },
-        { nameX: 500, spX: 940, y: 130 },
-        { nameX: 500, spX: 940, y: 168 },
-    ],
-
-    // AP / Attribute — middle-right section
-    attrZone: { x: 480, y: 210, w: 500, h: 100 },
-    attrLabel: { x: 680, y: 240 },
-    attrValue: { x: 680, y: 280 },
-
-    // Organization & Rank — bottom-right section
-    orgZone: { x: 510, y: 370, w: 470, h: 110 },
-    orgName: { x: 730, y: 410 },
-    orgRank: { x: 730, y: 450 },
-};
-
 // ── Helper: draw text with black outer glow ──────────────────────────
 function drawGlowText(ctx, text, x, y, {
     font = fontStr(20),
     color = '#FFFFFF',
     align = 'center',
     baseline = 'middle',
-    shadowBlur = 5,
+    shadowBlur = 6,
     shadowColor = 'rgba(0,0,0,0.95)',
     maxWidth = undefined,
 } = {}) {
@@ -89,8 +50,8 @@ function drawGlowText(ctx, text, x, y, {
     ctx.textBaseline = baseline;
     ctx.shadowColor = shadowColor;
     ctx.shadowBlur = shadowBlur;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
     if (maxWidth) {
         ctx.fillText(text, x, y, maxWidth);
     } else {
@@ -99,10 +60,10 @@ function drawGlowText(ctx, text, x, y, {
     ctx.restore();
 }
 
-// ── Helper: draw a dark overlay rectangle to cover template text ─────
-function coverZone(ctx, x, y, w, h) {
+// ── Helper: draw a dark overlay to cover template placeholder text ───
+function coverZone(ctx, x, y, w, h, opacity = 0.8) {
     ctx.save();
-    ctx.fillStyle = 'rgba(12, 0, 20, 0.75)';
+    ctx.fillStyle = `rgba(10, 0, 18, ${opacity})`;
     ctx.fillRect(x, y, w, h);
     ctx.restore();
 }
@@ -123,7 +84,7 @@ async function fetchImage(url, timeoutMs = 5000) {
 }
 
 // ── Helper: generate placeholder avatar ──────────────────────────────
-function createPlaceholderAvatar(size = 256) {
+function createPlaceholderAvatar(size = 512) {
     const c = createCanvas(size, size);
     const cx = c.getContext('2d');
     const gradient = cx.createLinearGradient(0, 0, size, size);
@@ -132,14 +93,40 @@ function createPlaceholderAvatar(size = 256) {
     cx.fillStyle = gradient;
     cx.fillRect(0, 0, size, size);
     cx.fillStyle = '#FFFFFF';
-    cx.font = `bold ${Math.floor(size * 0.4)}px sans-serif`;
+    cx.font = `bold ${Math.floor(size * 0.35)}px sans-serif`;
     cx.textAlign = 'center';
     cx.textBaseline = 'middle';
     cx.fillText('?', size / 2, size / 2);
     return c;
 }
 
-// ── Neon XP Progress Bar ─────────────────────────────────────────────
+// ── Segmented progress bar (AP-style blocks) ─────────────────────────
+function drawSegmentedBar(ctx, x, y, w, h, ratio, totalSegments = 12) {
+    const clamped = Math.max(0, Math.min(1, ratio));
+    const gap = 4;
+    const segW = (w - gap * (totalSegments - 1)) / totalSegments;
+    const filledCount = Math.round(clamped * totalSegments);
+
+    for (let i = 0; i < totalSegments; i++) {
+        const sx = x + i * (segW + gap);
+        if (i < filledCount) {
+            ctx.save();
+            ctx.shadowColor = '#B026FF';
+            ctx.shadowBlur = 8;
+            ctx.fillStyle = '#B026FF';
+            ctx.fillRect(sx, y, segW, h);
+            ctx.restore();
+            // brighter inner
+            ctx.fillStyle = '#D070FF';
+            ctx.fillRect(sx + 1, y + 1, segW - 2, h - 2);
+        } else {
+            ctx.fillStyle = 'rgba(255,255,255,0.08)';
+            ctx.fillRect(sx, y, segW, h);
+        }
+    }
+}
+
+// ── Smooth XP bar ────────────────────────────────────────────────────
 function drawXPBar(ctx, x, y, w, h, ratio) {
     const clamped = Math.max(0, Math.min(1, ratio));
 
@@ -149,13 +136,13 @@ function drawXPBar(ctx, x, y, w, h, ratio) {
     roundRect(ctx, x, y, w, h, h / 2);
     ctx.fill();
 
-    // Filled portion with neon purple glow
+    // Filled portion
     if (clamped > 0) {
         const fillW = Math.max(h, w * clamped);
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         ctx.shadowColor = '#B026FF';
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = 10;
         ctx.fillStyle = '#B026FF';
         roundRect(ctx, x, y, fillW, h, h / 2);
         ctx.fill();
@@ -193,21 +180,30 @@ function roundRect(ctx, x, y, w, h, r) {
  * @param {number}  data.attributeValue
  * @param {string|null} data.orgName
  * @param {string|null} data.orgRank
+ * @param {string|null} data.playerId
  * @returns {Promise<Buffer>} PNG buffer
  */
 export async function generateProfileImage(data) {
     ensureFont();
 
+    // ── 1. Load background & create canvas at its native size ────────
+    const bgPath = join(ASSETS_DIR, 'beb.jpg');
+    let bg = null;
+    let W = 1196;
+    let H = 761;
+    if (existsSync(bgPath)) {
+        bg = await loadImage(bgPath);
+        W = bg.width;
+        H = bg.height;
+    }
+
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
 
-    // ── 1. Base layer ────────────────────────────────────────────────
-    const bgPath = join(ASSETS_DIR, 'beb.jpg');
-    if (existsSync(bgPath)) {
-        const bg = await loadImage(bgPath);
+    if (bg) {
         ctx.drawImage(bg, 0, 0, W, H);
     } else {
-        // Fallback: procedural dark-purple HUD gradient
+        // Fallback gradient
         const grad = ctx.createLinearGradient(0, 0, W, H);
         grad.addColorStop(0, '#0D001A');
         grad.addColorStop(0.5, '#1A003D');
@@ -222,8 +218,14 @@ export async function generateProfileImage(data) {
         ctx.shadowBlur = 0;
     }
 
-    // ── 2. Avatar — rectangular clip inside the frame ────────────────
-    const av = LAYOUT.avatar;
+    // ══════════════════════════════════════════════════════════════════
+    // Layout coordinates for 1196×761 template
+    // ══════════════════════════════════════════════════════════════════
+    // All positions matched to beb.jpg visual zones.
+
+    // ── 2. Avatar — rectangular clip inside the template frame ───────
+    const avX = 72, avY = 82, avW = 370, avH = 390;
+
     let avatarImg = null;
     if (data.avatarUrl) {
         avatarImg = await fetchImage(data.avatarUrl);
@@ -234,121 +236,132 @@ export async function generateProfileImage(data) {
 
     ctx.save();
     ctx.beginPath();
-    ctx.rect(av.x, av.y, av.w, av.h);
+    ctx.rect(avX, avY, avW, avH);
     ctx.clip();
-    // Draw avatar covering the frame area (cover-fit)
-    const imgW = avatarImg.width || av.w;
-    const imgH = avatarImg.height || av.h;
-    const scale = Math.max(av.w / imgW, av.h / imgH);
-    const drawW = imgW * scale;
-    const drawH = imgH * scale;
-    const drawX = av.x + (av.w - drawW) / 2;
-    const drawY = av.y + (av.h - drawH) / 2;
-    ctx.drawImage(avatarImg, drawX, drawY, drawW, drawH);
+    const imgW = avatarImg.width || avW;
+    const imgH = avatarImg.height || avH;
+    const scale = Math.max(avW / imgW, avH / imgH);
+    const dW = imgW * scale;
+    const dH = imgH * scale;
+    const dX = avX + (avW - dW) / 2;
+    const dY = avY + (avH - dH) / 2;
+    ctx.drawImage(avatarImg, dX, dY, dW, dH);
     ctx.restore();
 
-    // ── 3. Character Name — above avatar frame ──────────────────────
-    drawGlowText(ctx, data.characterName || 'Unknown', LAYOUT.name.x, LAYOUT.name.y, {
-        font: fontStr(22),
+    // ── 3. Character name — covers "АВАТАРКА" label on template ─────
+    coverZone(ctx, 60, 38, 400, 38);
+    drawGlowText(ctx, (data.characterName || 'Unknown').toUpperCase(), 80, 57, {
+        font: fontStr(26),
+        align: 'left',
         shadowBlur: 8,
     });
 
-    // ── 4. Level & XP Bar ────────────────────────────────────────────
+    // ── 4. СТИЛИ section — top-right ─────────────────────────────────
+    // Cover the "СТИЛИ (1-3)" and "SP (1-3)" template labels
+    coverZone(ctx, 500, 38, 650, 40);
+    drawGlowText(ctx, 'СТИЛИ:', 520, 58, {
+        font: fontStr(28),
+        align: 'left',
+        shadowBlur: 8,
+    });
+
+    const styles = (data.styles || []).slice(0, 3);
+    const styleStartY = 100;
+    const styleRowH = 45;
+
+    for (let i = 0; i < 3; i++) {
+        const rowY = styleStartY + i * styleRowH;
+        coverZone(ctx, 500, rowY - 16, 650, 38);
+
+        if (i < styles.length) {
+            drawGlowText(ctx, (styles[i].name || '—').toUpperCase(), 530, rowY, {
+                font: fontStr(20),
+                align: 'left',
+                maxWidth: 480,
+            });
+            drawGlowText(ctx, `${styles[i].sp || 0}`, 1100, rowY, {
+                font: fontStr(24),
+                align: 'right',
+            });
+        } else {
+            drawGlowText(ctx, '—', 530, rowY, {
+                font: fontStr(20),
+                align: 'left',
+                color: 'rgba(255,255,255,0.25)',
+            });
+            drawGlowText(ctx, '0', 1100, rowY, {
+                font: fontStr(24),
+                align: 'right',
+                color: 'rgba(255,255,255,0.25)',
+            });
+        }
+    }
+
+    // ── 5. AP | Attribute — middle-right ─────────────────────────────
+    const attrName = data.attributeName || null;
+    const attrVal = data.attributeValue ?? 0;
+    const apLabel = attrName ? `AP | ${attrName}` : `AP`;
+
+    coverZone(ctx, 500, 280, 650, 55);
+    drawGlowText(ctx, apLabel, 530, 310, {
+        font: fontStr(32),
+        align: 'left',
+        shadowBlur: 8,
+    });
+
+    // Segmented AP progress bar
+    const apBarY = 360;
+    coverZone(ctx, 500, apBarY - 8, 650, 36);
+    const apRatio = Math.min(1, attrVal / 1000);
+    drawSegmentedBar(ctx, 530, apBarY, 560, 20, apRatio, 14);
+
+    // ── 6. LVL — bottom-left ─────────────────────────────────────────
     const level = data.level || 0;
     const xp = data.xp || 0;
     const xpMax = data.xpToNextLevel || 100;
     const xpRatio = xpMax > 0 ? xp / xpMax : 0;
 
-    drawGlowText(ctx, `LVL ${level}`, LAYOUT.level.x, LAYOUT.level.y, {
-        font: fontStr(14),
-        shadowBlur: 6,
+    coverZone(ctx, 60, 520, 410, 50);
+    drawGlowText(ctx, `LVL: ${level}`, 265, 545, {
+        font: fontStr(30),
+        shadowBlur: 8,
     });
 
-    drawXPBar(ctx, LAYOUT.xpBar.x, LAYOUT.xpBar.y, LAYOUT.xpBar.w, LAYOUT.xpBar.h, xpRatio);
-
-    drawGlowText(ctx, `${xp} / ${xpMax} XP`, LAYOUT.xpBar.x + LAYOUT.xpBar.w / 2, LAYOUT.xpBar.y + LAYOUT.xpBar.h / 2, {
+    // XP bar under level
+    drawXPBar(ctx, 80, 580, 360, 14, xpRatio);
+    drawGlowText(ctx, `${xp} / ${xpMax} XP`, 260, 587, {
         font: fontStr(10),
         shadowBlur: 4,
     });
 
-    // ── 5. Styles & SP — top-right grid (cover template labels) ─────
-    // Cover the "СТИЛИ (1-3)" / "SP (1-3)" header text
-    coverZone(ctx, LAYOUT.stylesHeader.x, LAYOUT.stylesHeader.y, LAYOUT.stylesHeader.w, LAYOUT.stylesHeader.h);
-
-    // Header row
-    drawGlowText(ctx, 'СТИЛИ', 600, LAYOUT.stylesHeader.y + 14, {
-        font: fontStr(14),
-        color: '#C8A0FF',
-    });
-    drawGlowText(ctx, 'SP', 920, LAYOUT.stylesHeader.y + 14, {
-        font: fontStr(14),
-        color: '#C8A0FF',
-    });
-
-    const styles = (data.styles || []).slice(0, 3);
-    for (let i = 0; i < 3; i++) {
-        const row = LAYOUT.styleRows[i];
-        // Cover template decoration for this row
-        coverZone(ctx, 490, row.y - 14, 480, 30);
-
-        if (i < styles.length) {
-            drawGlowText(ctx, styles[i].name || '—', row.nameX, row.y, {
-                font: fontStr(16),
-                align: 'left',
-                maxWidth: 380,
-            });
-            drawGlowText(ctx, `${styles[i].sp || 0}`, row.spX, row.y, {
-                font: fontStr(16),
-                align: 'right',
-                color: '#E0C0FF',
-            });
-        } else {
-            drawGlowText(ctx, '—', row.nameX, row.y, {
-                font: fontStr(16),
-                align: 'left',
-                color: 'rgba(255,255,255,0.3)',
-            });
-            drawGlowText(ctx, '0', row.spX, row.y, {
-                font: fontStr(16),
-                align: 'right',
-                color: 'rgba(255,255,255,0.3)',
-            });
-        }
-    }
-
-    // ── 6. AP / Attribute — middle-right section ─────────────────────
-    coverZone(ctx, LAYOUT.attrZone.x, LAYOUT.attrZone.y, LAYOUT.attrZone.w, LAYOUT.attrZone.h);
-
-    const attrName = data.attributeName || 'AP';
-    const attrVal = data.attributeValue ?? 0;
-
-    drawGlowText(ctx, `${attrName} | АТРИБУТ`, LAYOUT.attrLabel.x, LAYOUT.attrLabel.y, {
-        font: fontStr(22),
-        shadowBlur: 7,
-    });
-    drawGlowText(ctx, `${attrVal}`, LAYOUT.attrValue.x, LAYOUT.attrValue.y, {
-        font: fontStr(34),
-        shadowBlur: 10,
-        color: '#E0C0FF',
-    });
-
-    // ── 7. Organization & Rank — bottom-right section ────────────────
-    coverZone(ctx, LAYOUT.orgZone.x, LAYOUT.orgZone.y, LAYOUT.orgZone.w, LAYOUT.orgZone.h);
-
+    // ── 7. Organization & Rank — bottom-right ────────────────────────
     const orgText = data.orgName || 'Нет организации';
     const rankText = data.orgRank || 'Нет ранга';
 
-    drawGlowText(ctx, orgText, LAYOUT.orgName.x, LAYOUT.orgName.y, {
+    coverZone(ctx, 500, 450, 650, 160);
+
+    drawGlowText(ctx, `ОРГАНИЗАЦИЯ: ${orgText.toUpperCase()}`, 530, 490, {
         font: fontStr(20),
+        align: 'left',
         shadowBlur: 6,
-        maxWidth: 400,
+        maxWidth: 580,
     });
-    drawGlowText(ctx, `Ранг: ${rankText}`, LAYOUT.orgRank.x, LAYOUT.orgRank.y, {
-        font: fontStr(15),
-        color: '#C8A0FF',
-        shadowBlur: 5,
-        maxWidth: 400,
+    drawGlowText(ctx, `РАНГ: ${rankText.toUpperCase()}`, 530, 540, {
+        font: fontStr(20),
+        align: 'left',
+        shadowBlur: 6,
+        maxWidth: 580,
     });
+
+    // ── 8. Player ID — bottom-right corner ──────────────────────────
+    if (data.playerId) {
+        drawGlowText(ctx, data.playerId, 1140, 720, {
+            font: fontStr(12),
+            align: 'right',
+            color: 'rgba(255,255,255,0.5)',
+            shadowBlur: 3,
+        });
+    }
 
     // ── Encode to PNG buffer ─────────────────────────────────────────
     return canvas.toBuffer('image/png');

@@ -173,7 +173,7 @@ export async function updatePlayer(playerId, updates) {
     }
 }
 
-export async function createPlayer(playerId, username, characterName, characterAvatar = null, slot = 1) {
+export async function createPlayer(playerId, username, characterName, characterAvatar = null, slot = 1, attributeName = null) {
     try {
         const db = getDB();
         let id = playerId;
@@ -190,6 +190,7 @@ export async function createPlayer(playerId, username, characterName, characterA
             username,
             character_name: characterName,
             character_avatar: characterAvatar,
+            attribute_name: attributeName,
             krw: 0,
             yen: 0,
             ap: 0,
