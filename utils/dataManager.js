@@ -247,16 +247,6 @@ export async function addAP(playerId, amount, actionType = 'train') {
             );
         }
         
-        const oldMilestones = Math.floor(player.ap / 100);
-        const newMilestones = Math.floor(newAP / 100);
-        const newTechniques = newMilestones - oldMilestones;
-        
-        if (newTechniques > 0) {
-            for (let i = 0; i < newTechniques; i++) {
-                await giveItem(playerId, '+Техника', 1, 'system');
-            }
-        }
-
         await addProgressionHistory(playerId, 'ap', player.ap, newAP, actionType);
         
         return newAP;

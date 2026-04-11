@@ -203,11 +203,10 @@ export function createProfileMainPage(player, user) {
     embed.addFields({ name: '🏢 Организация', value: player.organization || 'Не указана', inline: true });
     embed.addFields({ name: '👑 Ранг', value: player.rank || 'Нет ранга', inline: true });
     embed.addFields({ name: '⚡ Очки способностей (AP)', value: `${player.ap} AP`, inline: true });
-    embed.addFields({ name: '🎯 Техники', value: `${Math.floor(player.ap / 100)}`, inline: true });
     embed.addFields({ name: '📈 AP / SP', value: `${player.ap_multiplier || 100}% / ${player.sp_multiplier || 100}%`, inline: true });
 
     if (player.unlocked_avatar) {
-        embed.addFields({ name: '🌟 Статус', value: 'Avatar/Embodiment разблокирован', inline: false });
+        embed.addFields({ name: '🌟 Статус', value: 'Олицетворение достигнуто', inline: false });
     }
 
     if (player.krw > 0 || player.yen > 0) {
@@ -236,13 +235,12 @@ export function createProfileAPSPPage(player, user, totalSP = 0) {
     
     const apBar = createProgressBar(progressInRange, 100, 20);
     embed.addFields({ 
-        name: '⚡ Прогресс к следующей технике', 
-        value: `${apBar}\n**${player.ap}** AP (следующая: ${nextMilestone} AP)`,
+        name: '⚡ Прогресс AP', 
+        value: `${apBar}\n**${player.ap}** AP (следующая отметка: ${nextMilestone} AP)`,
         inline: false 
     });
     
     embed.addFields({ name: '🥋 Всего SP', value: `${totalSP} SP`, inline: true });
-    embed.addFields({ name: '🎯 Техник разблокировано', value: `${Math.floor(player.ap / 100)}`, inline: true });
     
     embed.setFooter({ text: `ID: ${player.id} • Страница 2/4` });
     

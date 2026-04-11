@@ -17,8 +17,7 @@ export function getAPProgress(currentAP) {
     return {
         current: progressInCurrentRange,
         max: 100,
-        nextMilestone,
-        techniques: Math.floor(currentAP / 100)
+        nextMilestone
     };
 }
 

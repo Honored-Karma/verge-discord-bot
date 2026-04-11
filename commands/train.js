@@ -99,13 +99,12 @@ export async function execute(interaction) {
         `Множитель: **${multiplier}%**\n` +
         `Итого получено: **+${actualAPGained} AP**\n\n` +
         `**Всего AP:** ${newAP}\n` +
-        `**Техник разблокировано:** ${apProgress.techniques}\n` +
         `**Следующая тренировка:** <t:${Math.floor((Date.now() + TRAIN_COOLDOWN) / 1000)}:R>\n\n` +
-        `**Прогресс к следующей технике:**\n${progressText}`
+        `**Прогресс AP:**\n${progressText}`
     );
     
     if (newAP >= 1000) {
-        embed.setDescription(embed.data.description + '\n\n🌟 **Вы достигли 1000 AP! Avatar/Embodiment доступен!**');
+        embed.setDescription(embed.data.description + '\n\n🌟 **Олицетворение достигнуто!**');
     }
     
     const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
