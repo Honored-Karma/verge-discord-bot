@@ -1,6 +1,6 @@
 {
   "name": "discord-rpg-bot",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Discord RPG bot with training, AP/SP progression, and admin tools",
   "main": "index.js",
   "type": "module",

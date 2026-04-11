@@ -4,7 +4,7 @@ import ms from 'ms';
 const globalCooldowns = new Map();
 const GLOBAL_COOLDOWN_MS = 3000;
 const AUTO_DELETE_MS = 20000;
-const AUTO_DELETE_SHORT_MS = 20000;
+const AUTO_DELETE_SHORT_MS = 10000;
 
 export function checkGlobalCooldown(userId) {
     const now = Date.now();

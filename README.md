@@ -1,146 +1,108 @@
-# 🤖 Verge - Discord RPG Bot
+# 🤖 Verge — Discord RPG Bot
 
-**Полнофункциональный Discord RPG бот с системой тренировок, боевых стилей, экономики и профилей!**
+**Discord RPG бот с тренировками, боевыми стилями, двойной экономикой, слот-системой персонажей, зарплатами и логированием.**
 
 ![Discord.js](https://img.shields.io/badge/discord.js-v14-blue?style=for-the-badge&logo=discord)
-![MongoDB](https://img.shields.io/badge/MongoDB-6.5.0-green?style=for-the-badge&logo=mongodb)
+![MongoDB](https://img.shields.io/badge/MongoDB-6-green?style=for-the-badge&logo=mongodb)
 ![Node.js](https://img.shields.io/badge/Node.js-18+-darkgreen?style=for-the-badge&logo=node.js)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 
 ---
 
-## ✨ Особенности
+## ✨ Возможности
 
-### 🎮 Игровая механика
-- **Регистрация персонажа** с уникальным именем и аватаром
-- **Система тренировок** для повышения AP (Attack Power)
-- **24 боевых стиля** с разными характеристиками
-- **Социальные ролевые сценарии** для заработка SP (Style Points)
-- **Система инвентаря** для хранения предметов
-
-### 💰 Экономика
-- **Двойная валюта**: KRW (корейская вона) и YEN (японская иена)
-- **Обмен валют** с динамическим курсом
-- **Платежи между игроками** `/pay`
-- **Лидерборд** по AP, SP и богатству
-
-### 👤 Профиль персонажа
-- **Подробный профиль** с всей статистикой
-- **Смена аватара** командой `/set-avatar`
-- **Отслеживание прогресса** в каждом стиле боя
-- **Просмотр инвентаря** и истории
-
-### ⚙️ Администрирование
-- **Команды для админов** для управления экономикой
-- **Выдача стилей** и предметов
-- **Управление множителями** AP и SP
-- **Логирование действий**
+- **36 слэш-команд** — регистрация, тренировки, экономика, администрирование
+- **Система слотов** — до 2 персонажей на одного пользователя (`/slot`, `/register slot:2`)
+- **AP / SP прогрессия** — очки способностей и очки стилей с множителями и бонусами за ранг/активность
+- **Двойная валюта** — KRW и YEN, обмен по курсу 1 ¥ = 9.4 ₩
+- **Еженедельные зарплаты** — автоматические выплаты по организации и рангу (cron)
+- **Ролевая система прав** — ADMIN_IDS, LIMITED_ADMIN_ROLE_IDS, GIVE_STYLE_ROLE_IDS
+- **Логирование команд** — запись в БД + пересылка в лог-канал (`/log-enable`, `/log-disable`)
+- **Профиль с пагинацией** — 4 страницы: основная, AP/SP, стили, баланс + история
+- **Красивые embed-ы** — баннеры, прогресс-бары, кнопки навигации
+- **MongoDB Atlas** — автоматическая инициализация 10 коллекций с индексами
 
 ---
 
 ## 🚀 Быстрый старт
 
 ### Требования
-- **Node.js** 18 или выше
-- **MongoDB Atlas** аккаунт (бесплатно)
-- **Discord Bot Token** с необходимыми permissions
+- **Node.js** 18+
+- **MongoDB Atlas** (бесплатный кластер)
+- **Discord Bot Token**
 
 ### Установка
 
-1. **Клонируйте репозиторий**
 ```bash
-git clone https://github.com/yourusername/verge-discord-bot.git
+git clone https://github.com/your-username/verge-discord-bot.git
 cd verge-discord-bot
-```
-
-2. **Установите зависимости**
-```bash
 npm install
+cp .env.example .env   # заполните своими значениями
+npm run deploy          # зарегистрировать команды в Discord
+npm start               # запустить бота
 ```
 
-3. **Настройте переменные окружения**
-```bash
-cp .env.example .env
-```
-
-Отредактируйте `.env`:
-```env
-DISCORD_TOKEN=ваш_токен_бота
-CLIENT_ID=ID_вашего_бота
-MONGODB_URI=mongodb+srv://пользователь:пароль@кластер.mongodb.net/?appName=Verge
-```
-
-4. **Запустите бота**
-```bash
-npm start
-```
-
-5. **Задеплойте команды в Discord** (один раз)
-```bash
-npm run deploy
-```
+Подробнее: [QUICKSTART.md](QUICKSTART.md)
 
 ---
 
-## 📋 Доступные команды
+## 📋 Команды (36)
 
-### 👤 Профиль и персонаж
+### 👤 Персонаж
 | Команда | Описание |
 |---------|----------|
-| `/register` | Создать нового персонажа |
-| `/profile` | Просмотреть свой профиль (с пагинацией) |
-| `/set-avatar <url>` | Установить аватар персонажа |
-| `/inventory` | Просмотреть инвентарь |
+| `/register` | Создать персонажа (опц. `slot:2`) |
+| `/profile` | Профиль с пагинацией (4 страницы) |
+| `/set-avatar` | Установить аватар персонажа |
+| `/set-rank` | Установить ранг (админ) |
+| `/slot` | Переключить активный слот |
+| `/slots` | Просмотреть все слоты |
+| `/inventory` | Инвентарь персонажа |
+| `/ranks-info` | Таблица рангов и организаций |
 
-### 🥋 Боевые стили
+### 🥋 Тренировка и стили
 | Команда | Описание |
 |---------|----------|
-| `/train <style>` | Тренироваться в стиле боя |
-| `/styles-list` | Список всех доступных стилей |
-| `/social-rp <action>` | Социальное ролевое действие |
-
-### 💪 Характеристики
-| Команда | Описание |
-|---------|----------|
-| `/add-ap <user> <amount>` | Добавить AP |
-| `/set-ap <user> <amount>` | Установить AP |
-| `/add-sp <user> <amount>` | Добавить SP |
-| `/set-sp <user> <amount>` | Установить SP |
-| `/add-currency <user> <krw> <yen>` | Добавить деньги |
+| `/train` | Тренировка (AP, кулдаун 2ч) |
+| `/social-rp` | Социальный RP (AP/SP, кулдаун 2ч) |
+| `/styles-list` | Список стилей с пагинацией |
+| `/add-style` | Создать стиль (админ) |
+| `/delete-style` | Удалить стиль (админ) |
+| `/give-style` | Выдать стиль игроку |
+| `/remove-player-style` | Убрать стиль у игрока |
 
 ### 💰 Экономика
 | Команда | Описание |
 |---------|----------|
-| `/pay <user> <krw/yen> <amount>` | Отправить деньги игроку |
-| `/exchange <from> <to> <amount>` | Обменять валюту |
-| `/leaderboard <type>` | Лидерборд (ap/sp/krw/yen) |
-| `/use <item>` | Использовать предмет из инвентаря |
+| `/pay` | Перевод валюты (2% налог) |
+| `/exchange` | Обмен KRW ↔ YEN |
+| `/leaderboard` | Рейтинг (ap / sp / krw / yen) |
+| `/use` | Использовать предмет |
 
-### 🛡️ Администрирование
+### ⚙️ Администрирование
 | Команда | Описание |
 |---------|----------|
-| `/delete-user <user>` | Удалить игрока (админ) |
-| `/set-ap-multiplier <multiplier>` | Установить множитель AP |
-| `/set-sp-multiplier <multiplier>` | Установить множитель SP |
-| `/set-currency <user> <krw> <yen>` | Установить денежный баланс |
-| `/give-style <user> <style>` | Выдать стиль боя (админ) |
-| `/give-item <user> <item>` | Выдать предмет (админ) |
-| `/add-style <name>` | Создать новый стиль (админ) |
-| `/delete-style <name>` | Удалить стиль (админ) |
+| `/add-ap` | Добавить AP |
+| `/set-ap` | Установить AP |
+| `/add-sp` | Добавить SP |
+| `/set-sp` | Установить SP |
+| `/add-currency` | Добавить валюту |
+| `/deduct-currency` | Списать валюту |
+| `/set-currency` | Установить баланс |
+| `/set-ap-multiplier` | Множитель AP (50–500%) |
+| `/set-sp-multiplier` | Множитель SP (50–500%) |
+| `/give-item` | Выдать предмет |
+| `/delete-user` | Удалить персонажа |
 
-### 📖 Справка
+### � Логи и утилиты
 | Команда | Описание |
 |---------|----------|
-| `/help [category]` | **НОВОЕ!** Полный гайд по командам |
-
----
-
-## 📚 Документация
-
-- **[TUTORIAL.md](TUTORIAL.md)** - Подробный туториал по игре (700+ строк)
-- **[START_HERE.md](START_HERE.md)** - Начните отсюда
-- **[QUICKSTART.md](QUICKSTART.md)** - Быстрый старт за 5 минут
-- **[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)** - Структура проекта
+| `/log-enable` | Включить лог-канал |
+| `/log-disable` | Отключить лог-канал |
+| `/logs` | Просмотреть последние логи |
+| `/help` | Справка по командам |
+| `/render-ui` | Рендер Discohook JSON |
+| `/components-demo` | Демо компонентов |
 
 ---
 
@@ -148,162 +110,88 @@ npm run deploy
 
 ```
 verge-discord-bot/
-├── commands/                 # Все 24+ слэш-команды
-│   ├── register.js
-│   ├── profile.js
-│   ├── train.js
-│   ├── set-avatar.js
-│   └── ... (и другие)
+├── commands/            # 36 слэш-команд
 ├── utils/
-│   ├── db.js               # Подключение MongoDB
-│   ├── dataManager.js      # 30+ функций работы с БД
-│   ├── embeds.js           # Красивые embed-ы
-│   ├── cooldowns.js        # Система кулдаунов
-│   ├── adminCheck.js       # Проверка админских прав
-│   └── progressBar.js      # Визуализация прогресса
+│   ├── db.js            # Подключение MongoDB, инициализация коллекций
+│   ├── dataManager.js   # ~40 функций работы с БД
+│   ├── embeds.js        # Embed-билдеры, баннеры, кнопки
+│   ├── cooldowns.js     # Кулдауны и валидация текста
+│   ├── adminCheck.js    # Проверка прав (admin / limited / style-giver)
+│   ├── rankSystem.js    # Организации, ранги, зарплаты
+│   ├── logs.js          # Логирование команд в БД и канал
+│   ├── playerKey.js     # Генерация ключа слота
+│   ├── memberHelper.js  # Resolve member с fetch
+│   ├── progressBar.js   # Прогресс-бары
+│   └── discohookParser.js # Парсер Discohook JSON
+├── services/
+│   └── salaryService.js # Еженедельные зарплаты (cron)
 ├── data/
-│   └── default_items.json  # Дефолтные предметы
-├── sql/
-│   └── init.sql            # Инициализация БД (справка)
-├── .env.example            # Шаблон переменных окружения
-├── .gitignore              # Git ignore файл
-├── package.json            # Зависимости
-├── deploy-commands.js      # Регистрация команд в Discord
-└── index.js                # Главный файл бота
+│   └── default_items.json
+├── index.js             # Точка входа
+├── deploy-commands.js   # Деплой команд в Discord API
+├── .env.example         # Шаблон переменных окружения
+└── package.json
 ```
 
 ---
 
 ## 🗄️ База данных
 
-Бот использует **MongoDB** с 5 основными коллекциями:
+MongoDB, 10 коллекций (создаются автоматически):
 
-1. **players** - Данные игроков (имя, AP, SP, валюта, аватар и т.д.)
-2. **styles** - Боевые стили (название, описание, требования)
-3. **player_sp** - SP в каждом стиле для каждого игрока
-4. **inventory** - Предметы в инвентаре
-5. **admin_actions** - Логирование действий администраторов
-
-База данных **автоматически инициализируется** при первом запуске!
+| Коллекция | Назначение |
+|-----------|-----------|
+| `players` | Персонажи (AP, валюта, ранг, множители, аватар) |
+| `user_settings` | Активный слот пользователя |
+| `styles` | Боевые стили |
+| `player_sp` | SP игрока по каждому стилю |
+| `inventory` | Предметы |
+| `admin_actions` | Лог админских действий |
+| `command_logs` | Лог всех команд |
+| `log_channels` | Каналы для пересылки логов |
+| `progression_history` | История изменений AP/SP |
+| `salary_logs` | Лог выплат зарплат |
 
 ---
 
-## 🔧 Конфигурация
+## 🔧 Конфигурация (.env)
 
-### Требуемые permissions для бота в Discord
-- Read Messages/View Channels
-- Send Messages
-- Embed Links
-- Read Message History
-- Use Slash Commands
-
-### Переменные окружения (.env)
 ```env
-# Discord
-DISCORD_TOKEN=токен_вашего_бота
-CLIENT_ID=ID_приложения_бота
-
-# MongoDB Atlas
-MONGODB_URI=mongodb+srv://пользователь:пароль@кластер.mongodb.net/?appName=Verge
+DISCORD_TOKEN=...          # Токен бота (обязательно)
+CLIENT_ID=...              # ID приложения (обязательно)
+MONGODB_URI=...            # MongoDB URI (обязательно)
+GUILD_ID=...               # ID сервера (для guild deploy)
+ADMIN_IDS=id1,id2          # ID полных админов
+LIMITED_ADMIN_ROLE_IDS=... # Роли для add-ap, add-sp и т.п.
+GIVE_STYLE_ROLE_IDS=...    # Роли для give-style
+SALARY_CRON=0 12 * * 1    # Расписание зарплат (по умолчанию: пн 12:00 UTC)
+SALARY_LOG_CHANNEL_ID=...  # Канал для отчёта о зарплатах
 ```
 
----
-
-## 📊 Статистика
-
-- **25+ Команд** готовых к использованию
-- **30+ Функций** работы с БД
-- **8 Боевых стилей** по умолчанию (легко добавлять новые)
-- **MongoDB** для надёжного хранения данных
-- **100% на русском языке** 🇷🇺
-- **Подробный туториал** (TUTORIAL.md - 700+ строк)
+Полный список — см. [.env.example](.env.example)
 
 ---
 
-## 🎨 Особенности интерфейса
+## 🐛 FAQ
 
-- ✅ Красивые **embed-ы** с цветными полями
-- ✅ **Пагинация** в профиле (навигационные кнопки)
-- ✅ **Визуальные прогресс-бары** для показа уровня
-- ✅ **Автоматические сообщения** удаляются через 30 сек
-- ✅ **Система кулдаунов** для баланса
-- ✅ **Эмодзи** на русском и английском
+**"Unknown interaction"** — бот не успевает ответить за 3 сек. Используйте `deferReply()`.
 
----
+**MongoDB connection error** — проверьте IP в Atlas Network Access и корректность URI.
 
-## 🐛 Известные проблемы и решения
-
-### "Unknown interaction" ошибка
-- Убедитесь, что бот отвечает в течение 3 секунд
-- Используйте `await interaction.deferReply()` для долгих операций
-
-### MongoDB connection error
-- Проверьте IP в MongoDB Atlas Network Access
-- Убедитесь, что пароль не содержит спецсимволы (или экранируйте их)
-
-### Команды не видны в Discord
-- Запустите `npm run deploy`
-- Дождитесь 5-15 минут для синхронизации
+**Команды не видны** — выполните `npm run deploy` и подождите до 15 минут.
 
 ---
 
 ## 📚 Документация
 
-- [Discord.js Documentation](https://discord.js.org/)
-- [MongoDB Documentation](https://docs.mongodb.com/)
-- [Discord Developer Portal](https://discord.com/developers)
+- [TUTORIAL.md](TUTORIAL.md) — полный туториал по игре
+- [QUICKSTART.md](QUICKSTART.md) — быстрый старт
+- [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) — структура проекта
+- [CONTRIBUTING.md](CONTRIBUTING.md) — как участвовать в разработке
+- [CHANGELOG.md](CHANGELOG.md) — история изменений
 
 ---
 
-## 🤝 Примеры использования
+## � Лицензия
 
-### Создание нового стиля
-```javascript
-await addStyle('Новый стиль', 'Описание стиля', 100, 50);
-```
-
-### Добавление предмета в инвентарь
-```javascript
-await addItemToInventory(playerId, 'Зелье здоровья', 5);
-```
-
-### Обновление профиля
-```javascript
-await setCharacterAvatar(playerId, 'https://example.com/avatar.jpg');
-```
-
----
-
-## 📝 Лицензия
-
-MIT License - смотрите [LICENSE](LICENSE) файл для подробностей
-
----
-
-## 👥 Автор
-
-Создано с ❤️ для Discord сообщества
-
----
-
-## 🎯 Планы развития
-
-- [ ] Веб-панель администратора
-- [ ] Система достижений
-- [ ] PvP боевая система
-- [ ] Клан система
-- [ ] Магазин предметов
-- [ ] Эвенты и квесты
-
----
-
-## 💬 Вопросы и поддержка
-
-Если у вас есть вопросы или проблемы:
-1. Проверьте раздел **Известные проблемы**
-2. Откройте **Issue** на GitHub
-3. Напишите в Discord сообщество
-
----
-
-**Спасибо за использование Verge! Приятной игры! 🎮**
+MIT — см. [LICENSE](LICENSE)

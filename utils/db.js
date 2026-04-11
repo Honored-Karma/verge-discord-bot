@@ -135,4 +135,3 @@ export async function closeDatabase() {
 }
 
 export { connectDatabase };
-export default db;
