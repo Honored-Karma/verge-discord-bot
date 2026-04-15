@@ -1,4 +1,60 @@
-import { createCanvas, loadImage } from '@napi-rs/canvas';
+import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
+import { existsSync, writeFileSync, mkdirSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const FONT_DIR = join(__dirname, '..', 'assets', 'fonts');
+const FONT_PATH = join(FONT_DIR, 'Inter-Bold.ttf');
+const FONT_FAMILY = 'CardFont';
+let fontReady = false;
+
+async function ensureFont() {
+    if (fontReady) return;
+
+    // 1. Already cached on disk
+    if (existsSync(FONT_PATH)) {
+        GlobalFonts.registerFromPath(FONT_PATH, FONT_FAMILY);
+        fontReady = true;
+        return;
+    }
+
+    // 2. Auto-download Inter Bold from CDN and cache it
+    if (!existsSync(FONT_DIR)) mkdirSync(FONT_DIR, { recursive: true });
+
+    const urls = [
+        'https://cdn.jsdelivr.net/fontsource/fonts/inter@latest/latin-700-normal.ttf',
+        'https://cdn.jsdelivr.net/gh/rsms/inter@v4.0/docs/font-files/Inter-Bold.otf',
+    ];
+
+    for (const url of urls) {
+        try {
+            const res = await fetch(url, { redirect: 'follow' });
+            if (res.ok) {
+                const buf = Buffer.from(await res.arrayBuffer());
+                writeFileSync(FONT_PATH, buf);
+                GlobalFonts.registerFromPath(FONT_PATH, FONT_FAMILY);
+                console.log('✅ Font downloaded and registered:', url);
+                fontReady = true;
+                return;
+            }
+        } catch (e) {
+            console.warn('⚠️ Font download failed:', url, e.message);
+        }
+    }
+
+    // 3. Fallback: try system font dirs
+    const sysDirs = ['/usr/share/fonts', '/usr/local/share/fonts'];
+    for (const dir of sysDirs) {
+        if (existsSync(dir)) {
+            try { GlobalFonts.loadFontsFromDir(dir); } catch {}
+        }
+    }
+
+    fontReady = true;
+}
+
+const FONT = `'${FONT_FAMILY}', 'Inter', 'DejaVu Sans', sans-serif`;
 
 const W = 840;
 const H = 280;
@@ -54,7 +110,7 @@ function drawBar(ctx, x, y, w, h, ratio, colors) {
     }
 }
 
-function drawText(ctx, text, x, y, { font = 'bold 14px sans-serif', color = TEXT_WHITE, align = 'left', maxW } = {}) {
+function drawText(ctx, text, x, y, { font = `bold 14px ${FONT}`, color = TEXT_WHITE, align = 'left', maxW } = {}) {
     ctx.save();
     ctx.font = font;
     ctx.fillStyle = color;
@@ -88,6 +144,8 @@ async function fetchImage(url, timeoutMs = 4000) {
  * Returns a PNG buffer suitable for AttachmentBuilder.
  */
 export async function generateProfileCard(data) {
+    await ensureFont();
+
     const {
         characterName = 'Unknown',
         avatarUrl,
@@ -160,7 +218,7 @@ export async function generateProfileCard(data) {
         ctx.fillStyle = '#2C003E';
         ctx.fillRect(avCX - avR, avCY - avR, avR * 2, avR * 2);
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 40px sans-serif';
+        ctx.font = `bold 40px ${FONT}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('?', avCX, avCY);
@@ -171,7 +229,7 @@ export async function generateProfileCard(data) {
     const badgeText = `LVL ${level}`;
     const badgeY = avCY + avR + 22;
     ctx.save();
-    ctx.font = 'bold 15px sans-serif';
+    ctx.font = `bold 15px ${FONT}`;
     const badgeW = ctx.measureText(badgeText).width + 28;
     const badgeX = avCX - badgeW / 2;
     const badgeGrad = ctx.createLinearGradient(badgeX, 0, badgeX + badgeW, 0);
@@ -183,21 +241,21 @@ export async function generateProfileCard(data) {
     roundRect(ctx, badgeX, badgeY - 12, badgeW, 24, 12);
     ctx.fill();
     ctx.restore();
-    drawText(ctx, badgeText, avCX, badgeY, { font: 'bold 14px sans-serif', align: 'center' });
+    drawText(ctx, badgeText, avCX, badgeY, { font: `bold 14px ${FONT}`, align: 'center' });
 
     // ── 3. Right section: info ───────────────────────────────────────
     const rx = 210; // right section start X
 
     // Character name
     drawText(ctx, characterName, rx, 36, {
-        font: 'bold 26px sans-serif',
+        font: `bold 26px ${FONT}`,
         maxW: 400,
     });
 
     // Attribute badge
     const attrLabel = attributeName ? `AP | ${attributeName}` : 'AP';
     ctx.save();
-    ctx.font = 'bold 13px sans-serif';
+    ctx.font = `bold 13px ${FONT}`;
     const attrW = ctx.measureText(attrLabel).width + 22;
     const attrX = W - 30 - attrW;
     ctx.fillStyle = 'rgba(139,92,246,0.2)';
@@ -208,7 +266,7 @@ export async function generateProfileCard(data) {
     ctx.stroke();
     ctx.restore();
     drawText(ctx, attrLabel, attrX + attrW / 2, 35, {
-        font: 'bold 13px sans-serif',
+        font: `bold 13px ${FONT}`,
         color: '#c4b5fd',
         align: 'center',
     });
@@ -216,25 +274,25 @@ export async function generateProfileCard(data) {
     // Org & Rank
     const orgStr = `Организация: ${orgName || 'Нет'}`;
     const rankStr = `Ранг: ${orgRank || 'Нет'}`;
-    drawText(ctx, orgStr, rx, 62, { font: '13px sans-serif', color: TEXT_DIM, maxW: 300 });
-    drawText(ctx, rankStr, rx + 310, 62, { font: '13px sans-serif', color: TEXT_DIM, maxW: 200 });
+    drawText(ctx, orgStr, rx, 62, { font: `13px ${FONT}`, color: TEXT_DIM, maxW: 300 });
+    drawText(ctx, rankStr, rx + 310, 62, { font: `13px ${FONT}`, color: TEXT_DIM, maxW: 200 });
 
     // ── 4. AP Progress Bar ───────────────────────────────────────────
     const barX = rx, barW = W - rx - 30, barH = 16;
     const apBarY = 100;
 
-    drawText(ctx, 'АП (Очки Атрибута)', barX, apBarY - 12, { font: 'bold 12px sans-serif', color: TEXT_LIGHT });
+    drawText(ctx, 'АП (Очки Атрибута)', barX, apBarY - 12, { font: `bold 12px ${FONT}`, color: TEXT_LIGHT });
     drawText(ctx, `${xp} / ${xpToNextLevel} XP`, barX + barW, apBarY - 12, {
-        font: 'bold 12px sans-serif', color: TEXT_DIM, align: 'right',
+        font: `bold 12px ${FONT}`, color: TEXT_DIM, align: 'right',
     });
     const apRatio = xpToNextLevel > 0 ? xp / xpToNextLevel : 0;
     drawBar(ctx, barX, apBarY, barW, barH, apRatio, AP_GRAD);
 
     // ── 5. SP Progress Bar ───────────────────────────────────────────
     const spBarY = 145;
-    drawText(ctx, 'СП (Очки Стиля)', barX, spBarY - 12, { font: 'bold 12px sans-serif', color: TEXT_LIGHT });
+    drawText(ctx, 'СП (Очки Стиля)', barX, spBarY - 12, { font: `bold 12px ${FONT}`, color: TEXT_LIGHT });
     drawText(ctx, `${totalSP} SP`, barX + barW, spBarY - 12, {
-        font: 'bold 12px sans-serif', color: TEXT_DIM, align: 'right',
+        font: `bold 12px ${FONT}`, color: TEXT_DIM, align: 'right',
     });
     const spRatio = totalSP > 0 ? Math.min(totalSP / 1000, 1) : 0;
     drawBar(ctx, barX, spBarY, barW, barH, spRatio, SP_GRAD);
@@ -245,11 +303,11 @@ export async function generateProfileCard(data) {
     const tagY = 190;
 
     if (topStyles.length === 0) {
-        drawText(ctx, 'Нет стилей', tagX, tagY, { font: '12px sans-serif', color: '#64748b' });
+        drawText(ctx, 'Нет стилей', tagX, tagY, { font: `12px ${FONT}`, color: '#64748b' });
     } else {
         for (const s of topStyles) {
             const label = `${s.name}  ${s.sp}`;
-            ctx.font = 'bold 12px sans-serif';
+            ctx.font = `bold 12px ${FONT}`;
             const tw = ctx.measureText(label).width + 18;
 
             ctx.save();
@@ -262,11 +320,11 @@ export async function generateProfileCard(data) {
             ctx.restore();
 
             // Draw name part
-            drawText(ctx, s.name, tagX + 8, tagY, { font: '12px sans-serif', color: TEXT_LIGHT });
+            drawText(ctx, s.name, tagX + 8, tagY, { font: `12px ${FONT}`, color: TEXT_LIGHT });
             // Draw SP part in purple
-            ctx.font = '12px sans-serif';
+            ctx.font = `12px ${FONT}`;
             const nameW = ctx.measureText(s.name + '  ').width;
-            drawText(ctx, `${s.sp}`, tagX + 8 + nameW, tagY, { font: 'bold 12px sans-serif', color: '#a78bfa' });
+            drawText(ctx, `${s.sp}`, tagX + 8 + nameW, tagY, { font: `bold 12px ${FONT}`, color: '#a78bfa' });
 
             tagX += tw + 8;
         }
@@ -275,7 +333,7 @@ export async function generateProfileCard(data) {
     // ── 7. Footer ID ─────────────────────────────────────────────────
     const footerText = `ID: ${playerId} • Слот №${slot}`;
     drawText(ctx, footerText, W - 16, H - 14, {
-        font: '10px sans-serif',
+        font: `10px ${FONT}`,
         color: 'rgba(255,255,255,0.25)',
         align: 'right',
     });
