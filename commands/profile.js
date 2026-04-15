@@ -12,7 +12,7 @@ import {
     createCooldownEmbed
 } from '../utils/embeds.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
-import { generateProfileImage } from '../utils/profileRenderer.js';
+import { generateProfileCard } from '../utils/profileHtml.js';
 
 export const data = new SlashCommandBuilder()
     .setName('profile')
@@ -67,7 +67,7 @@ export async function execute(interaction) {
     const styles = await getAllPlayerSP(slotPlayerId);
     const totalSP = await getTotalSP(slotPlayerId);
 
-    // ── Build HUD canvas image ───────────────────────────────────
+    // ── Build HTML profile card ──────────────────────────────────
     const topStyles = styles.slice(0, 3);
     const level = Math.floor(player.ap / 100);
     const xp = player.ap % 100;
@@ -75,7 +75,7 @@ export async function execute(interaction) {
 
     let hudBuffer;
     try {
-        hudBuffer = await generateProfileImage({
+        hudBuffer = await generateProfileCard({
             characterName: player.character_name || player.username,
             avatarUrl: player.character_avatar || targetUser.displayAvatarURL({ extension: 'png', size: 512 }),
             level,
@@ -84,13 +84,14 @@ export async function execute(interaction) {
             styles: topStyles,
             attributeName: player.attribute_name || null,
             attributeValue: player.ap,
+            totalSP,
             orgName: player.organization || null,
             orgRank: player.rank || null,
             playerId: player.id,
+            slot,
         });
     } catch (err) {
-        console.error('Profile HUD render error:', err);
-        // Fallback to text embed
+        console.error('Profile card render error:', err);
         hudBuffer = null;
     }
 
