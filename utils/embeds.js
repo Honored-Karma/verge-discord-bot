@@ -17,7 +17,7 @@ const BANNERS = {
 
 export function createSuccessEmbed(title, description) {
     return new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0xA855F7)
         .setTitle(`✅ ${title}`)
         .setDescription(description)
         .setImage(BANNERS.default)
@@ -26,7 +26,7 @@ export function createSuccessEmbed(title, description) {
 
 export function createErrorEmbed(title, description) {
     return new EmbedBuilder()
-        .setColor(0xFF0000)
+        .setColor(0x7C3AED)
         .setTitle(`❌ ${title}`)
         .setDescription(description)
         .setImage(BANNERS.error)
@@ -35,7 +35,7 @@ export function createErrorEmbed(title, description) {
 
 export function createInfoEmbed(title, description) {
     return new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0xA855F7)
         .setTitle(title)
         .setDescription(description)
         .setImage(BANNERS.default)
@@ -44,7 +44,7 @@ export function createInfoEmbed(title, description) {
 
 export function createCooldownEmbed(actionName, unixTimestamp) {
     return new EmbedBuilder()
-        .setColor(0xF1C40F)
+        .setColor(0xC084FC)
         .setTitle(`⏳ ${actionName}: cooldown`)
         .setDescription(`Следующее действие будет доступно <t:${unixTimestamp}:R>.\nТочное время: <t:${unixTimestamp}:F>`)
         .setImage(BANNERS.cooldown)
@@ -64,7 +64,7 @@ export function createModernProfileEmbed(player, user, history = []) {
         : 'Изменений пока нет';
 
     return new EmbedBuilder()
-        .setColor(0x5865F2)
+        .setColor(0x9333EA)
         .setTitle(`🧬 Профиль: ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .addFields(
@@ -83,7 +83,7 @@ export function createModernProfileEmbed(player, user, history = []) {
 
 export function createLeaderboardEmbed(title, description, sortBy) {
     const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0xA855F7)
         .setTitle(title)
         .setDescription(description)
         .setTimestamp();
@@ -103,7 +103,7 @@ export function createLeaderboardEmbed(title, description, sortBy) {
 
 export function createTrainEmbed(title, description) {
     return new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0xA855F7)
         .setTitle(`✅ ${title}`)
         .setDescription(description)
         .setImage(BANNERS.train)
@@ -112,7 +112,7 @@ export function createTrainEmbed(title, description) {
 
 export function createSocialRPEmbed(title, description) {
     return new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0xA855F7)
         .setTitle(`✅ ${title}`)
         .setDescription(description)
         .setImage(BANNERS.social)
@@ -121,7 +121,7 @@ export function createSocialRPEmbed(title, description) {
 
 export function createPayEmbed(title, description) {
     return new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0xA855F7)
         .setTitle(`✅ ${title}`)
         .setDescription(description)
         .setImage(BANNERS.pay)
@@ -130,7 +130,7 @@ export function createPayEmbed(title, description) {
 
 export function createInventoryEmbed(title, description) {
     return new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0xA855F7)
         .setTitle(title)
         .setDescription(description)
         .setImage(BANNERS.inventory)
@@ -139,7 +139,7 @@ export function createInventoryEmbed(title, description) {
 
 export function createRegisterEmbed(title, description) {
     return new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0xA855F7)
         .setTitle(`✅ ${title}`)
         .setDescription(description)
         .setImage(BANNERS.default)
@@ -148,7 +148,7 @@ export function createRegisterEmbed(title, description) {
 
 export function createStylesListEmbed(title, description, page = 1, totalPages = 1) {
     const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0xA855F7)
         .setTitle(title)
         .setDescription(description)
         .setImage(BANNERS.stylesList)
@@ -193,7 +193,7 @@ export function createProfileMainPage(player, user) {
         }
     }
     const embed = new EmbedBuilder()
-        .setColor(0x5865F2)
+        .setColor(0x9333EA)
         .setTitle(`🧬 Профиль — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .setImage(BANNERS.profile)
@@ -223,7 +223,7 @@ export function createProfileMainPage(player, user) {
 
 export function createProfileAPSPPage(player, user, totalSP = 0) {
     const embed = new EmbedBuilder()
-        .setColor(0x5865F2)
+        .setColor(0x9333EA)
         .setTitle(`📊 Прогресс — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .setImage(BANNERS.progress)
@@ -249,7 +249,7 @@ export function createProfileAPSPPage(player, user, totalSP = 0) {
 
 export function createProfileBalancePage(player, user) {
     const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0xA855F7)
         .setTitle(`💰 Баланс — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .setImage(BANNERS.balance)
@@ -276,7 +276,7 @@ export function createProfileBalancePage(player, user) {
 
 export function createProfileStylesPage(player, styles, user, page = 0) {
     const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0xA855F7)
         .setTitle(`🥋 Боевые стили — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .setImage(BANNERS.styles)
@@ -496,7 +496,7 @@ export function createProfileHistoryPage(player, user, history = []) {
         : 'Изменений пока нет';
 
     return new EmbedBuilder()
-        .setColor(0x5865F2)
+        .setColor(0x9333EA)
         .setTitle(`🕓 История изменений — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .setDescription(historyText)

@@ -68,7 +68,7 @@ export async function execute(interaction) {
 
 function createMainHelp() {
     return new EmbedBuilder()
-        .setColor('#0099ff')
+        .setColor('#A855F7')
         .setTitle('📖 Гайд по Verge RPG Bot')
         .setDescription('**Быстрая справка по основным командам**')
         .setImage('https://s.iimg.su/s/22/uPwMsKAxzFj3zv2fzk1VVgPLssmMEosDzMeKuRk4.jpg')
@@ -104,7 +104,7 @@ function createMainHelp() {
 
 function createProfileHelp() {
     return new EmbedBuilder()
-        .setColor('#00ff00')
+        .setColor('#A855F7')
         .setTitle('👤 Команды профиля и персонажа')
         .setImage('https://s.iimg.su/s/22/ufkWBu0xWZJ35E1dhmIFfmTwEoXZtvP8zOPqXpsI.jpg')
         .addFields(
@@ -134,7 +134,7 @@ function createProfileHelp() {
 
 function createTrainingHelp() {
     return new EmbedBuilder()
-        .setColor('#ff9900')
+        .setColor('#A855F7')
         .setTitle('🥋 Команды тренировки и боевых стилей')
         .setImage('https://s.iimg.su/s/22/u8s3xB1xoVgeQgI8hXTRd6MZ88M8XiFCWKQfVaAj.jpg')
         .addFields(
@@ -159,7 +159,7 @@ function createTrainingHelp() {
 
 function createEconomyHelp() {
     return new EmbedBuilder()
-        .setColor('#ffcc00')
+        .setColor('#A855F7')
         .setTitle('💰 Команды экономики и валюты')
         .setImage('https://s.iimg.su/s/22/uFdH3S7x2AJgL3HbTz3lECdHIvTFBrlq6A1a6f0n.jpg')
         .addFields(
@@ -189,7 +189,7 @@ function createEconomyHelp() {
 
 function createAdminHelp() {
     return new EmbedBuilder()
-        .setColor('#ff0000')
+        .setColor('#7C3AED')
         .setTitle('🛡️ Админские команды')
         .setDescription('⚠️ Эти команды доступны только администраторам!')
         .setImage('https://s.iimg.su/s/22/uohed4ixYWCczdInGXb1odpCeZrFRlMjrQQGq8qI.jpg')
@@ -265,7 +265,7 @@ function createAdminHelp() {
 
 function createAllCommandsHelp() {
     return new EmbedBuilder()
-        .setColor('#00ffff')
+        .setColor('#A855F7')
         .setTitle('📚 Полный список всех команд (24+)')
         .setImage('https://s.iimg.su/s/22/uexBneExAdoahYKkvzj43zvE9k0z7Dgaq7j2HlEk.jpg')
         .addFields(

@@ -17,7 +17,7 @@ export const data = new SlashCommandBuilder()
             .setRequired(true)
             .addChoices(
                 { name: 'TENRYU (F-S)', value: 'TENRYU' },
-                { name: 'HERO_CORPS (VI-I)', value: 'HERO_CORPS' }
+                { name: 'Guardians (VI-I)', value: 'GUARDIANS' }
             ))
     .addStringOption(option =>
         option.setName('rank')
