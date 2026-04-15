@@ -67,20 +67,14 @@ export async function execute(interaction) {
     const styles = await getAllPlayerSP(slotPlayerId);
     const totalSP = await getTotalSP(slotPlayerId);
 
-    // ── Build HTML profile card ──────────────────────────────────
+    // ── Build profile card banner ─────────────────────────────────
     const topStyles = styles.slice(0, 3);
-    const level = Math.floor(player.ap / 100);
-    const xp = player.ap % 100;
-    const xpToNextLevel = 100;
 
     let hudBuffer;
     try {
         hudBuffer = await generateProfileCard({
             characterName: player.character_name || player.username,
             avatarUrl: player.character_avatar || targetUser.displayAvatarURL({ extension: 'png', size: 512 }),
-            level,
-            xp,
-            xpToNextLevel,
             styles: topStyles,
             attributeName: player.attribute_name || null,
             attributeValue: player.ap,

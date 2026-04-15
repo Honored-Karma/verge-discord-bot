@@ -25,6 +25,9 @@ logs/*.log
 *.swo
 *~
 
+# Auto-downloaded font cache
+assets/fonts/InterCyr.ttf
+
 # OS
 .DS_Store
 Thumbs.db

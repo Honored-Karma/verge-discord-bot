@@ -5,26 +5,25 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FONT_DIR = join(__dirname, '..', 'assets', 'fonts');
-const FONT_PATH = join(FONT_DIR, 'Inter-Bold.ttf');
+const FONT_PATH = join(FONT_DIR, 'InterCyr.ttf');
 const FONT_FAMILY = 'CardFont';
 let fontReady = false;
 
 async function ensureFont() {
     if (fontReady) return;
 
-    // 1. Already cached on disk
-    if (existsSync(FONT_PATH)) {
+    if (existsSync(FONT_PATH) && (await import('fs')).statSync(FONT_PATH).size > 100_000) {
         GlobalFonts.registerFromPath(FONT_PATH, FONT_FAMILY);
         fontReady = true;
         return;
     }
 
-    // 2. Auto-download Inter Bold from CDN and cache it
     if (!existsSync(FONT_DIR)) mkdirSync(FONT_DIR, { recursive: true });
 
+    // Full font with Cyrillic + Latin support
     const urls = [
-        'https://cdn.jsdelivr.net/fontsource/fonts/inter@latest/latin-700-normal.ttf',
-        'https://cdn.jsdelivr.net/gh/rsms/inter@v4.0/docs/font-files/Inter-Bold.otf',
+        'https://cdn.jsdelivr.net/gh/notofonts/notofonts.github.io/fonts/NotoSans/hinted/ttf/NotoSans-Bold.ttf',
+        'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosans/NotoSans%5Bwdth%2Cwght%5D.ttf',
     ];
 
     for (const url of urls) {
@@ -32,39 +31,33 @@ async function ensureFont() {
             const res = await fetch(url, { redirect: 'follow' });
             if (res.ok) {
                 const buf = Buffer.from(await res.arrayBuffer());
-                writeFileSync(FONT_PATH, buf);
-                GlobalFonts.registerFromPath(FONT_PATH, FONT_FAMILY);
-                console.log('✅ Font downloaded and registered:', url);
-                fontReady = true;
-                return;
+                if (buf.length > 50_000) {
+                    writeFileSync(FONT_PATH, buf);
+                    GlobalFonts.registerFromPath(FONT_PATH, FONT_FAMILY);
+                    console.log(`✅ Font downloaded (${(buf.length / 1024).toFixed(0)}KB):`, url);
+                    fontReady = true;
+                    return;
+                }
             }
         } catch (e) {
             console.warn('⚠️ Font download failed:', url, e.message);
         }
     }
 
-    // 3. Fallback: try system font dirs
     const sysDirs = ['/usr/share/fonts', '/usr/local/share/fonts'];
     for (const dir of sysDirs) {
         if (existsSync(dir)) {
             try { GlobalFonts.loadFontsFromDir(dir); } catch {}
         }
     }
-
     fontReady = true;
 }
 
-const FONT = `'${FONT_FAMILY}', 'Inter', 'DejaVu Sans', sans-serif`;
+const F = `'${FONT_FAMILY}', sans-serif`;
 
 const W = 840;
-const H = 280;
+const H = 240;
 
-// ── Colors ───────────────────────────────────────────────────────────
-const BG_GRADIENT = [
-    [0, '#1a0a2e'],
-    [0.4, '#16213e'],
-    [1, '#0f3460'],
-];
 const PURPLE = '#8b5cf6';
 const PURPLE_DIM = 'rgba(139,92,246,0.35)';
 const AP_GRAD = ['#f59e0b', '#f97316', '#ef4444'];
@@ -72,6 +65,8 @@ const SP_GRAD = ['#06b6d4', '#8b5cf6', '#a855f7'];
 const TEXT_WHITE = '#FFFFFF';
 const TEXT_DIM = '#94a3b8';
 const TEXT_LIGHT = '#cbd5e1';
+const EMPTY_BORDER = 'rgba(255,255,255,0.12)';
+const EMPTY_BG = 'rgba(255,255,255,0.04)';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 function roundRect(ctx, x, y, w, h, r) {
@@ -90,11 +85,9 @@ function roundRect(ctx, x, y, w, h, r) {
 
 function drawBar(ctx, x, y, w, h, ratio, colors) {
     const r = h / 2;
-    // Track
     ctx.fillStyle = 'rgba(255,255,255,0.07)';
     roundRect(ctx, x, y, w, h, r);
     ctx.fill();
-    // Fill
     const clamped = Math.max(0, Math.min(1, ratio));
     if (clamped > 0) {
         const fillW = Math.max(h, w * clamped);
@@ -110,18 +103,31 @@ function drawBar(ctx, x, y, w, h, ratio, colors) {
     }
 }
 
-function drawText(ctx, text, x, y, { font = `bold 14px ${FONT}`, color = TEXT_WHITE, align = 'left', maxW } = {}) {
+function txt(ctx, text, x, y, { font = `bold 16px ${F}`, color = TEXT_WHITE, align = 'left', maxW } = {}) {
     ctx.save();
     ctx.font = font;
     ctx.fillStyle = color;
     ctx.textAlign = align;
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,0.7)';
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
     ctx.shadowBlur = 4;
     ctx.shadowOffsetX = 1;
-    ctx.shadowOffsetY = 1;
+    ctx.shadowOffsetY = 2;
     if (maxW) ctx.fillText(text, x, y, maxW);
     else ctx.fillText(text, x, y);
+    ctx.restore();
+}
+
+function emptyBox(ctx, x, y, w, h, r = 8) {
+    ctx.save();
+    ctx.fillStyle = EMPTY_BG;
+    ctx.strokeStyle = EMPTY_BORDER;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    roundRect(ctx, x, y, w, h, r);
+    ctx.fill();
+    ctx.stroke();
+    ctx.setLineDash([]);
     ctx.restore();
 }
 
@@ -137,21 +143,12 @@ async function fetchImage(url, timeoutMs = 4000) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// Main export
-// ══════════════════════════════════════════════════════════════════════
-/**
- * Generates a Juniper-style profile banner using @napi-rs/canvas.
- * Returns a PNG buffer suitable for AttachmentBuilder.
- */
 export async function generateProfileCard(data) {
     await ensureFont();
 
     const {
         characterName = 'Unknown',
         avatarUrl,
-        level = 0,
-        xp = 0,
-        xpToNextLevel = 100,
         styles = [],
         attributeName,
         attributeValue = 0,
@@ -165,21 +162,21 @@ export async function generateProfileCard(data) {
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
 
-    // ── 1. Background gradient + rounded card ────────────────────────
+    // ── 1. Background ────────────────────────────────────────────────
     const bgGrad = ctx.createLinearGradient(0, 0, W, H);
-    BG_GRADIENT.forEach(([stop, color]) => bgGrad.addColorStop(stop, color));
+    bgGrad.addColorStop(0, '#1a0a2e');
+    bgGrad.addColorStop(0.4, '#16213e');
+    bgGrad.addColorStop(1, '#0f3460');
     ctx.fillStyle = bgGrad;
     roundRect(ctx, 0, 0, W, H, 20);
     ctx.fill();
 
-    // Subtle purple radial glow
-    const glow = ctx.createRadialGradient(160, H / 2, 20, 160, H / 2, 300);
+    const glow = ctx.createRadialGradient(140, H / 2, 20, 140, H / 2, 280);
     glow.addColorStop(0, 'rgba(139,92,246,0.15)');
     glow.addColorStop(1, 'transparent');
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, W, H);
 
-    // Border
     ctx.save();
     ctx.strokeStyle = PURPLE_DIM;
     ctx.lineWidth = 2;
@@ -187,10 +184,9 @@ export async function generateProfileCard(data) {
     ctx.stroke();
     ctx.restore();
 
-    // ── 2. Avatar (circular) ─────────────────────────────────────────
-    const avCX = 110, avCY = 115, avR = 60;
+    // ── 2. Avatar ────────────────────────────────────────────────────
+    const avCX = 100, avCY = H / 2, avR = 56;
 
-    // Ring gradient
     ctx.save();
     ctx.beginPath();
     ctx.arc(avCX, avCY, avR + 4, 0, Math.PI * 2);
@@ -204,7 +200,6 @@ export async function generateProfileCard(data) {
     ctx.fill();
     ctx.restore();
 
-    // Avatar image (clipped circle)
     let avatarImg = avatarUrl ? await fetchImage(avatarUrl) : null;
     ctx.save();
     ctx.beginPath();
@@ -218,125 +213,112 @@ export async function generateProfileCard(data) {
         ctx.fillStyle = '#2C003E';
         ctx.fillRect(avCX - avR, avCY - avR, avR * 2, avR * 2);
         ctx.fillStyle = '#fff';
-        ctx.font = `bold 40px ${FONT}`;
+        ctx.font = `bold 36px ${F}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('?', avCX, avCY);
     }
     ctx.restore();
 
-    // Level badge below avatar
-    const badgeText = `LVL ${level}`;
-    const badgeY = avCY + avR + 22;
-    ctx.save();
-    ctx.font = `bold 15px ${FONT}`;
-    const badgeW = ctx.measureText(badgeText).width + 28;
-    const badgeX = avCX - badgeW / 2;
-    const badgeGrad = ctx.createLinearGradient(badgeX, 0, badgeX + badgeW, 0);
-    badgeGrad.addColorStop(0, '#8b5cf6');
-    badgeGrad.addColorStop(1, '#6d28d9');
-    ctx.shadowColor = PURPLE;
-    ctx.shadowBlur = 10;
-    ctx.fillStyle = badgeGrad;
-    roundRect(ctx, badgeX, badgeY - 12, badgeW, 24, 12);
-    ctx.fill();
-    ctx.restore();
-    drawText(ctx, badgeText, avCX, badgeY, { font: `bold 14px ${FONT}`, align: 'center' });
+    // ── 3. Right section ─────────────────────────────────────────────
+    const rx = 196;
 
-    // ── 3. Right section: info ───────────────────────────────────────
-    const rx = 210; // right section start X
+    // Character name (large)
+    txt(ctx, characterName, rx, 32, { font: `bold 28px ${F}`, maxW: 420 });
 
-    // Character name
-    drawText(ctx, characterName, rx, 36, {
-        font: `bold 26px ${FONT}`,
-        maxW: 400,
-    });
+    // Attribute badge (top-right)
+    if (attributeName) {
+        const attrLabel = `AP | ${attributeName}`;
+        ctx.font = `bold 14px ${F}`;
+        const attrW = ctx.measureText(attrLabel).width + 24;
+        const attrX = W - 24 - attrW;
+        ctx.save();
+        ctx.fillStyle = 'rgba(139,92,246,0.2)';
+        ctx.strokeStyle = 'rgba(139,92,246,0.5)';
+        ctx.lineWidth = 1;
+        roundRect(ctx, attrX, 17, attrW, 28, 14);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+        txt(ctx, attrLabel, attrX + attrW / 2, 31, { font: `bold 14px ${F}`, color: '#c4b5fd', align: 'center' });
+    } else {
+        // Empty attribute placeholder
+        emptyBox(ctx, W - 24 - 80, 17, 80, 28, 14);
+    }
 
-    // Attribute badge
-    const attrLabel = attributeName ? `AP | ${attributeName}` : 'AP';
-    ctx.save();
-    ctx.font = `bold 13px ${FONT}`;
-    const attrW = ctx.measureText(attrLabel).width + 22;
-    const attrX = W - 30 - attrW;
-    ctx.fillStyle = 'rgba(139,92,246,0.2)';
-    ctx.strokeStyle = 'rgba(139,92,246,0.5)';
-    ctx.lineWidth = 1;
-    roundRect(ctx, attrX, 22, attrW, 26, 12);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-    drawText(ctx, attrLabel, attrX + attrW / 2, 35, {
-        font: `bold 13px ${FONT}`,
-        color: '#c4b5fd',
-        align: 'center',
-    });
+    // Org & Rank row
+    const infoY = 60;
+    if (orgName) {
+        txt(ctx, `Организация: ${orgName}`, rx, infoY, { font: `14px ${F}`, color: TEXT_DIM, maxW: 320 });
+    } else {
+        txt(ctx, 'Организация:', rx, infoY, { font: `14px ${F}`, color: TEXT_DIM });
+        emptyBox(ctx, rx + 120, infoY - 10, 120, 20, 6);
+    }
+    if (orgRank) {
+        txt(ctx, `Ранг: ${orgRank}`, rx + 340, infoY, { font: `14px ${F}`, color: TEXT_DIM, maxW: 200 });
+    } else {
+        txt(ctx, 'Ранг:', rx + 340, infoY, { font: `14px ${F}`, color: TEXT_DIM });
+        emptyBox(ctx, rx + 394, infoY - 10, 100, 20, 6);
+    }
 
-    // Org & Rank
-    const orgStr = `Организация: ${orgName || 'Нет'}`;
-    const rankStr = `Ранг: ${orgRank || 'Нет'}`;
-    drawText(ctx, orgStr, rx, 62, { font: `13px ${FONT}`, color: TEXT_DIM, maxW: 300 });
-    drawText(ctx, rankStr, rx + 310, 62, { font: `13px ${FONT}`, color: TEXT_DIM, maxW: 200 });
-
-    // ── 4. AP Progress Bar ───────────────────────────────────────────
-    const barX = rx, barW = W - rx - 30, barH = 16;
+    // ── 4. AP Bar ────────────────────────────────────────────────────
+    const barX = rx, barW = W - rx - 24, barH = 18;
     const apBarY = 100;
 
-    drawText(ctx, 'АП (Очки Атрибута)', barX, apBarY - 12, { font: `bold 12px ${FONT}`, color: TEXT_LIGHT });
-    drawText(ctx, `${xp} / ${xpToNextLevel} XP`, barX + barW, apBarY - 12, {
-        font: `bold 12px ${FONT}`, color: TEXT_DIM, align: 'right',
-    });
-    const apRatio = xpToNextLevel > 0 ? xp / xpToNextLevel : 0;
+    txt(ctx, 'AP', barX, apBarY - 12, { font: `bold 14px ${F}`, color: TEXT_LIGHT });
+    txt(ctx, `${attributeValue} AP`, barX + barW, apBarY - 12, { font: `bold 14px ${F}`, color: TEXT_DIM, align: 'right' });
+    const apRatio = attributeValue > 0 ? Math.min(attributeValue / 10000, 1) : 0;
     drawBar(ctx, barX, apBarY, barW, barH, apRatio, AP_GRAD);
 
-    // ── 5. SP Progress Bar ───────────────────────────────────────────
-    const spBarY = 145;
-    drawText(ctx, 'СП (Очки Стиля)', barX, spBarY - 12, { font: `bold 12px ${FONT}`, color: TEXT_LIGHT });
-    drawText(ctx, `${totalSP} SP`, barX + barW, spBarY - 12, {
-        font: `bold 12px ${FONT}`, color: TEXT_DIM, align: 'right',
-    });
+    // ── 5. SP Bar ────────────────────────────────────────────────────
+    const spBarY = 142;
+    txt(ctx, 'SP', barX, spBarY - 12, { font: `bold 14px ${F}`, color: TEXT_LIGHT });
+    txt(ctx, `${totalSP} SP`, barX + barW, spBarY - 12, { font: `bold 14px ${F}`, color: TEXT_DIM, align: 'right' });
     const spRatio = totalSP > 0 ? Math.min(totalSP / 1000, 1) : 0;
     drawBar(ctx, barX, spBarY, barW, barH, spRatio, SP_GRAD);
 
     // ── 6. Style tags ────────────────────────────────────────────────
     const topStyles = styles.slice(0, 3);
     let tagX = barX;
-    const tagY = 190;
+    const tagY = 185;
 
     if (topStyles.length === 0) {
-        drawText(ctx, 'Нет стилей', tagX, tagY, { font: `12px ${FONT}`, color: '#64748b' });
+        // 3 empty placeholder boxes
+        for (let i = 0; i < 3; i++) {
+            emptyBox(ctx, tagX, tagY - 12, 100, 24, 8);
+            tagX += 108;
+        }
     } else {
         for (const s of topStyles) {
             const label = `${s.name}  ${s.sp}`;
-            ctx.font = `bold 12px ${FONT}`;
-            const tw = ctx.measureText(label).width + 18;
+            ctx.font = `bold 13px ${F}`;
+            const tw = ctx.measureText(label).width + 20;
 
             ctx.save();
             ctx.fillStyle = 'rgba(255,255,255,0.06)';
             ctx.strokeStyle = 'rgba(255,255,255,0.12)';
             ctx.lineWidth = 1;
-            roundRect(ctx, tagX, tagY - 11, tw, 22, 8);
+            roundRect(ctx, tagX, tagY - 12, tw, 24, 8);
             ctx.fill();
             ctx.stroke();
             ctx.restore();
 
-            // Draw name part
-            drawText(ctx, s.name, tagX + 8, tagY, { font: `12px ${FONT}`, color: TEXT_LIGHT });
-            // Draw SP part in purple
-            ctx.font = `12px ${FONT}`;
+            txt(ctx, s.name, tagX + 10, tagY, { font: `13px ${F}`, color: TEXT_LIGHT });
+            ctx.font = `13px ${F}`;
             const nameW = ctx.measureText(s.name + '  ').width;
-            drawText(ctx, `${s.sp}`, tagX + 8 + nameW, tagY, { font: `bold 12px ${FONT}`, color: '#a78bfa' });
+            txt(ctx, `${s.sp}`, tagX + 10 + nameW, tagY, { font: `bold 13px ${F}`, color: '#a78bfa' });
 
-            tagX += tw + 8;
+            tagX += tw + 10;
+        }
+        // Fill remaining slots with empty boxes
+        for (let i = topStyles.length; i < 3; i++) {
+            emptyBox(ctx, tagX, tagY - 12, 100, 24, 8);
+            tagX += 108;
         }
     }
 
-    // ── 7. Footer ID ─────────────────────────────────────────────────
-    const footerText = `ID: ${playerId} • Слот №${slot}`;
-    drawText(ctx, footerText, W - 16, H - 14, {
-        font: `10px ${FONT}`,
-        color: 'rgba(255,255,255,0.25)',
-        align: 'right',
-    });
+    // ── 7. Footer ────────────────────────────────────────────────────
+    txt(ctx, `ID: ${playerId}`, W - 16, H - 16, { font: `10px ${F}`, color: 'rgba(255,255,255,0.25)', align: 'right' });
 
     return canvas.toBuffer('image/png');
 }
