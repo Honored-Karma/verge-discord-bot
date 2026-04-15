@@ -95,19 +95,13 @@ export async function execute(interaction) {
         hudBuffer = null;
     }
 
-    let mainEmbed;
+    // Old embed stays as the main content; card goes as the banner image below
+    let mainEmbed = createProfileMainPage(player, targetUser, slot);
     const files = [];
     if (hudBuffer) {
         const attachment = new AttachmentBuilder(hudBuffer, { name: 'profile-hud.png' });
         files.push(attachment);
-        mainEmbed = new EmbedBuilder()
-            .setColor(0x5865F2)
-            .setTitle(`🧬 Профиль — ${player.character_name || player.username}`)
-            .setImage('attachment://profile-hud.png')
-            .setFooter({ text: `ID: ${player.id} • Слот №${slot}` })
-            .setTimestamp();
-    } else {
-        mainEmbed = createProfileMainPage(player, targetUser, slot);
+        mainEmbed.setImage('attachment://profile-hud.png');
     }
     const buttons = createProfileButtons(0);
 
@@ -132,17 +126,11 @@ export async function execute(interaction) {
         let newFiles = [];
 
         if (i.customId === 'profile_main') {
+            newEmbed = createProfileMainPage(player, targetUser, slot);
             if (hudBuffer) {
                 const att = new AttachmentBuilder(hudBuffer, { name: 'profile-hud.png' });
                 newFiles = [att];
-                newEmbed = new EmbedBuilder()
-                    .setColor(0x5865F2)
-                    .setTitle(`🧬 Профиль — ${player.character_name || player.username}`)
-                    .setImage('attachment://profile-hud.png')
-                    .setFooter({ text: `ID: ${player.id} • Слот №${slot}` })
-                    .setTimestamp();
-            } else {
-                newEmbed = createProfileMainPage(player, targetUser, slot);
+                newEmbed.setImage('attachment://profile-hud.png');
             }
             newButtons = [createProfileButtons(0)];
         } else if (i.customId === 'profile_apsp') {
