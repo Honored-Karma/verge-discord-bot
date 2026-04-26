@@ -70,6 +70,6 @@ export async function execute(interaction) {
     await updatePlayer(slotPlayerId, { rank, organization });
 
     interaction.reply({
-        embeds: [createSuccessEmbed('Ранг обновлен', `Для ${targetUser.username} (Слот ${slot}) установлен ранг **${rank}** в организации **${organization}**.`)]
+        embeds: [createSuccessEmbed('Ранг обновлен', `Для ${targetUser.username} (Слот ${slot}) установлен ранг **${rank}** в организации **${organization}**.`, 'setRank')]
     });
 }

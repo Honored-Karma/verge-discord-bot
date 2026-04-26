@@ -125,7 +125,7 @@ if (!hasCommandPermission(member, 'set-sp')) {
         const rank = amount >= 2500 ? 'Мастер' : amount >= 1000 ? 'Эксперт' : amount >= 350 ? 'Владелец' : 'Новичок';
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('SP обновлено', 
-                `Установлено **${amount} SP** для стиля **${style.name}** игроку **${player.character_name || player.username}**\n\nРанг: **${rank}**`)],
+                `Установлено **${amount} SP** для стиля **${style.name}** игроку **${player.character_name || player.username}**\n\nРанг: **${rank}**`, 'setSp')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

@@ -76,7 +76,7 @@ export async function execute(interaction) {
 
     if (success) {
         const msg = await interaction.reply({
-            embeds: [createSuccessEmbed('Успешно! ✅', `Ваш аватар персонажа обновлён!\n\n📸 **URL:** ${avatarUrl}`)],
+            embeds: [createSuccessEmbed('Успешно! ✅', `Ваш аватар персонажа обновлён!\n\n📸 **URL:** ${avatarUrl}`, 'setAvatar')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

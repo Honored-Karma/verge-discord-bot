@@ -68,10 +68,10 @@ export async function execute(interaction) {
 
 function createMainHelp() {
     return new EmbedBuilder()
-        .setColor('#A855F7')
+        .setColor('#b209d4')
         .setTitle('📖 Гайд по Verge RPG Bot')
         .setDescription('**Быстрая справка по основным командам**')
-        .setImage('https://s.iimg.su/s/22/uPwMsKAxzFj3zv2fzk1VVgPLssmMEosDzMeKuRk4.jpg')
+        .setImage('https://iili.io/BP3OOut.png')
         .addFields(
             {
                 name: '👤 Профиль и персонаж',
@@ -104,9 +104,9 @@ function createMainHelp() {
 
 function createProfileHelp() {
     return new EmbedBuilder()
-        .setColor('#A855F7')
+        .setColor('#b209d4')
         .setTitle('👤 Команды профиля и персонажа')
-        .setImage('https://s.iimg.su/s/22/ufkWBu0xWZJ35E1dhmIFfmTwEoXZtvP8zOPqXpsI.jpg')
+        .setImage('https://iili.io/BP3ODMb.png')
         .addFields(
             {
                 name: '/register',
@@ -134,9 +134,9 @@ function createProfileHelp() {
 
 function createTrainingHelp() {
     return new EmbedBuilder()
-        .setColor('#A855F7')
+        .setColor('#b209d4')
         .setTitle('🥋 Команды тренировки и боевых стилей')
-        .setImage('https://s.iimg.su/s/22/u8s3xB1xoVgeQgI8hXTRd6MZ88M8XiFCWKQfVaAj.jpg')
+        .setImage('https://iili.io/BP3eoSp.png')
         .addFields(
             {
                 name: '/train <style>',
@@ -159,9 +159,9 @@ function createTrainingHelp() {
 
 function createEconomyHelp() {
     return new EmbedBuilder()
-        .setColor('#A855F7')
+        .setColor('#b209d4')
         .setTitle('💰 Команды экономики и валюты')
-        .setImage('https://s.iimg.su/s/22/uFdH3S7x2AJgL3HbTz3lECdHIvTFBrlq6A1a6f0n.jpg')
+        .setImage('https://iili.io/BP3OLN9.png')
         .addFields(
             {
                 name: '/pay <user> <krw/yen> <amount>',
@@ -189,10 +189,10 @@ function createEconomyHelp() {
 
 function createAdminHelp() {
     return new EmbedBuilder()
-        .setColor('#7C3AED')
+        .setColor('#b209d4')
         .setTitle('🛡️ Админские команды')
         .setDescription('⚠️ Эти команды доступны только администраторам!')
-        .setImage('https://s.iimg.su/s/22/uohed4ixYWCczdInGXb1odpCeZrFRlMjrQQGq8qI.jpg')
+        .setImage('https://iili.io/BP3OMMJ.png')
         .addFields(
             {
                 name: '/add-ap <user> <amount>',
@@ -265,9 +265,9 @@ function createAdminHelp() {
 
 function createAllCommandsHelp() {
     return new EmbedBuilder()
-        .setColor('#A855F7')
+        .setColor('#b209d4')
         .setTitle('📚 Полный список всех команд (24+)')
-        .setImage('https://s.iimg.su/s/22/uexBneExAdoahYKkvzj43zvE9k0z7Dgaq7j2HlEk.jpg')
+        .setImage('https://iili.io/BP3OOut.png')
         .addFields(
             {
                 name: '👤 Профиль (4)',

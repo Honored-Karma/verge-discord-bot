@@ -56,7 +56,7 @@ export async function execute(interaction) {
     if (inventory.length === 0) {
         const name = player.character_name || player.username;
         const msg = await interaction.reply({
-            embeds: [createInfoEmbed('🎒 Инвентарь', `Инвентарь игрока **${name}** пуст.`)],
+            embeds: [createInfoEmbed('🎒 Инвентарь', `Инвентарь игрока **${name}** пуст.`, 'inventory')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

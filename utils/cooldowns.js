@@ -3,8 +3,9 @@ import ms from 'ms';
 // Global command cooldown tracker (3 seconds between commands per user)
 const globalCooldowns = new Map();
 const GLOBAL_COOLDOWN_MS = 3000;
-const AUTO_DELETE_MS = 20000;
-const AUTO_DELETE_SHORT_MS = 10000;
+const AUTO_DELETE_MS = 3 * 60 * 1000;
+const AUTO_DELETE_SHORT_MS = 3 * 60 * 1000;
+const AUTO_DELETE_LONG_MS = 3 * 60 * 1000;
 
 export function checkGlobalCooldown(userId) {
     const now = Date.now();
@@ -36,6 +37,14 @@ export function autoDeleteMessageShort(message) {
         setTimeout(() => {
             message.delete().catch(() => {});
         }, AUTO_DELETE_SHORT_MS);
+    }
+}
+
+export function autoDeleteMessageLong(message) {
+    if (message && message.delete) {
+        setTimeout(() => {
+            message.delete().catch(() => {});
+        }, AUTO_DELETE_LONG_MS);
     }
 }
 

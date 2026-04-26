@@ -73,7 +73,7 @@ if (!hasCommandPermission(member, 'set-sp')) {
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('Множитель SP установлен', 
                 `Установлен множитель **${result}%** для **${player.character_name || player.username}** (слот **${slot}**).\n\n` +
-                `**Пример:** Добавление 100 SP → теперь добавит **${Math.round(100 * result / 100)} SP**`)],
+                `**Пример:** Добавление 100 SP → теперь добавит **${Math.round(100 * result / 100)} SP**`, 'setSpMultiplier')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

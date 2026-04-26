@@ -85,7 +85,7 @@ export async function execute(interaction) {
     if (success) {
         const name = player.character_name || player.username;
         const msg = await interaction.reply({
-            embeds: [createSuccessEmbed('Предмет выдан', `Выдано **${qty}x ${itemName}** игроку **${name}**`)],
+            embeds: [createSuccessEmbed('Предмет выдан', `Выдано **${qty}x ${itemName}** игроку **${name}**`, 'giveItem')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

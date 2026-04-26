@@ -34,7 +34,7 @@ export async function logCommand({ client, guildId, channelId, userId, userTag, 
                         const logsChannel = await client.channels.fetch(logChannelDoc.channel_id);
                         if (logsChannel && logsChannel.isTextBased()) {
                             const embed = new EmbedBuilder()
-                                .setColor('#A855F7')
+                                .setColor('#b209d4')
                                 .setTitle(`📋 Command Log: /${command}`)
                                 .addFields(
                                     { name: '👤 Executor', value: userTag || `<@${userId}>`, inline: true },

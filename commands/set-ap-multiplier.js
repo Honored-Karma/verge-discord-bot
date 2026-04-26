@@ -73,7 +73,7 @@ if (!hasCommandPermission(member, 'set-ap')) {
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('Множитель AP установлен', 
                 `Установлен множитель **${result}%** для **${player.character_name || player.username}** (слот **${slot}**).\n\n` +
-                `**Пример:** Тренировка дает 10 AP → теперь даст **${Math.round(10 * result / 100)} AP**`)],
+                `**Пример:** Тренировка дает 10 AP → теперь даст **${Math.round(10 * result / 100)} AP**`, 'setApMultiplier')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

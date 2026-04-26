@@ -6,10 +6,10 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
     const embed = new EmbedBuilder()
-        .setColor(0xA855F7)
+        .setColor(0xB209D4)
         .setTitle('📊 Ранговая система и зарплаты')
         .setDescription('Зарплата начисляется **раз в неделю** автоматически.')
-        .setImage('https://s.iimg.su/s/22/uAHetLrx0gHhdpdgNEk0sz5rXNryIiakpM4NOC2i.jpg')
+        .setImage('https://iili.io/BP3OQte.png')
         .addFields(
             {
                 name: '🏢 TENRYU (F-S, YEN/месяц)',

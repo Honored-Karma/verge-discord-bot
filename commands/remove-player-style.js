@@ -111,7 +111,7 @@ if (!hasCommandPermission(member, 'remove-player-style') && !isAdmin(member)) {
     }
 
     const msg = await interaction.reply({
-        embeds: [createSuccessEmbed('Стиль удален у игрока', `У игрока ${player.character_name || player.username} удален стиль **${style.name}**.`)],
+        embeds: [createSuccessEmbed('Стиль удален у игрока', `У игрока ${player.character_name || player.username} удален стиль **${style.name}**.`, 'removePlayerStyle')],
         fetchReply: true
     });
     autoDeleteMessageShort(msg);

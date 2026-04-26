@@ -41,7 +41,7 @@ export async function execute(interaction) {
     );
 
     const message = await interaction.reply({
-        embeds: [createInfoEmbed('Ваши слоты', description)],
+        embeds: [createInfoEmbed('Ваши слоты', description, 'slots')],
         components: [row],
         flags: 64,
         fetchReply: true
@@ -81,7 +81,7 @@ export async function execute(interaction) {
         );
 
         await i.update({
-            embeds: [createInfoEmbed('Ваши слоты', updated)],
+            embeds: [createInfoEmbed('Ваши слоты', updated, 'slots']),
             components: [nextRow]
         });
     });

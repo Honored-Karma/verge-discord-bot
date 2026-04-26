@@ -95,7 +95,7 @@ export async function execute(interaction) {
     
     if (leaderboard.length === 0) {
         const msg = await interaction.reply({
-            embeds: [createInfoEmbed('📊 Таблица лидеров', 'Пока нет зарегистрированных игроков.')],
+            embeds: [createInfoEmbed('📊 Таблица лидеров', 'Пока нет зарегистрированных игроков.', 'default')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

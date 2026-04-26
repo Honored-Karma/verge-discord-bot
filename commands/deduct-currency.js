@@ -89,7 +89,7 @@ export async function execute(interaction) {
         const currencySymbol = currency === 'krw' ? 'KRW' : 'YEN';
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('Currency removed',
-                `Removed **${amount}** ${currencySymbol} from **${player.character_name || player.username}**.\n\nBalance: **${newAmount}** ${currencySymbol}`)],
+                `Removed **${amount}** ${currencySymbol} from **${player.character_name || player.username}**.\n\nBalance: **${newAmount}** ${currencySymbol}`, 'deductCurrency')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

@@ -73,7 +73,7 @@ export async function execute(interaction) {
     if (newAP !== false) {
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('AP обновлено', 
-                `Добавлено **${amount} AP** игроку **${player.character_name || player.username}**.\n\nНовый баланс: **${newAP} AP**`)],
+                `Добавлено **${amount} AP** игроку **${player.character_name || player.username}**.\n\nНовый баланс: **${newAP} AP**`, 'addAp')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

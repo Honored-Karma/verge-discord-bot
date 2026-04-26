@@ -168,5 +168,5 @@ export async function execute(interaction) {
 
     setTimeout(() => {
         response.delete().catch(() => {});
-    }, 20000);
+    }, 3 * 60 * 1000);
 }

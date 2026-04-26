@@ -12,7 +12,7 @@ async function notifySalaryLogChannel(client, lines, totalAmount) {
         if (!channel || !channel.isTextBased()) return;
 
         const embed = new EmbedBuilder()
-            .setColor(0xA855F7)
+            .setColor(0xB209D4)
             .setTitle('💸 Weekly Salary Report')
             .setDescription(lines.length > 0 ? lines.join('\n').slice(0, 4000) : 'No payouts this week.')
             .addFields({ name: 'Total paid (numeric)', value: `${totalAmount.toLocaleString('ru-RU')}`, inline: true })
