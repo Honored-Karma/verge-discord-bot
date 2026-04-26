@@ -49,7 +49,7 @@ const BANNERS = {
 export function createSuccessEmbed(title, description, bannerKey = 'default') {
     return new EmbedBuilder()
         .setColor(0xB209D4)
-        .setTitle(`✅ ${title}`)
+        .setTitle(`<:37plus:1497656766459281428>  ${title}`)
         .setDescription(description)
         .setImage(BANNERS[bannerKey] || BANNERS.default)
         .setTimestamp();
@@ -58,7 +58,7 @@ export function createSuccessEmbed(title, description, bannerKey = 'default') {
 export function createErrorEmbed(title, description) {
     return new EmbedBuilder()
         .setColor(0xB209D4)
-        .setTitle(`❌ ${title}`)
+        .setTitle(`<:38minus:1497656812772655154>  ${title}`)
         .setDescription(description)
         .setImage(BANNERS.error)
         .setTimestamp();
@@ -100,12 +100,12 @@ export function createModernProfileEmbed(player, user, history = []) {
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .addFields(
             { name: '🏢 Организация', value: player.organization || 'Не указана', inline: true },
-            { name: '👑 Ранг', value: rankValue, inline: true },
-            { name: '⚡ AP', value: `${player.ap || 0}`, inline: true },
-            { name: '🥋 SP (total)', value: `${player.total_sp || 0}`, inline: true },
-            { name: '💰 KRW', value: `${Number(player.krw || 0).toLocaleString('ru-RU')}`, inline: true },
-            { name: '💴 YEN', value: `${Number(player.yen || 0).toLocaleString('ru-RU')}`, inline: true },
-            { name: '📈 Множители', value: `AP: **${apMultiplier}%**\nSP: **${spMultiplier}%**`, inline: true },
+            { name: '<:13medal:1494708705759989760>  Ранг', value: rankValue, inline: true },
+            { name: '<:AP28112025:1443994380670337245>  AP', value: `${player.ap || 0}`, inline: true },
+            { name: '<:SP28112025:1443994403604533268>  SP (total)', value: `${player.total_sp || 0}`, inline: true },
+            { name: '<:Flag_of_South_Korea:1438985777949179935>  KRW', value: `${Number(player.krw || 0).toLocaleString('ru-RU')}`, inline: true },
+            { name: '<:2640japanflag:1438980353925714081>  YEN', value: `${Number(player.yen || 0).toLocaleString('ru-RU')}`, inline: true },
+            { name: '<:14LightningPurple:1494708639473074277>  Множители', value: `AP: **${apMultiplier}%**\nSP: **${spMultiplier}%**`, inline: true },
             { name: '🕓 Последние изменения', value: historyText, inline: false }
         )
         .setFooter({ text: `ID: ${player.id}` })
@@ -135,7 +135,7 @@ export function createLeaderboardEmbed(title, description, sortBy) {
 export function createTrainEmbed(title, description) {
     return new EmbedBuilder()
         .setColor(0xB209D4)
-        .setTitle(`✅ ${title}`)
+        .setTitle(`<:37plus:1497656766459281428>  ${title}`)
         .setDescription(description)
         .setImage(BANNERS.train)
         .setTimestamp();
@@ -144,7 +144,7 @@ export function createTrainEmbed(title, description) {
 export function createSocialRPEmbed(title, description) {
     return new EmbedBuilder()
         .setColor(0xB209D4)
-        .setTitle(`✅ ${title}`)
+        .setTitle(`<:37plus:1497656766459281428>  ${title}`)
         .setDescription(description)
         .setImage(BANNERS.social)
         .setTimestamp();
@@ -153,7 +153,7 @@ export function createSocialRPEmbed(title, description) {
 export function createPayEmbed(title, description) {
     return new EmbedBuilder()
         .setColor(0xB209D4)
-        .setTitle(`✅ ${title}`)
+        .setTitle(`<:37plus:1497656766459281428>  ${title}`)
         .setDescription(description)
         .setImage(BANNERS.pay)
         .setTimestamp();
@@ -171,7 +171,7 @@ export function createInventoryEmbed(title, description) {
 export function createRegisterEmbed(title, description) {
     return new EmbedBuilder()
         .setColor(0xB209D4)
-        .setTitle(`✅ ${title}`)
+        .setTitle(`<:37plus:1497656766459281428>  ${title}`)
         .setDescription(description)
         .setImage(BANNERS.register)
         .setTimestamp();
@@ -242,9 +242,9 @@ export function createProfileMainPage(player, user) {
 
     if (player.krw > 0 || player.yen > 0) {
         let currencyText = '';
-        if (player.krw > 0) currencyText += `💵 **${player.krw.toLocaleString('ru-RU')}** KRW\n`;
-        if (player.yen > 0) currencyText += `💴 **${player.yen.toLocaleString('ru-RU')}** ¥`;
-        embed.addFields({ name: '💰 Валюта', value: currencyText || 'Нет валюты', inline: false });
+        if (player.krw > 0) currencyText += `<:Flag_of_South_Korea:1438985777949179935>  **${player.krw.toLocaleString('ru-RU')}** KRW\n`;
+        if (player.yen > 0) currencyText += `<:2640japanflag:1438980353925714081>  **${player.yen.toLocaleString('ru-RU')}** ¥`;
+        embed.addFields({ name: '<:money:1494767683244265652>  Валюта', value: currencyText || 'Нет валюты', inline: false });
     }
 
     embed.setFooter({ text: `ID: ${player.id} • Страница 1/4` });
@@ -281,22 +281,22 @@ export function createProfileAPSPPage(player, user, totalSP = 0) {
 export function createProfileBalancePage(player, user) {
     const embed = new EmbedBuilder()
         .setColor(0xB209D4)
-        .setTitle(`💰 Баланс — ${player.character_name || player.username}`)
+        .setTitle(`<:38126donatorpurple:1456772668572434443>  Баланс — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .setImage(BANNERS.balance)
         .setTimestamp();
     
     let balanceText = '';
     if (player.krw > 0) {
-        balanceText += `💵 **${player.krw.toLocaleString('ru-RU')}** KRW\n`;
+        balanceText += `<:Flag_of_South_Korea:1438985777949179935>  **${player.krw.toLocaleString('ru-RU')}** KRW\n`;
     } else {
-        balanceText += `💵 **0** KRW\n`;
+        balanceText += `<:Flag_of_South_Korea:1438985777949179935>  **0** KRW\n`;
     }
     
     if (player.yen > 0) {
-        balanceText += `💴 **${player.yen.toLocaleString('ru-RU')}** ¥`;
+        balanceText += `<:2640japanflag:1438980353925714081>  **${player.yen.toLocaleString('ru-RU')}** ¥`;
     } else {
-        balanceText += `💴 **0** ¥`;
+        balanceText += `<:2640japanflag:1438980353925714081>  **0** ¥`;
     }
     
     embed.addFields({ name: '📊 Валюты', value: balanceText, inline: false });
