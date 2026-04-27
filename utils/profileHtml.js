@@ -147,7 +147,7 @@ export async function generateProfileCard(data) {
     await ensureFont();
 
     const {
-        characterName = 'Unknown',
+        characterName = 'Неизвестно',
         avatarUrl,
         styles = [],
         attributeName,

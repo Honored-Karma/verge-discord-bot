@@ -76,7 +76,7 @@ export function createInfoEmbed(title, description, bannerKey = 'default') {
 export function createCooldownEmbed(actionName, unixTimestamp) {
     return new EmbedBuilder()
         .setColor(0xB209D4)
-        .setTitle(`⏳ ${actionName}: cooldown`)
+        .setTitle(`⏳ ${actionName}: кулдаун`)
         .setDescription(`Следующее действие будет доступно <t:${unixTimestamp}:R>.\nТочное время: <t:${unixTimestamp}:F>`)
         .setImage(BANNERS.cooldown)
         .setTimestamp();
@@ -106,7 +106,7 @@ export function createModernProfileEmbed(player, user, history = []) {
             { name: '🏢 Организация', value: player.organization || 'Не указана', inline: true },
             { name: '<:13medal:1494708705759989760>  Ранг', value: rankValue, inline: true },
             { name: '<:AP28112025:1443994380670337245>  AP', value: `${player.ap || 0}`, inline: true },
-            { name: '<:SP28112025:1443994403604533268>  SP (total)', value: `${player.total_sp || 0}`, inline: true },
+            { name: '<:SP28112025:1443994403604533268>  SP (всего)', value: `${player.total_sp || 0}`, inline: true },
             { name: '<:Flag_of_South_Korea:1438985777949179935>  KRW', value: `${Number(player.krw || 0).toLocaleString('ru-RU')}`, inline: true },
             { name: '<:2640japanflag:1438980353925714081>  YEN', value: `${Number(player.yen || 0).toLocaleString('ru-RU')}`, inline: true },
             { name: '<:14LightningPurple:1494708639473074277>  Множители', value: `AP: **${apMultiplier}%**${apExpireText}\nSP: **${spMultiplier}%**${spExpireText}`, inline: true },

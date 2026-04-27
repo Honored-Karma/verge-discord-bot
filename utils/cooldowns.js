@@ -16,7 +16,7 @@ export function checkGlobalCooldown(userId) {
         return {
             onCooldown: true,
             remaining,
-            remainingFormatted: `${Math.ceil(remaining / 1000)}s`
+            remainingFormatted: `${Math.ceil(remaining / 1000)}с`
         };
     }
     
@@ -73,12 +73,12 @@ export function formatTime(ms) {
     
     if (hours > 0) {
         const remainingMinutes = minutes % 60;
-        return `${hours}h ${remainingMinutes}m`;
+        return `${hours}ч ${remainingMinutes}м`;
     } else if (minutes > 0) {
         const remainingSeconds = seconds % 60;
-        return `${minutes}m ${remainingSeconds}s`;
+        return `${minutes}м ${remainingSeconds}с`;
     } else {
-        return `${seconds}s`;
+        return `${seconds}с`;
     }
 }
 

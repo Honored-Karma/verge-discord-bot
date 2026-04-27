@@ -22,7 +22,7 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
         const msg = await interaction.reply({
-            embeds: [createCooldownEmbed('Train', retryAt)],
+            embeds: [createCooldownEmbed('Тренировка', retryAt)],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -69,7 +69,7 @@ export async function execute(interaction) {
     if (cooldownCheck.onCooldown) {
         const retryAt = Math.floor(Date.now() / 1000) + Math.ceil(cooldownCheck.remaining / 1000);
         const msg = await interaction.reply({
-            embeds: [createCooldownEmbed('Train', retryAt)],
+            embeds: [createCooldownEmbed('Тренировка', retryAt)],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

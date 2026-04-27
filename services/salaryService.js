@@ -13,9 +13,9 @@ async function notifySalaryLogChannel(client, lines, totalAmount) {
 
         const embed = new EmbedBuilder()
             .setColor(0xB209D4)
-            .setTitle('💸 Weekly Salary Report')
-            .setDescription(lines.length > 0 ? lines.join('\n').slice(0, 4000) : 'No payouts this week.')
-            .addFields({ name: 'Total paid (numeric)', value: `${totalAmount.toLocaleString('ru-RU')}`, inline: true })
+            .setTitle('💸 Еженедельный отчёт зарплат')
+            .setDescription(lines.length > 0 ? lines.join('\n').slice(0, 4000) : 'На этой неделе выплат не было.')
+            .addFields({ name: 'Итого выплачено', value: `${totalAmount.toLocaleString('ru-RU')}`, inline: true })
             .setTimestamp();
 
         await channel.send({ embeds: [embed] });

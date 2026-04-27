@@ -50,10 +50,10 @@ export async function execute(interaction) {
     const lines = rows.map(r => {
         const time = new Date(r.timestamp).toLocaleString('ru-RU');
         const who = r.user_tag || `<@${r.user_id}>`;
-        const cmd = r.command || 'unknown';
+        const cmd = r.command || 'неизвестно';
         const target = r.target_tag ? ` → ${r.target_tag}` : '';
-        const ch = r.channel_id ? ` in <#${r.channel_id}>` : '';
-        return `• [${time}] **${who}** ran **/${cmd}**${target}${ch}`;
+        const ch = r.channel_id ? ` в <#${r.channel_id}>` : '';
+        return `• [${time}] **${who}** использовал **/${cmd}**${target}${ch}`;
     });
 
     // Discord message limit considerations: send as multiple replies if needed

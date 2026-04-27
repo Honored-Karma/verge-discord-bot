@@ -36,7 +36,7 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
         const msg = await interaction.reply({
-            embeds: [createCooldownEmbed('Profile', retryAt)],
+            embeds: [createCooldownEmbed('Профиль', retryAt)],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

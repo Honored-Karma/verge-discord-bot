@@ -16,8 +16,8 @@ export const data = new SlashCommandBuilder()
             .setDescription('Организация ранговой сетки')
             .setRequired(true)
             .addChoices(
-                { name: 'TENRYU (F-S)', value: 'TENRYU' },
-                { name: 'Guardians (VI-I)', value: 'GUARDIANS' }
+                { name: 'ТЕНРЮ (F-S)', value: 'TENRYU' },
+                { name: 'Стражи (VI-I)', value: 'GUARDIANS' }
             ))
     .addStringOption(option =>
         option.setName('rank')
