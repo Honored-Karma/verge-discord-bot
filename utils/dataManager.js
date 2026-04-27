@@ -14,6 +14,8 @@ const PLAYER_DEFAULTS = {
     unlocked_avatar: 0,
     ap_multiplier: 100,
     sp_multiplier: 100,
+    ap_multiplier_expires_at: 0,
+    sp_multiplier_expires_at: 0,
     last_ap_change_at: 0,
     last_sp_change_at: 0,
     last_salary_paid_at: 0
@@ -29,6 +31,8 @@ function normalizePlayerDocument(player) {
         ap: Number(player.ap || 0),
         ap_multiplier: Number(player.ap_multiplier || 100),
         sp_multiplier: Number(player.sp_multiplier || 100),
+        ap_multiplier_expires_at: Number(player.ap_multiplier_expires_at || 0),
+        sp_multiplier_expires_at: Number(player.sp_multiplier_expires_at || 0),
         unlocked_avatar: Number(player.unlocked_avatar || 0),
         last_train_timestamp: Number(player.last_train_timestamp || 0),
         last_socialrp_timestamp: Number(player.last_socialrp_timestamp || 0),
@@ -42,6 +46,40 @@ function normalizeSlot(slot) {
     const s = Number(slot);
     if (s === 2) return 2;
     return 1;
+}
+
+function formatDuration(seconds) {
+    if (seconds <= 0) return 'бессрочно';
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const parts = [];
+    if (days > 0) parts.push(`${days}д`);
+    if (hours > 0) parts.push(`${hours}ч`);
+    if (minutes > 0) parts.push(`${minutes}мин`);
+    return parts.join(' ') || 'менее 1 мин';
+}
+
+export async function expireMultipliers() {
+    try {
+        const db = getDB();
+        const now = Math.floor(Date.now() / 1000);
+        const apResult = await db.collection('players').updateMany(
+            { ap_multiplier_expires_at: { $gt: 0, $lte: now } },
+            { $set: { ap_multiplier: 100, ap_multiplier_expires_at: 0 } }
+        );
+        const spResult = await db.collection('players').updateMany(
+            { sp_multiplier_expires_at: { $gt: 0, $lte: now } },
+            { $set: { sp_multiplier: 100, sp_multiplier_expires_at: 0 } }
+        );
+        if (apResult.modifiedCount > 0 || spResult.modifiedCount > 0) {
+            console.log(`🔄 Expired multipliers: AP=${apResult.modifiedCount}, SP=${spResult.modifiedCount}`);
+        }
+        return { ap: apResult.modifiedCount, sp: spResult.modifiedCount };
+    } catch (error) {
+        console.error('Error expiring multipliers:', error);
+        return { ap: 0, sp: 0 };
+    }
 }
 
 function getRankBonusPercent(rank) {
@@ -199,6 +237,8 @@ export async function createPlayer(playerId, username, characterName, characterA
             unlocked_avatar: 0,
             ap_multiplier: 100.0,
             sp_multiplier: 100.0,
+            ap_multiplier_expires_at: 0,
+            sp_multiplier_expires_at: 0,
             last_ap_change_at: 0,
             last_sp_change_at: 0,
             rank: null,
@@ -223,11 +263,20 @@ export async function addAP(playerId, amount, actionType = 'train') {
         const player = await getPlayer(playerId);
         if (!player) return false;
         
+        const now = Math.floor(Date.now() / 1000);
+        let apMultiplier = player.ap_multiplier || 100;
+        if (player.ap_multiplier_expires_at > 0 && now >= player.ap_multiplier_expires_at) {
+            apMultiplier = 100;
+            await db.collection('players').updateOne(
+                { id: playerId },
+                { $set: { ap_multiplier: 100, ap_multiplier_expires_at: 0 } }
+            );
+        }
         const dynamicBonus = getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
-        const effectiveMultiplier = (player.ap_multiplier || 100) + dynamicBonus;
+        const effectiveMultiplier = apMultiplier + dynamicBonus;
         const adjustedAmount = Math.round(amount * (effectiveMultiplier / 100));
         const newAP = player.ap + adjustedAmount;
-        const timestamp = Math.floor(Date.now() / 1000);
+        const timestamp = now;
         
         const updateObj = { ap: newAP, last_ap_change_at: timestamp };
         if (actionType === 'train') {
@@ -341,8 +390,17 @@ export async function addSP(playerId, styleId, amount, adminId) {
         const player = await getPlayer(playerId);
         if (!player) return false;
         
+        const now = Math.floor(Date.now() / 1000);
+        let spMultiplier = player.sp_multiplier || 100;
+        if (player.sp_multiplier_expires_at > 0 && now >= player.sp_multiplier_expires_at) {
+            spMultiplier = 100;
+            await db.collection('players').updateOne(
+                { id: playerId },
+                { $set: { sp_multiplier: 100, sp_multiplier_expires_at: 0 } }
+            );
+        }
         const dynamicBonus = getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
-        const effectiveMultiplier = (player.sp_multiplier || 100) + dynamicBonus;
+        const effectiveMultiplier = spMultiplier + dynamicBonus;
         const adjustedAmount = Math.round(amount * (effectiveMultiplier / 100));
         
         const currentSP = await getSP(playerId, styleId);
@@ -360,7 +418,7 @@ export async function addSP(playerId, styleId, amount, adminId) {
             { $set: { last_sp_change_at: timestamp } }
         );
         
-        logAdminAction(adminId, 'ADD_SP', `Добавил ${amount} SP (×${player.sp_multiplier}% = ${adjustedAmount}) стиль ${styleId} игроку ${playerId}`);
+        logAdminAction(adminId, 'ADD_SP', `Добавил ${amount} SP (×${spMultiplier}% = ${adjustedAmount}) стиль ${styleId} игроку ${playerId}`);
         await addProgressionHistory(playerId, 'sp', currentSP, newSP, 'add-sp');
         return newSP;
     } catch (error) {
@@ -758,16 +816,20 @@ export async function deleteStyle(styleId, adminId) {
     }
 }
 
-export async function setAPMultiplier(playerId, multiplier, adminId) {
+export async function setAPMultiplier(playerId, multiplier, adminId, durationSeconds = 0) {
     try {
         const db = getDB();
         const validMultiplier = Math.max(50, Math.min(500, multiplier));
+        const expiresAt = durationSeconds > 0
+            ? Math.floor(Date.now() / 1000) + durationSeconds
+            : 0;
         await db.collection('players').updateOne(
             { id: playerId },
-            { $set: { ap_multiplier: validMultiplier } }
+            { $set: { ap_multiplier: validMultiplier, ap_multiplier_expires_at: expiresAt } }
         );
-        logAdminAction(adminId, 'SET_AP_MULTIPLIER', `Установил множитель AP ${validMultiplier}% для игрока ${playerId}`);
-        return validMultiplier;
+        const durationText = expiresAt > 0 ? ` на ${formatDuration(durationSeconds)}` : ' (бессрочно)';
+        logAdminAction(adminId, 'SET_AP_MULTIPLIER', `Установил множитель AP ${validMultiplier}%${durationText} для игрока ${playerId}`);
+        return { multiplier: validMultiplier, expiresAt };
     } catch (error) {
         console.error('Error setting AP multiplier:', error);
         return false;
@@ -788,16 +850,20 @@ export async function getRecentProgressionHistory(playerId, limit = 5) {
     }
 }
 
-export async function setSPMultiplier(playerId, multiplier, adminId) {
+export async function setSPMultiplier(playerId, multiplier, adminId, durationSeconds = 0) {
     try {
         const db = getDB();
         const validMultiplier = Math.max(50, Math.min(500, multiplier));
+        const expiresAt = durationSeconds > 0
+            ? Math.floor(Date.now() / 1000) + durationSeconds
+            : 0;
         await db.collection('players').updateOne(
             { id: playerId },
-            { $set: { sp_multiplier: validMultiplier } }
+            { $set: { sp_multiplier: validMultiplier, sp_multiplier_expires_at: expiresAt } }
         );
-        logAdminAction(adminId, 'SET_SP_MULTIPLIER', `Установил множитель SP ${validMultiplier}% для игрока ${playerId}`);
-        return validMultiplier;
+        const durationText = expiresAt > 0 ? ` на ${formatDuration(durationSeconds)}` : ' (бессрочно)';
+        logAdminAction(adminId, 'SET_SP_MULTIPLIER', `Установил множитель SP ${validMultiplier}%${durationText} для игрока ${playerId}`);
+        return { multiplier: validMultiplier, expiresAt };
     } catch (error) {
         console.error('Error setting SP multiplier:', error);
         return false;

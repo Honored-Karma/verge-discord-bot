@@ -86,6 +86,10 @@ export function createModernProfileEmbed(player, user, history = []) {
     const rankValue = player.rank || 'Нет ранга';
     const apMultiplier = Number(player.ap_multiplier || 100);
     const spMultiplier = Number(player.sp_multiplier || 100);
+    const apExpires = Number(player.ap_multiplier_expires_at || 0);
+    const spExpires = Number(player.sp_multiplier_expires_at || 0);
+    const apExpireText = apExpires > 0 ? ` (до <t:${apExpires}:R>)` : '';
+    const spExpireText = spExpires > 0 ? ` (до <t:${spExpires}:R>)` : '';
     const historyText = history.length > 0
         ? history.map((entry) => {
             const deltaSign = entry.delta >= 0 ? '+' : '';
@@ -105,7 +109,7 @@ export function createModernProfileEmbed(player, user, history = []) {
             { name: '<:SP28112025:1443994403604533268>  SP (total)', value: `${player.total_sp || 0}`, inline: true },
             { name: '<:Flag_of_South_Korea:1438985777949179935>  KRW', value: `${Number(player.krw || 0).toLocaleString('ru-RU')}`, inline: true },
             { name: '<:2640japanflag:1438980353925714081>  YEN', value: `${Number(player.yen || 0).toLocaleString('ru-RU')}`, inline: true },
-            { name: '<:14LightningPurple:1494708639473074277>  Множители', value: `AP: **${apMultiplier}%**\nSP: **${spMultiplier}%**`, inline: true },
+            { name: '<:14LightningPurple:1494708639473074277>  Множители', value: `AP: **${apMultiplier}%**${apExpireText}\nSP: **${spMultiplier}%**${spExpireText}`, inline: true },
             { name: '🕓 Последние изменения', value: historyText, inline: false }
         )
         .setFooter({ text: `ID: ${player.id}` })
@@ -232,9 +236,17 @@ export function createProfileMainPage(player, user) {
 
     embed.addFields({ name: '🟦 Активный слот', value: `Слот №${slotNumber}`, inline: true });
     embed.addFields({ name: '🏢 Организация', value: player.organization || 'Не указана', inline: true });
-    embed.addFields({ name: '👑 Ранг', value: player.rank || 'Нет ранга', inline: true });
-    embed.addFields({ name: '⚡ Очки способностей (AP)', value: `${player.ap} AP`, inline: true });
-    embed.addFields({ name: '📈 AP / SP', value: `${player.ap_multiplier || 100}% / ${player.sp_multiplier || 100}%`, inline: true });
+    embed.addFields({ name: '<:13medal:1494708705759989760>  Ранг', value: player.rank || 'Нет ранга', inline: true });
+    embed.addFields({ name: '<:AP28112025:1443994380670337245>  Очки способностей (AP)', value: `${player.ap} AP`, inline: true });
+    const apMult = Number(player.ap_multiplier || 100);
+    const spMult = Number(player.sp_multiplier || 100);
+    const apExp = Number(player.ap_multiplier_expires_at || 0);
+    const spExp = Number(player.sp_multiplier_expires_at || 0);
+    let multText = `AP: **${apMult}%**`;
+    if (apExp > 0) multText += ` (до <t:${apExp}:R>)`;
+    multText += ` / SP: **${spMult}%**`;
+    if (spExp > 0) multText += ` (до <t:${spExp}:R>)`;
+    embed.addFields({ name: '<:14LightningPurple:1494708639473074277>  Множители', value: multText, inline: true });
 
     if (player.unlocked_avatar) {
         embed.addFields({ name: '🌟 Статус', value: 'Олицетворение достигнуто', inline: false });
@@ -272,7 +284,17 @@ export function createProfileAPSPPage(player, user, totalSP = 0) {
     });
     
     embed.addFields({ name: '🥋 Всего SP', value: `${totalSP} SP`, inline: true });
-    
+
+    const apMult = Number(player.ap_multiplier || 100);
+    const spMult = Number(player.sp_multiplier || 100);
+    const apExp = Number(player.ap_multiplier_expires_at || 0);
+    const spExp = Number(player.sp_multiplier_expires_at || 0);
+    let multText = `AP: **${apMult}%**`;
+    if (apExp > 0) multText += ` (до <t:${apExp}:R>)`;
+    multText += `\nSP: **${spMult}%**`;
+    if (spExp > 0) multText += ` (до <t:${spExp}:R>)`;
+    embed.addFields({ name: '📈 Множители', value: multText, inline: true });
+
     embed.setFooter({ text: `ID: ${player.id} • Страница 2/4` });
     
     return embed;

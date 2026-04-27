@@ -6,6 +6,7 @@ import { readdirSync } from 'fs';
 import { createServer } from 'http';
 import { connectDatabase, closeDatabase } from './utils/db.js';
 import { startWeeklySalaryScheduler } from './services/salaryService.js';
+import { expireMultipliers } from './utils/dataManager.js';
 
 config();
 
@@ -83,6 +84,9 @@ client.once(Events.ClientReady, async readyClient => {
     }
 
     startWeeklySalaryScheduler(client);
+
+    // Periodic multiplier expiry check (every 60 seconds)
+    setInterval(() => { expireMultipliers(); }, 60_000);
 });
 
 client.on(Events.InteractionCreate, async interaction => {
