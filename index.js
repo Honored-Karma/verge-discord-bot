@@ -3,6 +3,7 @@ import { config } from 'dotenv';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { readdirSync } from 'fs';
+import { createServer } from 'http';
 import { connectDatabase, closeDatabase } from './utils/db.js';
 import { startWeeklySalaryScheduler } from './services/salaryService.js';
 
@@ -141,6 +142,16 @@ client.on(Events.Error, error => {
 
 process.on('unhandledRejection', error => {
     console.error('❌ Unhandled promise rejection:', error);
+});
+
+// Health check HTTP server for Railway / hosting platforms
+// Must start BEFORE heavy init so the platform sees an open port immediately
+const PORT = process.env.PORT || 3000;
+createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('OK');
+}).listen(PORT, () => {
+    console.log(`✅ Health check server listening on port ${PORT}`);
 });
 
 // Connect to MongoDB

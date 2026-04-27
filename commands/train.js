@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, addAP } from '../utils/dataManager.js';
-import { checkCooldown, validateTrainingText, checkGlobalCooldown, autoDeleteMessageLong } from '../utils/cooldowns.js';
+import { checkCooldown, validateTrainingText, checkGlobalCooldown, autoDeleteMessageShort, autoDeleteMessageLong } from '../utils/cooldowns.js';
 import { createTrainEmbed, createErrorEmbed, createCooldownEmbed } from '../utils/embeds.js';
 import { progressBar, getAPProgress } from '../utils/progressBar.js';
 import { logCommand } from '../utils/logs.js';
