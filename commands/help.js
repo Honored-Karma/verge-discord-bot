@@ -219,6 +219,12 @@ function createAdminHelp() {
     .setImage("https://iili.io/BP3OOut.png")
     .addFields(
       {
+        name: "/announce <message> <target>",
+        value:
+          "✅ **НОВОЕ!** Массовая рассылка в ЛС\nОтправить объявление в embed формате участникам сервера\n📝 Параметры: message, target, user, title, color, image\n💡 См. `/help` для подробностей",
+        inline: false,
+      },
+      {
         name: "/add-ap <user> <amount>",
         value: "✅ Добавить AP игроку\nПример: `/add-ap @John 100`",
         inline: true,
@@ -293,7 +299,7 @@ function createAdminHelp() {
 function createAllCommandsHelp() {
   return new EmbedBuilder()
     .setColor("#b209d4")
-    .setTitle("📚 Полный список всех команд (25+)")
+    .setTitle("📚 Полный список всех команд (26)")
     .setImage("https://iili.io/BP3OOut.png")
     .addFields(
       {
@@ -312,9 +318,9 @@ function createAllCommandsHelp() {
         inline: true,
       },
       {
-        name: "🛡️ Админ (13)",
+        name: "🛡️ Админ (14)",
         value:
-          "/add-ap\n/set-ap\n/add-sp\n/set-sp\n/add-currency\n/set-currency\n/add-style\n/delete-style\n/give-item\n/give-style\n/set-ap-multiplier\n/set-sp-multiplier\n/delete-user",
+          "/announce\n/add-ap\n/set-ap\n/add-sp\n/set-sp\n/add-currency\n/set-currency\n/add-style\n/delete-style\n/give-item\n/give-style\n/set-ap-multiplier\n/set-sp-multiplier\n/delete-user",
         inline: true,
       },
       {
@@ -324,7 +330,7 @@ function createAllCommandsHelp() {
       },
       {
         name: "🔍 Всего команд",
-        value: "**25 команд** - полный функционал RPG бота!",
+        value: "**26 команд** - полный функционал RPG бота!",
         inline: true,
       },
     )
