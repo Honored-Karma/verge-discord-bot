@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder } from 'discord.js';
 import { getPlayer, getAllPlayerSP, getTotalSP, getRecentProgressionHistory } from '../utils/dataManager.js';
 import {
     createProfileMainPage,
@@ -12,6 +12,7 @@ import {
     createCooldownEmbed
 } from '../utils/embeds.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
+import { generateProfileCard } from '../utils/profileHtml.js';
 
 export const data = new SlashCommandBuilder()
     .setName('profile')
@@ -35,7 +36,7 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
         const msg = await interaction.reply({
-            embeds: [createCooldownEmbed('Profile', retryAt)],
+            embeds: [createCooldownEmbed('Профиль', retryAt)],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -63,11 +64,44 @@ export async function execute(interaction) {
     }
 
     const history = await getRecentProgressionHistory(slotPlayerId, 8);
-    const mainEmbed = createProfileMainPage(player, targetUser, slot);
+    const styles = await getAllPlayerSP(slotPlayerId);
+    const totalSP = await getTotalSP(slotPlayerId);
+
+    // ── Build profile card banner ─────────────────────────────────
+    const topStyles = styles.slice(0, 3);
+
+    let hudBuffer;
+    try {
+        hudBuffer = await generateProfileCard({
+            characterName: player.character_name || player.username,
+            avatarUrl: player.character_avatar || targetUser.displayAvatarURL({ extension: 'png', size: 512 }),
+            styles: topStyles,
+            attributeName: player.attribute_name || null,
+            attributeValue: player.ap,
+            totalSP,
+            orgName: player.organization || null,
+            orgRank: player.rank || null,
+            playerId: player.id,
+            slot,
+        });
+    } catch (err) {
+        console.error('Profile card render error:', err);
+        hudBuffer = null;
+    }
+
+    // Old embed stays as the main content; card goes as the banner image below
+    let mainEmbed = createProfileMainPage(player, targetUser, slot);
+    const files = [];
+    if (hudBuffer) {
+        const attachment = new AttachmentBuilder(hudBuffer, { name: 'profile-hud.png' });
+        files.push(attachment);
+        mainEmbed.setImage('attachment://profile-hud.png');
+    }
     const buttons = createProfileButtons(0);
 
     const response = await interaction.reply({
         embeds: [mainEmbed],
+        files,
         components: [buttons],
         fetchReply: true
     });
@@ -83,9 +117,15 @@ export async function execute(interaction) {
         const styles = await getAllPlayerSP(slotPlayerId);
         let newEmbed;
         let newButtons;
+        let newFiles = [];
 
         if (i.customId === 'profile_main') {
             newEmbed = createProfileMainPage(player, targetUser, slot);
+            if (hudBuffer) {
+                const att = new AttachmentBuilder(hudBuffer, { name: 'profile-hud.png' });
+                newFiles = [att];
+                newEmbed.setImage('attachment://profile-hud.png');
+            }
             newButtons = [createProfileButtons(0)];
         } else if (i.customId === 'profile_apsp') {
             const totalSP = await getTotalSP(slotPlayerId);
@@ -119,7 +159,7 @@ export async function execute(interaction) {
             newButtons = [createProfileButtons(4)];
         }
 
-        await i.update({ embeds: [newEmbed], components: newButtons });
+        await i.update({ embeds: [newEmbed], files: newFiles, components: newButtons });
     });
 
     collector.on('end', () => {
@@ -128,5 +168,5 @@ export async function execute(interaction) {
 
     setTimeout(() => {
         response.delete().catch(() => {});
-    }, 20000);
+    }, 3 * 60 * 1000);
 }

@@ -26,6 +26,20 @@ export const data = new SlashCommandBuilder()
             .addChoices(
                 { name: '1', value: 1 },
                 { name: '2', value: 2 }
+            ))
+    .addStringOption(option =>
+        option.setName('duration')
+            .setDescription('Длительность множителя. Если не указана — бессрочно.')
+            .setRequired(false)
+            .addChoices(
+                { name: '1 час', value: '3600' },
+                { name: '6 часов', value: '21600' },
+                { name: '12 часов', value: '43200' },
+                { name: '1 день', value: '86400' },
+                { name: '3 дня', value: '259200' },
+                { name: '7 дней', value: '604800' },
+                { name: '14 дней', value: '1209600' },
+                { name: '30 дней', value: '2592000' }
             ));
 
 export async function execute(interaction) {
@@ -67,13 +81,19 @@ if (!hasCommandPermission(member, 'set-sp')) {
         return;
     }
     
-    const result = await setSPMultiplier(playerId, multiplier, interaction.user.id);
+    const durationStr = interaction.options.getString('duration');
+    const durationSeconds = durationStr ? parseInt(durationStr, 10) : 0;
+    const result = await setSPMultiplier(playerId, multiplier, interaction.user.id, durationSeconds);
     
     if (result !== false) {
+        const expiresText = result.expiresAt > 0
+            ? `Истекает <t:${result.expiresAt}:R>`
+            : 'Бессрочно';
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('Множитель SP установлен', 
-                `Установлен множитель **${result}%** для **${player.character_name || player.username}** (слот **${slot}**).\n\n` +
-                `**Пример:** Добавление 100 SP → теперь добавит **${Math.round(100 * result / 100)} SP**`)],
+                `Установлен множитель **${result.multiplier}%** для **${player.character_name || player.username}** (слот **${slot}**).\n` +
+                `${expiresText}\n\n` +
+                `**Пример:** Добавление 100 SP → теперь добавит **${Math.round(100 * result.multiplier / 100)} SP**`, 'setSpMultiplier')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

@@ -26,7 +26,7 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
         const msg = await interaction.reply({
-            embeds: [createCooldownEmbed('Leaderboard', retryAt)],
+            embeds: [createCooldownEmbed('Рейтинг', retryAt)],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -95,7 +95,7 @@ export async function execute(interaction) {
     
     if (leaderboard.length === 0) {
         const msg = await interaction.reply({
-            embeds: [createInfoEmbed('📊 Таблица лидеров', 'Пока нет зарегистрированных игроков.')],
+            embeds: [createInfoEmbed('📊 Таблица лидеров', 'Пока нет зарегистрированных игроков.', 'default')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

@@ -37,7 +37,8 @@ export async function execute(interaction) {
         await interaction.reply({
             embeds: [createSuccessEmbed(
                 '✅ Логирование отключено',
-                `Логи команд больше не будут отправляться в <#${channelId}>.`
+                `Логи команд больше не будут отправляться в <#${channelId}>.`,
+                'logDisable'
             )],
             flags: 64
         });

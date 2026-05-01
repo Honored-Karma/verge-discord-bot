@@ -102,7 +102,7 @@ export async function execute(interaction) {
         const name = player.character_name || player.username;
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('Стиль выдан', 
-                `Выдан стиль **${styleName}** игроку **${name}** с **${initialSP} SP**`)],
+                `Выдан стиль **${styleName}** игроку **${name}** с **${initialSP} SP**`, 'giveStyle')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

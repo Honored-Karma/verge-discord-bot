@@ -1,51 +1,82 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 
 const BANNERS = {
-    default: 'https://s.iimg.su/s/22/uPwMsKAxzFj3zv2fzk1VVgPLssmMEosDzMeKuRk4.jpg',
-    error: 'https://s.iimg.su/s/22/uohed4ixYWCczdInGXb1odpCeZrFRlMjrQQGq8qI.jpg',
+    default: 'https://iili.io/BP3OOut.png',
+    error: 'https://iili.io/BP3OMMJ.png',
     cooldown: 'https://s.iimg.su/s/22/uClf58LxwwC7ZyuLlAWkzTJ3TD4tsoH4fjoKN653.jpg',
     profile: 'https://s.iimg.su/s/22/ufkWBu0xWZJ35E1dhmIFfmTwEoXZtvP8zOPqXpsI.jpg',
-    progress: 'https://s.iimg.su/s/22/uClf58LxwwC7ZyuLlAWkzTJ3TD4tsoH4fjoKN653.jpg',
-    balance: 'https://s.iimg.su/s/22/uLqXmUuxOHQ7fpQo0nDeYZzNFsHDabcjaeMIG1cz.jpg',
-    styles: 'https://s.iimg.su/s/22/ufK5WxvxJvic3v3sAKeMNidyrlIjH9veHktCaMW1.jpg',
-    inventory: 'https://s.iimg.su/s/22/umRJkWkxFm1Vz7bFaeY7yfOl5Vwj7cuvVJ7OS5Sz.jpg',
-    train: 'https://s.iimg.su/s/22/ufkWBu0xWZJ35E1dhmIFfmTwEoXZtvP8zOPqXpsI.jpg',
-    social: 'https://s.iimg.su/s/22/u8s3xB1xoVgeQgI8hXTRd6MZ88M8XiFCWKQfVaAj.jpg',
-    pay: 'https://s.iimg.su/s/22/uFdH3S7x2AJgL3HbTz3lECdHIvTFBrlq6A1a6f0n.jpg',
-    stylesList: 'https://s.iimg.su/s/22/uexBneExAdoahYKkvzj43zvE9k0z7Dgaq7j2HlEk.jpg'
+    progress: 'https://iili.io/BP3eTNt.png',
+    balance: 'https://iili.io/BP3OayP.png',
+    styles: 'https://iili.io/BP3eIRI.png',
+    inventory: 'https://iili.io/BP3O8ns.png',
+    train: 'https://iili.io/BP3eoSp.png',
+    social: 'https://iili.io/BP3eoSp.png',
+    pay: 'https://iili.io/BP3OLN9.png',
+    stylesList: 'https://iili.io/BP3enlR.png',
+    register: 'https://iili.io/BP3ODMb.png',
+    help: 'https://iili.io/BP3OOut.png',
+    ranksInfo: 'https://iili.io/BP3OQte.png',
+    profileHistory: 'https://iili.io/BP3Oktn.png',
+    leaderboardAp: 'https://iili.io/BP3OSMG.png',
+    leaderboardSp: 'https://iili.io/BP3OUPf.png',
+    leaderboardYen: 'https://iili.io/BP3O6S2.png',
+    leaderboardKrw: 'https://iili.io/BP3O4cl.png',
+    addAp: 'https://iili.io/BP3OY8B.png',
+    addCurrency: 'https://iili.io/BP3O7aV.png',
+    addSp: 'https://iili.io/BP3OA6x.png',
+    addStyle: 'https://iili.io/BP3O53Q.png',
+    deductCurrency: 'https://iili.io/BP3Olu1.png',
+    deleteStyle: 'https://iili.io/BP3O1Zg.png',
+    deleteUser: 'https://iili.io/BP3OGna.png',
+    exchange: 'https://iili.io/BP3OGna.png',
+    giveItem: 'https://iili.io/BP3Ohap.png',
+    giveStyle: 'https://iili.io/BP3Oj8N.png',
+    removePlayerStyle: 'https://iili.io/BP3ObPj.png',
+    setAp: 'https://iili.io/BP3OpKx.png',
+    setApMultiplier: 'https://iili.io/BP3eJHB.png',
+    setAvatar: 'https://iili.io/BP3OycQ.png',
+    setCurrency: 'https://iili.io/BP3e9SV.png',
+    setRank: 'https://iili.io/BP3edAP.png',
+    setSp: 'https://iili.io/BP3e3DF.png',
+    setSpMultiplier: 'https://iili.io/BP3edAP.png',
+    slot: 'https://iili.io/BP3eKog.png',
+    slots: 'https://iili.io/BP3eqiJ.png',
+    use: 'https://iili.io/BP3ezHN.png',
+    logDisable: 'https://iili.io/BP3Oi9S.png',
+    logEnable: 'https://iili.io/BP3OsA7.png',
 };
 
-export function createSuccessEmbed(title, description) {
+export function createSuccessEmbed(title, description, bannerKey = 'default') {
     return new EmbedBuilder()
-        .setColor(0x0099FF)
-        .setTitle(`✅ ${title}`)
+        .setColor(0xB209D4)
+        .setTitle(`<:37plus:1497656766459281428>  ${title}`)
         .setDescription(description)
-        .setImage(BANNERS.default)
+        .setImage(BANNERS[bannerKey] || BANNERS.default)
         .setTimestamp();
 }
 
 export function createErrorEmbed(title, description) {
     return new EmbedBuilder()
-        .setColor(0xFF0000)
-        .setTitle(`❌ ${title}`)
+        .setColor(0xB209D4)
+        .setTitle(`<:38minus:1497656812772655154>  ${title}`)
         .setDescription(description)
         .setImage(BANNERS.error)
         .setTimestamp();
 }
 
-export function createInfoEmbed(title, description) {
+export function createInfoEmbed(title, description, bannerKey = 'default') {
     return new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0xB209D4)
         .setTitle(title)
         .setDescription(description)
-        .setImage(BANNERS.default)
+        .setImage(BANNERS[bannerKey] || BANNERS.default)
         .setTimestamp();
 }
 
 export function createCooldownEmbed(actionName, unixTimestamp) {
     return new EmbedBuilder()
-        .setColor(0xF1C40F)
-        .setTitle(`⏳ ${actionName}: cooldown`)
+        .setColor(0xB209D4)
+        .setTitle(`⏳ ${actionName}: кулдаун`)
         .setDescription(`Следующее действие будет доступно <t:${unixTimestamp}:R>.\nТочное время: <t:${unixTimestamp}:F>`)
         .setImage(BANNERS.cooldown)
         .setTimestamp();
@@ -55,6 +86,10 @@ export function createModernProfileEmbed(player, user, history = []) {
     const rankValue = player.rank || 'Нет ранга';
     const apMultiplier = Number(player.ap_multiplier || 100);
     const spMultiplier = Number(player.sp_multiplier || 100);
+    const apExpires = Number(player.ap_multiplier_expires_at || 0);
+    const spExpires = Number(player.sp_multiplier_expires_at || 0);
+    const apExpireText = apExpires > 0 ? ` (до <t:${apExpires}:R>)` : '';
+    const spExpireText = spExpires > 0 ? ` (до <t:${spExpires}:R>)` : '';
     const historyText = history.length > 0
         ? history.map((entry) => {
             const deltaSign = entry.delta >= 0 ? '+' : '';
@@ -64,17 +99,17 @@ export function createModernProfileEmbed(player, user, history = []) {
         : 'Изменений пока нет';
 
     return new EmbedBuilder()
-        .setColor(0x5865F2)
+        .setColor(0xB209D4)
         .setTitle(`🧬 Профиль: ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .addFields(
             { name: '🏢 Организация', value: player.organization || 'Не указана', inline: true },
-            { name: '👑 Ранг', value: rankValue, inline: true },
-            { name: '⚡ AP', value: `${player.ap || 0}`, inline: true },
-            { name: '🥋 SP (total)', value: `${player.total_sp || 0}`, inline: true },
-            { name: '💰 KRW', value: `${Number(player.krw || 0).toLocaleString('ru-RU')}`, inline: true },
-            { name: '💴 YEN', value: `${Number(player.yen || 0).toLocaleString('ru-RU')}`, inline: true },
-            { name: '📈 Множители', value: `AP: **${apMultiplier}%**\nSP: **${spMultiplier}%**`, inline: true },
+            { name: '<:13medal:1494708705759989760>  Ранг', value: rankValue, inline: true },
+            { name: '<:AP28112025:1443994380670337245>  AP', value: `${player.ap || 0}`, inline: true },
+            { name: '<:SP28112025:1443994403604533268>  SP (всего)', value: `${player.total_sp || 0}`, inline: true },
+            { name: '<:Flag_of_South_Korea:1438985777949179935>  KRW', value: `${Number(player.krw || 0).toLocaleString('ru-RU')}`, inline: true },
+            { name: '<:2640japanflag:1438980353925714081>  YEN', value: `${Number(player.yen || 0).toLocaleString('ru-RU')}`, inline: true },
+            { name: '<:14LightningPurple:1494708639473074277>  Множители', value: `AP: **${apMultiplier}%**${apExpireText}\nSP: **${spMultiplier}%**${spExpireText}`, inline: true },
             { name: '🕓 Последние изменения', value: historyText, inline: false }
         )
         .setFooter({ text: `ID: ${player.id}` })
@@ -83,19 +118,19 @@ export function createModernProfileEmbed(player, user, history = []) {
 
 export function createLeaderboardEmbed(title, description, sortBy) {
     const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0xB209D4)
         .setTitle(title)
         .setDescription(description)
         .setTimestamp();
     
     if (sortBy === 'ap') {
-        embed.setImage('https://s.iimg.su/s/22/uUNAXW5xTskOqP8qqHauAb5eSud6yn7mpUFh91Qj.jpg');
+        embed.setImage(BANNERS.leaderboardAp);
     } else if (sortBy === 'sp') {
-        embed.setImage('https://s.iimg.su/s/22/uLyAz19xZcYEibwhCNcyjlRjHJhicEGazYqGob5B.jpg');
+        embed.setImage(BANNERS.leaderboardSp);
     } else if (sortBy === 'krw') {
-        embed.setImage('https://s.iimg.su/s/22/uAHetLrx0gHhdpdgNEk0sz5rXNryIiakpM4NOC2i.jpg');
+        embed.setImage(BANNERS.leaderboardKrw);
     } else if (sortBy === 'yen') {
-        embed.setImage('https://s.iimg.su/s/22/umoD00txjt1iM7PD84VYYbh5EMcNXMFHU09ztUYR.jpg');
+        embed.setImage(BANNERS.leaderboardYen);
     }
     
     return embed;
@@ -103,8 +138,8 @@ export function createLeaderboardEmbed(title, description, sortBy) {
 
 export function createTrainEmbed(title, description) {
     return new EmbedBuilder()
-        .setColor(0x0099FF)
-        .setTitle(`✅ ${title}`)
+        .setColor(0xB209D4)
+        .setTitle(`<:37plus:1497656766459281428>  ${title}`)
         .setDescription(description)
         .setImage(BANNERS.train)
         .setTimestamp();
@@ -112,8 +147,8 @@ export function createTrainEmbed(title, description) {
 
 export function createSocialRPEmbed(title, description) {
     return new EmbedBuilder()
-        .setColor(0x0099FF)
-        .setTitle(`✅ ${title}`)
+        .setColor(0xB209D4)
+        .setTitle(`<:37plus:1497656766459281428>  ${title}`)
         .setDescription(description)
         .setImage(BANNERS.social)
         .setTimestamp();
@@ -121,8 +156,8 @@ export function createSocialRPEmbed(title, description) {
 
 export function createPayEmbed(title, description) {
     return new EmbedBuilder()
-        .setColor(0x0099FF)
-        .setTitle(`✅ ${title}`)
+        .setColor(0xB209D4)
+        .setTitle(`<:37plus:1497656766459281428>  ${title}`)
         .setDescription(description)
         .setImage(BANNERS.pay)
         .setTimestamp();
@@ -130,7 +165,7 @@ export function createPayEmbed(title, description) {
 
 export function createInventoryEmbed(title, description) {
     return new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0xB209D4)
         .setTitle(title)
         .setDescription(description)
         .setImage(BANNERS.inventory)
@@ -139,16 +174,16 @@ export function createInventoryEmbed(title, description) {
 
 export function createRegisterEmbed(title, description) {
     return new EmbedBuilder()
-        .setColor(0x0099FF)
-        .setTitle(`✅ ${title}`)
+        .setColor(0xB209D4)
+        .setTitle(`<:37plus:1497656766459281428>  ${title}`)
         .setDescription(description)
-        .setImage(BANNERS.default)
+        .setImage(BANNERS.register)
         .setTimestamp();
 }
 
 export function createStylesListEmbed(title, description, page = 1, totalPages = 1) {
     const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0xB209D4)
         .setTitle(title)
         .setDescription(description)
         .setImage(BANNERS.stylesList)
@@ -193,7 +228,7 @@ export function createProfileMainPage(player, user) {
         }
     }
     const embed = new EmbedBuilder()
-        .setColor(0x5865F2)
+        .setColor(0xB209D4)
         .setTitle(`🧬 Профиль — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .setImage(BANNERS.profile)
@@ -201,20 +236,27 @@ export function createProfileMainPage(player, user) {
 
     embed.addFields({ name: '🟦 Активный слот', value: `Слот №${slotNumber}`, inline: true });
     embed.addFields({ name: '🏢 Организация', value: player.organization || 'Не указана', inline: true });
-    embed.addFields({ name: '👑 Ранг', value: player.rank || 'Нет ранга', inline: true });
-    embed.addFields({ name: '⚡ Очки способностей (AP)', value: `${player.ap} AP`, inline: true });
-    embed.addFields({ name: '🎯 Техники', value: `${Math.floor(player.ap / 100)}`, inline: true });
-    embed.addFields({ name: '📈 AP / SP', value: `${player.ap_multiplier || 100}% / ${player.sp_multiplier || 100}%`, inline: true });
+    embed.addFields({ name: '<:13medal:1494708705759989760>  Ранг', value: player.rank || 'Нет ранга', inline: true });
+    embed.addFields({ name: '<:AP28112025:1443994380670337245>  Очки способностей (AP)', value: `${player.ap} AP`, inline: true });
+    const apMult = Number(player.ap_multiplier || 100);
+    const spMult = Number(player.sp_multiplier || 100);
+    const apExp = Number(player.ap_multiplier_expires_at || 0);
+    const spExp = Number(player.sp_multiplier_expires_at || 0);
+    let multText = `AP: **${apMult}%**`;
+    if (apExp > 0) multText += ` (до <t:${apExp}:R>)`;
+    multText += ` / SP: **${spMult}%**`;
+    if (spExp > 0) multText += ` (до <t:${spExp}:R>)`;
+    embed.addFields({ name: '<:14LightningPurple:1494708639473074277>  Множители', value: multText, inline: true });
 
     if (player.unlocked_avatar) {
-        embed.addFields({ name: '🌟 Статус', value: 'Avatar/Embodiment разблокирован', inline: false });
+        embed.addFields({ name: '🌟 Статус', value: 'Олицетворение достигнуто', inline: false });
     }
 
     if (player.krw > 0 || player.yen > 0) {
         let currencyText = '';
-        if (player.krw > 0) currencyText += `💵 **${player.krw.toLocaleString('ru-RU')}** KRW\n`;
-        if (player.yen > 0) currencyText += `💴 **${player.yen.toLocaleString('ru-RU')}** ¥`;
-        embed.addFields({ name: '💰 Валюта', value: currencyText || 'Нет валюты', inline: false });
+        if (player.krw > 0) currencyText += `<:Flag_of_South_Korea:1438985777949179935>  **${player.krw.toLocaleString('ru-RU')}** KRW\n`;
+        if (player.yen > 0) currencyText += `<:2640japanflag:1438980353925714081>  **${player.yen.toLocaleString('ru-RU')}** ¥`;
+        embed.addFields({ name: '<:money:1494767683244265652>  Валюта', value: currencyText || 'Нет валюты', inline: false });
     }
 
     embed.setFooter({ text: `ID: ${player.id} • Страница 1/4` });
@@ -224,7 +266,7 @@ export function createProfileMainPage(player, user) {
 
 export function createProfileAPSPPage(player, user, totalSP = 0) {
     const embed = new EmbedBuilder()
-        .setColor(0x5865F2)
+        .setColor(0xB209D4)
         .setTitle(`📊 Прогресс — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .setImage(BANNERS.progress)
@@ -236,14 +278,23 @@ export function createProfileAPSPPage(player, user, totalSP = 0) {
     
     const apBar = createProgressBar(progressInRange, 100, 20);
     embed.addFields({ 
-        name: '⚡ Прогресс к следующей технике', 
-        value: `${apBar}\n**${player.ap}** AP (следующая: ${nextMilestone} AP)`,
+        name: '⚡ Прогресс AP', 
+        value: `${apBar}\n**${player.ap}** AP (следующая отметка: ${nextMilestone} AP)`,
         inline: false 
     });
     
     embed.addFields({ name: '🥋 Всего SP', value: `${totalSP} SP`, inline: true });
-    embed.addFields({ name: '🎯 Техник разблокировано', value: `${Math.floor(player.ap / 100)}`, inline: true });
-    
+
+    const apMult = Number(player.ap_multiplier || 100);
+    const spMult = Number(player.sp_multiplier || 100);
+    const apExp = Number(player.ap_multiplier_expires_at || 0);
+    const spExp = Number(player.sp_multiplier_expires_at || 0);
+    let multText = `AP: **${apMult}%**`;
+    if (apExp > 0) multText += ` (до <t:${apExp}:R>)`;
+    multText += `\nSP: **${spMult}%**`;
+    if (spExp > 0) multText += ` (до <t:${spExp}:R>)`;
+    embed.addFields({ name: '📈 Множители', value: multText, inline: true });
+
     embed.setFooter({ text: `ID: ${player.id} • Страница 2/4` });
     
     return embed;
@@ -251,23 +302,23 @@ export function createProfileAPSPPage(player, user, totalSP = 0) {
 
 export function createProfileBalancePage(player, user) {
     const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
-        .setTitle(`💰 Баланс — ${player.character_name || player.username}`)
+        .setColor(0xB209D4)
+        .setTitle(`<:38126donatorpurple:1456772668572434443>  Баланс — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .setImage(BANNERS.balance)
         .setTimestamp();
     
     let balanceText = '';
     if (player.krw > 0) {
-        balanceText += `💵 **${player.krw.toLocaleString('ru-RU')}** KRW\n`;
+        balanceText += `<:Flag_of_South_Korea:1438985777949179935>  **${player.krw.toLocaleString('ru-RU')}** KRW\n`;
     } else {
-        balanceText += `💵 **0** KRW\n`;
+        balanceText += `<:Flag_of_South_Korea:1438985777949179935>  **0** KRW\n`;
     }
     
     if (player.yen > 0) {
-        balanceText += `💴 **${player.yen.toLocaleString('ru-RU')}** ¥`;
+        balanceText += `<:2640japanflag:1438980353925714081>  **${player.yen.toLocaleString('ru-RU')}** ¥`;
     } else {
-        balanceText += `💴 **0** ¥`;
+        balanceText += `<:2640japanflag:1438980353925714081>  **0** ¥`;
     }
     
     embed.addFields({ name: '📊 Валюты', value: balanceText, inline: false });
@@ -278,7 +329,7 @@ export function createProfileBalancePage(player, user) {
 
 export function createProfileStylesPage(player, styles, user, page = 0) {
     const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0xB209D4)
         .setTitle(`🥋 Боевые стили — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .setImage(BANNERS.styles)
@@ -498,11 +549,11 @@ export function createProfileHistoryPage(player, user, history = []) {
         : 'Изменений пока нет';
 
     return new EmbedBuilder()
-        .setColor(0x5865F2)
+        .setColor(0xB209D4)
         .setTitle(`🕓 История изменений — ${player.character_name || player.username}`)
         .setThumbnail(player.character_avatar || user.displayAvatarURL({ dynamic: true }))
         .setDescription(historyText)
-        .setImage(BANNERS.progress)
+        .setImage(BANNERS.profileHistory)
         .setFooter({ text: `ID: ${player.id} • Страница 4/4` })
         .setTimestamp();
 }

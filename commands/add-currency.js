@@ -90,7 +90,7 @@ export async function execute(interaction) {
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('Валюта добавлена',
                 `Добавлено **${amount.toLocaleString('ru-RU')} ${currencySymbol}** игроку **${player.character_name || player.username}**.\n\n` +
-                `Новый баланс: **${newAmount.toLocaleString('ru-RU')} ${currencySymbol}**`)],
+                `Новый баланс: **${newAmount.toLocaleString('ru-RU')} ${currencySymbol}**`, 'addCurrency')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

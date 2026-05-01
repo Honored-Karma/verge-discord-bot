@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, addAP } from '../utils/dataManager.js';
-import { checkCooldown, validateTrainingText, checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
+import { checkCooldown, validateTrainingText, checkGlobalCooldown, autoDeleteMessageShort, autoDeleteMessageLong } from '../utils/cooldowns.js';
 import { createTrainEmbed, createErrorEmbed, createCooldownEmbed } from '../utils/embeds.js';
 import { progressBar, getAPProgress } from '../utils/progressBar.js';
 import { logCommand } from '../utils/logs.js';
@@ -22,7 +22,7 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
         const msg = await interaction.reply({
-            embeds: [createCooldownEmbed('Train', retryAt)],
+            embeds: [createCooldownEmbed('Тренировка', retryAt)],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -69,7 +69,7 @@ export async function execute(interaction) {
     if (cooldownCheck.onCooldown) {
         const retryAt = Math.floor(Date.now() / 1000) + Math.ceil(cooldownCheck.remaining / 1000);
         const msg = await interaction.reply({
-            embeds: [createCooldownEmbed('Train', retryAt)],
+            embeds: [createCooldownEmbed('Тренировка', retryAt)],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -93,21 +93,23 @@ export async function execute(interaction) {
     const apProgress = getAPProgress(newAP);
     const progressText = progressBar(apProgress.current, apProgress.max, 20);
     
+    const truncatedText = trainingText.length > 900 ? trainingText.slice(0, 900) + '...' : trainingText;
+
     const embed = createTrainEmbed('Тренировка завершена!', 
         `**📊 Получено AP:**\n` +
         `Базовое значение: **${TRAIN_AP_REWARD} AP**\n` +
         `Множитель: **${multiplier}%**\n` +
         `Итого получено: **+${actualAPGained} AP**\n\n` +
         `**Всего AP:** ${newAP}\n` +
-        `**Техник разблокировано:** ${apProgress.techniques}\n` +
         `**Следующая тренировка:** <t:${Math.floor((Date.now() + TRAIN_COOLDOWN) / 1000)}:R>\n\n` +
-        `**Прогресс к следующей технике:**\n${progressText}`
+        `**Прогресс AP:**\n${progressText}`
     );
+    embed.addFields({ name: '📝 Текст тренировки', value: truncatedText });
     
     if (newAP >= 1000) {
-        embed.setDescription(embed.data.description + '\n\n🌟 **Вы достигли 1000 AP! Avatar/Embodiment доступен!**');
+        embed.setDescription(embed.data.description + '\n\n🌟 **Олицетворение достигнуто!**');
     }
     
     const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
-    autoDeleteMessageShort(msg);
+    autoDeleteMessageLong(msg);
 }

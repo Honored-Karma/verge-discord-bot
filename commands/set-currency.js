@@ -92,7 +92,7 @@ if (!hasCommandPermission(member, 'set-currency')) {
         
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('Валюта установлена', 
-                `Установлен баланс **${amount.toLocaleString('ru-RU')} ${currencySymbol}** для игрока **${player.character_name || player.username}**`)],
+                `Установлен баланс **${amount.toLocaleString('ru-RU')} ${currencySymbol}** для игрока **${player.character_name || player.username}**`, 'setCurrency')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

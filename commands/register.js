@@ -15,6 +15,10 @@ export const data = new SlashCommandBuilder()
         option.setName('avatar')
             .setDescription('Аватар персонажа (необязательно)')
                 .setRequired(false))
+            .addStringOption(option =>
+            option.setName('attribute_name')
+                .setDescription('Название атрибута персонажа (например: Пепел, Гром, Лёд)')
+                .setRequired(false))
             .addIntegerOption(option =>
             option.setName('slot')
                 .setDescription('Номер слота (необязательно). Если не указан — используется активный слот.')
@@ -36,6 +40,7 @@ export async function execute(interaction) {
     const username = interaction.user.username;
 
     const characterName = interaction.options.getString('character_name');
+    const attributeName = interaction.options.getString('attribute_name') || null;
     const avatarAttachment = interaction.options.getAttachment('avatar');
 
     const requestedSlot = interaction.options.getInteger('slot');
@@ -87,7 +92,7 @@ export async function execute(interaction) {
         }
     }
 
-    const success = await createPlayer(playerId, username, characterName, avatarUrl, slot);
+    const success = await createPlayer(playerId, username, characterName, avatarUrl, slot, attributeName);
 
     if (success) {
         await setActiveSlot(playerId, slot);

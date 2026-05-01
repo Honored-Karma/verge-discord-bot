@@ -18,6 +18,8 @@ async function backfillPlayerDefaults() {
         unlocked_avatar: 0,
         ap_multiplier: 100,
         sp_multiplier: 100,
+        ap_multiplier_expires_at: 0,
+        sp_multiplier_expires_at: 0,
         last_ap_change_at: 0,
         last_sp_change_at: 0,
         last_salary_paid_at: 0
@@ -134,4 +136,3 @@ export async function closeDatabase() {
 }
 
 export { connectDatabase };
-export default db;

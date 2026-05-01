@@ -42,7 +42,8 @@ export async function execute(interaction) {
         await interaction.reply({
             embeds: [createSuccessEmbed(
                 '✅ Логирование включено',
-                `Логи команд будут отправляться в <#${channelId}>.`
+                `Логи команд будут отправляться в <#${channelId}>.`,
+                'logEnable'
             )],
             flags: 64
         });

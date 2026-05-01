@@ -47,7 +47,7 @@ export async function execute(interaction) {
     
     if (success) {
         const msg = await interaction.reply({
-            embeds: [createSuccessEmbed('Стиль создан', `**${name}** был добавлен в список доступных боевых стилей!`)],
+            embeds: [createSuccessEmbed('Стиль создан', `**${name}** был добавлен в список доступных боевых стилей!`, 'addStyle')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

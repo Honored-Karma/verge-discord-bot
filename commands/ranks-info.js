@@ -6,10 +6,10 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
     const embed = new EmbedBuilder()
-        .setColor(0x5865F2)
+        .setColor(0xB209D4)
         .setTitle('📊 Ранговая система и зарплаты')
         .setDescription('Зарплата начисляется **раз в неделю** автоматически.')
-        .setImage('https://s.iimg.su/s/22/uAHetLrx0gHhdpdgNEk0sz5rXNryIiakpM4NOC2i.jpg')
+        .setImage('https://iili.io/BP3OQte.png')
         .addFields(
             {
                 name: '🏢 TENRYU (F-S, YEN/месяц)',
@@ -25,7 +25,7 @@ export async function execute(interaction) {
                 inline: false
             },
             {
-                name: '⚔️ HERO_CORPS (VI-I, KRW/месяц)',
+                name: '⚔️ Guardians (VI-I, KRW/месяц)',
                 value: [
                     'VI: 1,700,000-2,000,000 KRW',
                     'V: 2,500,000-3,200,000 KRW',
@@ -38,7 +38,7 @@ export async function execute(interaction) {
             },
             {
                 name: '🛠 Управление',
-                value: 'Админы используют `/set-rank` и выбирают организацию + ранг.\nВыплата идет в валюте организации: TENRYU -> YEN, HERO_CORPS -> KRW.',
+                value: 'Админы используют `/set-rank` и выбирают организацию + ранг.\nВыплата идет в валюте организации: TENRYU -> YEN, Guardians -> KRW.',
                 inline: false
             }
         )

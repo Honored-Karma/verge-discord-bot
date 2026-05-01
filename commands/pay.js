@@ -37,7 +37,7 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
         const msg = await interaction.reply({
-            embeds: [createCooldownEmbed('Pay', retryAt)],
+            embeds: [createCooldownEmbed('Перевод', retryAt)],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -116,7 +116,8 @@ export async function execute(interaction) {
         `Получатель: **${toPlayer.character_name || toPlayer.username}**\n` +
         `Сумма: **${amount.toLocaleString('ru-RU')} ${currencySymbol}**\n` +
         `Налог (2%): **${taxPreview.toLocaleString('ru-RU')} ${currencySymbol}**\n` +
-        `Получит: **${receivedPreview.toLocaleString('ru-RU')} ${currencySymbol}**`
+        `Получит: **${receivedPreview.toLocaleString('ru-RU')} ${currencySymbol}**`,
+        'pay'
     );
 
     const msg = await interaction.reply({
@@ -134,7 +135,7 @@ export async function execute(interaction) {
         if (i.customId === 'pay_cancel') {
             collector.stop('cancelled');
             return i.update({
-                embeds: [createInfoEmbed('Отменено', 'Перевод был отменен.')],
+                embeds: [createInfoEmbed('Отменено', 'Перевод был отменен.', 'pay')],
                 components: []
             });
         }
@@ -163,7 +164,7 @@ export async function execute(interaction) {
     collector.on('end', async (_collected, reason) => {
         if (['confirmed', 'cancelled', 'failed'].includes(reason)) return;
         await interaction.editReply({
-            embeds: [createInfoEmbed('Время вышло', 'Подтверждение перевода истекло.')],
+            embeds: [createInfoEmbed('Время вышло', 'Подтверждение перевода истекло.', 'pay')],
             components: []
         }).catch(() => {});
     });

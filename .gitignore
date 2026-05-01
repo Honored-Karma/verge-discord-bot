@@ -15,6 +15,7 @@ yarn.lock
 
 # Logs
 logs/*.log
+*.log
 
 # IDE
 .vscode/
@@ -23,6 +24,9 @@ logs/*.log
 *.swp
 *.swo
 *~
+
+# Auto-downloaded font cache
+assets/fonts/InterCyr.ttf
 
 # OS
 .DS_Store

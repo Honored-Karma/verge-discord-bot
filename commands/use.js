@@ -57,7 +57,7 @@ export async function execute(interaction) {
     if (result.success) {
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('Предмет использован', 
-                `✨ Вы успешно использовали **${result.itemName}** x${qty}`)],
+                `✨ Вы успешно использовали **${result.itemName}** x${qty}`, 'use')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

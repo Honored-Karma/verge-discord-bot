@@ -1,11 +1,11 @@
 export const ORGANIZATIONS = {
     TENRYU: 'TENRYU',
-    HERO_CORPS: 'HERO_CORPS'
+    GUARDIANS: 'GUARDIANS'
 };
 
 export const RANK_SETS = {
     [ORGANIZATIONS.TENRYU]: ['F', 'E', 'D', 'C', 'B', 'A', 'S'],
-    [ORGANIZATIONS.HERO_CORPS]: ['VI', 'V', 'IV', 'III', 'II', 'I']
+    [ORGANIZATIONS.GUARDIANS]: ['VI', 'V', 'IV', 'III', 'II', 'I']
 };
 
 // Monthly salary values converted to weekly payouts by dividing by 4.
@@ -19,7 +19,7 @@ const MONTHLY_SALARY = {
         A: { currency: 'yen', amount: 1050000 },
         S: { currency: 'yen', amount: 1900000 }
     },
-    [ORGANIZATIONS.HERO_CORPS]: {
+    [ORGANIZATIONS.GUARDIANS]: {
         VI: { currency: 'krw', amount: 1850000 },
         V: { currency: 'krw', amount: 2850000 },
         IV: { currency: 'krw', amount: 4500000 },
@@ -32,7 +32,7 @@ const MONTHLY_SALARY = {
 export function normalizeOrganization(input) {
     const value = String(input || '').trim().toUpperCase();
     if (value === ORGANIZATIONS.TENRYU || value === 'ТЕНРЮ') return ORGANIZATIONS.TENRYU;
-    if (value === ORGANIZATIONS.HERO_CORPS || value === 'ГЕРОЙСКИЙ_КОРПУС') return ORGANIZATIONS.HERO_CORPS;
+    if (value === ORGANIZATIONS.GUARDIANS || value === 'СТРАЖИ') return ORGANIZATIONS.GUARDIANS;
     return null;
 }
 

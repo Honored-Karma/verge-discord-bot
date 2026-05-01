@@ -1,10 +1,12 @@
-import { Client, Collection, Events, GatewayIntentBits } from 'discord.js';
+import { Client, Collection, Events, GatewayIntentBits, REST, Routes } from 'discord.js';
 import { config } from 'dotenv';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { readdirSync } from 'fs';
+import { createServer } from 'http';
 import { connectDatabase, closeDatabase } from './utils/db.js';
 import { startWeeklySalaryScheduler } from './services/salaryService.js';
+import { expireMultipliers } from './utils/dataManager.js';
 
 config();
 
@@ -22,28 +24,69 @@ const client = new Client({
 
 client.commands = new Collection();
 
+const token = process.env.DISCORD_TOKEN || process.env.TOKEN;
+
+if (!token) {
+    console.error('❌ No Discord token found! Please set DISCORD_TOKEN or TOKEN in your secrets.');
+    process.exit(1);
+}
+
 const commandsPath = join(__dirname, 'commands');
 const commandFiles = readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
 for (const file of commandFiles) {
     const filePath = join(commandsPath, file);
-    const command = await import(`file://${filePath}`);
-    if ('data' in command && 'execute' in command) {
-        if (client.commands.has(command.data.name)) {
-            console.warn(`⚠️  Duplicate command detected: ${command.data.name}. Skipping.`);
-            continue;
+    try {
+        const command = await import(pathToFileURL(filePath).href);
+        if ('data' in command && 'execute' in command) {
+            if (client.commands.has(command.data.name)) {
+                console.warn(`⚠️  Duplicate command detected: ${command.data.name}. Skipping.`);
+                continue;
+            }
+            client.commands.set(command.data.name, command);
+            console.log(`✅ Loaded command: ${command.data.name}`);
+        } else {
+            console.log(`⚠️  Warning: ${file} is missing required "data" or "execute" property.`);
         }
-        client.commands.set(command.data.name, command);
-        console.log(`✅ Loaded command: ${command.data.name}`);
-    } else {
-        console.log(`⚠️  Warning: ${file} is missing required "data" or "execute" property.`);
+    } catch (err) {
+        console.error(`❌ Failed to load command ${file}:`, err);
     }
 }
 
-client.once(Events.ClientReady, readyClient => {
+client.once(Events.ClientReady, async readyClient => {
     console.log(`🤖 Bot is ready! Logged in as ${readyClient.user.tag}`);
     console.log(`📊 Serving ${client.guilds.cache.size} server(s)`);
+
+    // Auto-deploy slash commands on startup
+    try {
+        const commandsJSON = [];
+        for (const [, cmd] of client.commands) {
+            commandsJSON.push(cmd.data.toJSON());
+        }
+
+        const rest = new REST().setToken(token);
+        const clientId = process.env.CLIENT_ID;
+        const guildId = process.env.GUILD_ID;
+
+        if (clientId) {
+            if (guildId) {
+                await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: commandsJSON });
+                console.log(`✅ Deployed ${commandsJSON.length} commands to guild ${guildId}`);
+            } else {
+                await rest.put(Routes.applicationCommands(clientId), { body: commandsJSON });
+                console.log(`✅ Deployed ${commandsJSON.length} commands globally`);
+            }
+        } else {
+            console.warn('⚠️  CLIENT_ID not set — skipping command deployment');
+        }
+    } catch (deployError) {
+        console.error('❌ Failed to deploy commands:', deployError);
+    }
+
     startWeeklySalaryScheduler(client);
+
+    // Periodic multiplier expiry check (every 60 seconds)
+    setInterval(() => { expireMultipliers(); }, 60_000);
 });
 
 client.on(Events.InteractionCreate, async interaction => {
@@ -85,8 +128,8 @@ client.on(Events.InteractionCreate, async interaction => {
         console.error(`❌ Error executing ${interaction.commandName}:`, error);
         
         const errorMessage = {
-            content: 'There was an error while executing this command!',
-            ephemeral: true
+            content: 'Произошла ошибка при выполнении команды!',
+            flags: 64
         };
         
         if (interaction.replied || interaction.deferred) {
@@ -105,12 +148,15 @@ process.on('unhandledRejection', error => {
     console.error('❌ Unhandled promise rejection:', error);
 });
 
-const token = process.env.DISCORD_TOKEN || process.env.TOKEN;
-
-if (!token) {
-    console.error('❌ No Discord token found! Please set DISCORD_TOKEN or TOKEN in your secrets.');
-    process.exit(1);
-}
+// Health check HTTP server for Railway / hosting platforms
+// Must start BEFORE heavy init so the platform sees an open port immediately
+const PORT = process.env.PORT || 3000;
+createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('OK');
+}).listen(PORT, () => {
+    console.log(`✅ Health check server listening on port ${PORT}`);
+});
 
 // Connect to MongoDB
 console.log('🔌 Connecting to MongoDB...');

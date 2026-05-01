@@ -16,8 +16,8 @@ export const data = new SlashCommandBuilder()
             .setDescription('Организация ранговой сетки')
             .setRequired(true)
             .addChoices(
-                { name: 'TENRYU (F-S)', value: 'TENRYU' },
-                { name: 'HERO_CORPS (VI-I)', value: 'HERO_CORPS' }
+                { name: 'ТЕНРЮ (F-S)', value: 'TENRYU' },
+                { name: 'Стражи (VI-I)', value: 'GUARDIANS' }
             ))
     .addStringOption(option =>
         option.setName('rank')
@@ -70,6 +70,6 @@ export async function execute(interaction) {
     await updatePlayer(slotPlayerId, { rank, organization });
 
     interaction.reply({
-        embeds: [createSuccessEmbed('Ранг обновлен', `Для ${targetUser.username} (Слот ${slot}) установлен ранг **${rank}** в организации **${organization}**.`)]
+        embeds: [createSuccessEmbed('Ранг обновлен', `Для ${targetUser.username} (Слот ${slot}) установлен ранг **${rank}** в организации **${organization}**.`, 'setRank')]
     });
 }

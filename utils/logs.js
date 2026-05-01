@@ -34,16 +34,16 @@ export async function logCommand({ client, guildId, channelId, userId, userTag, 
                         const logsChannel = await client.channels.fetch(logChannelDoc.channel_id);
                         if (logsChannel && logsChannel.isTextBased()) {
                             const embed = new EmbedBuilder()
-                                .setColor('#FFA500')
-                                .setTitle(`📋 Command Log: /${command}`)
+                                .setColor('#b209d4')
+                                .setTitle(`📋 Лог команды: /${command}`)
                                 .addFields(
-                                    { name: '👤 Executor', value: userTag || `<@${userId}>`, inline: true },
-                                    { name: '⏰ Time', value: `<t:${Math.floor(entry.timestamp.getTime() / 1000)}:F>`, inline: true },
-                                    { name: '💬 Channel', value: channelId ? `<#${channelId}>` : 'N/A', inline: true }
+                                    { name: '👤 Исполнитель', value: userTag || `<@${userId}>`, inline: true },
+                                    { name: '⏰ Время', value: `<t:${Math.floor(entry.timestamp.getTime() / 1000)}:F>`, inline: true },
+                                    { name: '💬 Канал', value: channelId ? `<#${channelId}>` : 'Не указан', inline: true }
                                 );
                             
                             if (targetTag) {
-                                embed.addFields({ name: '🎯 Target', value: targetTag.length > 1024 ? targetTag.slice(0, 1021) + '...' : targetTag, inline: true });
+                                embed.addFields({ name: '🎯 Цель', value: targetTag.length > 1024 ? targetTag.slice(0, 1021) + '...' : targetTag, inline: true });
                             }
                             
                             if (extra) {
@@ -52,7 +52,7 @@ export async function logCommand({ client, guildId, channelId, userId, userTag, 
                                     .join('\n');
                                 if (extraStr) {
                                     const safeExtraStr = extraStr.length > 1024 ? extraStr.slice(0, 1021) + '...' : extraStr;
-                                    embed.addFields({ name: '📝 Details', value: safeExtraStr, inline: false });
+                                    embed.addFields({ name: '📝 Подробности', value: safeExtraStr, inline: false });
                                 }
                             }
                             

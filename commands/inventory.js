@@ -25,7 +25,7 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
         const msg = await interaction.reply({
-            embeds: [createCooldownEmbed('Inventory', retryAt)],
+            embeds: [createCooldownEmbed('Инвентарь', retryAt)],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -56,7 +56,7 @@ export async function execute(interaction) {
     if (inventory.length === 0) {
         const name = player.character_name || player.username;
         const msg = await interaction.reply({
-            embeds: [createInfoEmbed('🎒 Инвентарь', `Инвентарь игрока **${name}** пуст.`)],
+            embeds: [createInfoEmbed('🎒 Инвентарь', `Инвентарь игрока **${name}** пуст.`, 'inventory')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

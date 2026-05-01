@@ -81,7 +81,7 @@ if (!hasCommandPermission(member, 'set-ap')) {
     if (success) {
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('AP обновлено', 
-                `Установлено **${amount} AP** для игрока **${player.character_name || player.username}**`)],
+                `Установлено **${amount} AP** для игрока **${player.character_name || player.username}**`, 'setAp')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

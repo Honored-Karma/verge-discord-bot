@@ -118,7 +118,7 @@ export async function execute(interaction) {
         const rank = newSP >= 2500 ? 'Мастер' : newSP >= 1000 ? 'Эксперт' : newSP >= 350 ? 'Владелец' : 'Новичок';
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('SP обновлено', 
-                `Добавлено **${amount} SP** к стилю **${style.name}** игроку **${player.character_name || player.username}**\n\nНовый баланс: **${newSP} SP** (${rank})`)],
+                `Добавлено **${amount} SP** к стилю **${style.name}** игроку **${player.character_name || player.username}**\n\nНовый баланс: **${newSP} SP** (${rank})`, 'addSp')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

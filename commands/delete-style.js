@@ -50,7 +50,7 @@ export async function execute(interaction) {
     if (success) {
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('Стиль удален', 
-                `Стиль **${styleName}** был удален вместе со всеми данными об изучении.`)],
+                `Стиль **${styleName}** был удален вместе со всеми данными об изучении.`, 'deleteStyle')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

@@ -73,7 +73,7 @@ export async function execute(interaction) {
         ? `💱 Вы обменяли **${amount.toLocaleString('ru-RU')} ¥** на **${result.received.toLocaleString('ru-RU')} ₩**\n\n**Курс:** 1 ¥ = 9.4 ₩`
         : `💱 Вы обменяли **${amount.toLocaleString('ru-RU')} ₩** на **${result.received.toLocaleString('ru-RU')} ¥**\n\n**Курс:** 1 ¥ = 9.4 ₩`;
     
-    const embed = createSuccessEmbed('Обмен успешен!', description);
+    const embed = createSuccessEmbed('Обмен успешен!', description, 'exchange');
     
     const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
     autoDeleteMessageShort(msg);

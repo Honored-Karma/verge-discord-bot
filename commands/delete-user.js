@@ -58,7 +58,7 @@ export async function execute(interaction) {
     if (success) {
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('Профиль удален', 
-                `Профиль **${player.character_name}** из слота **${slot}** успешно удален.\nИгрок может переучесться командой \`/register\`.`)],
+                `Профиль **${player.character_name}** из слота **${slot}** успешно удален.\nИгрок может переучесться командой \`/register\`.`, 'deleteUser')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
