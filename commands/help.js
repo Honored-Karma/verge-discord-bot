@@ -90,7 +90,7 @@ function createMainHelp() {
       {
         name: "🥋 Тренировка",
         value:
-          "`/train <style>` - Тренироваться в стиле\n`/social-rp <action>` - Социальный RP\n`/styles-list` - Список стилей",
+          "`/train-ap` — Тренировка для получения AP\n`/train-sp <style>` — Тренировка стиля для SP\n`/social-rp` — Социальный RP (+AP)\n`/styles-list` — Список боевых стилей",
         inline: false,
       },
       {
@@ -152,25 +152,54 @@ function createProfileHelp() {
 function createTrainingHelp() {
   return new EmbedBuilder()
     .setColor("#b209d4")
-    .setTitle("🥋 Команды тренировки и боевых стилей")
+    .setTitle("🥋 Тренировка и боевые стили")
     .setImage("https://iili.io/BP3OOut.png")
     .addFields(
       {
-        name: "/train <style>",
+        name: "/train-ap",
         value:
-          "✅ **Тренироваться в боевом стиле**\nПараметры:\n• `style` - Название стиля\n\n⚡ Награды:\n• +10 AP за тренировку\n• +30 SP в выбранный стиль\n• Кулдаун: 5 часов\n\n💡 Совет: Тренируйтесь в разных стилях для лучшего прогресса!",
+          "✅ **Физическая тренировка — получить AP**\n" +
+          "Параметры:\n" +
+          "• `text` — текст тренировки (мин. **800 символов**)\n\n" +
+          "⚡ Награды:\n" +
+          "• +10 AP (базовое значение × множитель)\n" +
+          "• Множитель: базовый% + бонус ранга + бонус активности\n" +
+          "• Кулдаун: **5 часов**\n\n" +
+          "📝 Результат содержит твой текст тренировки",
         inline: false,
       },
       {
-        name: "/social-rp <action>",
+        name: "/train-sp",
         value:
-          '✅ **Социальное ролевое действие**\nПараметры:\n• `action` - Описание действия\n\n⚡ Награды:\n• +20 AP за RP\n• +15 SP в случайный стиль\n• Кулдаун: 12 часов\n\n🎭 Примеры:\n• "медитирую в святилище"\n• "практикую с партнёром"',
+          "✅ **Тренировка боевого стиля — получить SP**\n" +
+          "Параметры:\n" +
+          "• `style` — название боевого стиля\n" +
+          "• `text` — текст тренировки (мин. **800 символов**)\n\n" +
+          "⚡ Награды:\n" +
+          "• +30 SP в выбранный стиль (базовое × множитель)\n" +
+          "• Кулдаун: **5 часов** *(отдельный от /train-ap)*\n\n" +
+          "💡 Пример: `/train-sp` style:`Muay Thai`\n" +
+          "📋 Список стилей: `/styles-list`",
+        inline: false,
+      },
+      {
+        name: "/social-rp",
+        value:
+          "✅ **Социальное RP — получить AP**\n" +
+          "Параметры:\n" +
+          "• `text` — описание действия (мин. **50 символов**)\n\n" +
+          "⚡ Награды:\n" +
+          "• +10 AP (с учётом множителя)\n" +
+          "• Кулдаун: **12 часов**\n\n" +
+          '🎭 Примеры: *"медитирую в святилище"*, *"практикую с партнёром"*',
         inline: false,
       },
       {
         name: "/styles-list",
         value:
-          "✅ **Просмотреть все боевые стили**\n\n🥋 В боте доступны 8+ стилей:\n• Aikido: reverse\n• Blood Taekwondo\n• Muay Thai\n• Dark Jiu-Jitsu\n• Sun Kendo\n• Qi boxing\n• Wolgwang Sword Style\n• Kyokushin Karate\n\n💡 Совет: Каждый стиль имеет уникальные свойства!",
+          "✅ **Просмотреть все боевые стили**\n\n" +
+          "🥋 Показывает все стили из базы данных\n" +
+          "💡 Используй точное название стиля в `/train-sp`",
         inline: false,
       },
     )
@@ -221,7 +250,18 @@ function createAdminHelp() {
       {
         name: "/announce <message> <target>",
         value:
-          "✅ **НОВОЕ!** Массовая рассылка в ЛС\nОтправить объявление в embed формате участникам сервера\n📝 Параметры: message, target, user, title, color, image\n💡 См. `/help` для подробностей",
+          "✅ **Массовая рассылка в ЛС**\nОтправить объявление в embed формате участникам сервера\n📝 Параметры: message, target, user, title, color, image",
+        inline: false,
+      },
+      {
+        name: "/purge-offtop <prefix> <count> [user]",
+        value:
+          "✅ **Удалить оффтоп-сообщения по префиксу**\n" +
+          "Параметры:\n" +
+          "• `prefix` — префикс оффтопа: `((` или `//` и т.д.\n" +
+          "• `count` — сколько сообщений просматривать (1–100)\n" +
+          "• `user` *(необязательно)* — только сообщения этого участника\n\n" +
+          "🗑️ Бот удаляет все совпавшие сообщения, результат виден только администратору",
         inline: false,
       },
       {
@@ -299,7 +339,7 @@ function createAdminHelp() {
 function createAllCommandsHelp() {
   return new EmbedBuilder()
     .setColor("#b209d4")
-    .setTitle("📚 Полный список всех команд (26)")
+    .setTitle("📚 Полный список всех команд (28)")
     .setImage("https://iili.io/BP3OOut.png")
     .addFields(
       {
@@ -308,8 +348,8 @@ function createAllCommandsHelp() {
         inline: true,
       },
       {
-        name: "🥋 Тренировка (3)",
-        value: "/train\n/social-rp\n/styles-list",
+        name: "🥋 Тренировка (4)",
+        value: "/train-ap\n/train-sp\n/social-rp\n/styles-list",
         inline: true,
       },
       {
@@ -318,9 +358,9 @@ function createAllCommandsHelp() {
         inline: true,
       },
       {
-        name: "🛡️ Админ (14)",
+        name: "🛡️ Админ (15)",
         value:
-          "/announce\n/add-ap\n/set-ap\n/add-sp\n/set-sp\n/add-currency\n/set-currency\n/add-style\n/delete-style\n/give-item\n/give-style\n/set-ap-multiplier\n/set-sp-multiplier\n/delete-user",
+          "/announce\n/purge-offtop\n/add-ap\n/set-ap\n/add-sp\n/set-sp\n/add-currency\n/set-currency\n/add-style\n/delete-style\n/give-item\n/give-style\n/set-ap-multiplier\n/set-sp-multiplier\n/delete-user",
         inline: true,
       },
       {
@@ -330,7 +370,7 @@ function createAllCommandsHelp() {
       },
       {
         name: "🔍 Всего команд",
-        value: "**26 команд** - полный функционал RPG бота!",
+        value: "**28 команд** — полный функционал RPG бота!",
         inline: true,
       },
     )
