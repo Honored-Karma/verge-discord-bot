@@ -290,6 +290,24 @@ export async function createPlayer(
   }
 }
 
+/**
+ * Вычисляет эффективный множитель AP для игрока — ровно так же, как это делает addAP.
+ * Используйте для отображения, чтобы избежать погрешности обратного вычисления.
+ */
+export function getEffectiveAPMultiplier(player) {
+  const now = Math.floor(Date.now() / 1000);
+  let apMultiplier = Number(player.ap_multiplier || 100);
+  if (
+    player.ap_multiplier_expires_at > 0 &&
+    now >= player.ap_multiplier_expires_at
+  ) {
+    apMultiplier = 100;
+  }
+  const dynamicBonus =
+    getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
+  return apMultiplier + dynamicBonus;
+}
+
 export async function addAP(playerId, amount, actionType = "train") {
   try {
     const db = getDB();
@@ -933,17 +951,15 @@ export async function setAPMultiplier(
     const validMultiplier = Math.max(50, Math.min(500, multiplier));
     const expiresAt =
       durationSeconds > 0 ? Math.floor(Date.now() / 1000) + durationSeconds : 0;
-    await db
-      .collection("players")
-      .updateOne(
-        { id: playerId },
-        {
-          $set: {
-            ap_multiplier: validMultiplier,
-            ap_multiplier_expires_at: expiresAt,
-          },
+    await db.collection("players").updateOne(
+      { id: playerId },
+      {
+        $set: {
+          ap_multiplier: validMultiplier,
+          ap_multiplier_expires_at: expiresAt,
         },
-      );
+      },
+    );
     const durationText =
       expiresAt > 0 ? ` на ${formatDuration(durationSeconds)}` : " (бессрочно)";
     logAdminAction(
@@ -984,17 +1000,15 @@ export async function setSPMultiplier(
     const validMultiplier = Math.max(50, Math.min(500, multiplier));
     const expiresAt =
       durationSeconds > 0 ? Math.floor(Date.now() / 1000) + durationSeconds : 0;
-    await db
-      .collection("players")
-      .updateOne(
-        { id: playerId },
-        {
-          $set: {
-            sp_multiplier: validMultiplier,
-            sp_multiplier_expires_at: expiresAt,
-          },
+    await db.collection("players").updateOne(
+      { id: playerId },
+      {
+        $set: {
+          sp_multiplier: validMultiplier,
+          sp_multiplier_expires_at: expiresAt,
         },
-      );
+      },
+    );
     const durationText =
       expiresAt > 0 ? ` на ${formatDuration(durationSeconds)}` : " (бессрочно)";
     logAdminAction(

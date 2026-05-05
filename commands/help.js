@@ -90,7 +90,7 @@ function createMainHelp() {
       {
         name: "🥋 Тренировка",
         value:
-          "`/train-ap` — Тренировка для получения AP\n`/train-sp <style>` — Тренировка стиля для SP\n`/social-rp` — Социальный RP (+AP)\n`/styles-list` — Список боевых стилей",
+          "`/train-ap` — Тренировка для получения AP\n`/social-rp` — Социальный RP (+AP)\n`/styles-list` — Список боевых стилей",
         inline: false,
       },
       {
@@ -166,20 +166,6 @@ function createTrainingHelp() {
           "• Множитель: базовый% + бонус ранга + бонус активности\n" +
           "• Кулдаун: **5 часов**\n\n" +
           "📝 Результат содержит твой текст тренировки",
-        inline: false,
-      },
-      {
-        name: "/train-sp",
-        value:
-          "✅ **Тренировка боевого стиля — получить SP**\n" +
-          "Параметры:\n" +
-          "• `style` — название боевого стиля\n" +
-          "• `text` — текст тренировки (мин. **800 символов**)\n\n" +
-          "⚡ Награды:\n" +
-          "• +30 SP в выбранный стиль (базовое × множитель)\n" +
-          "• Кулдаун: **5 часов** *(отдельный от /train-ap)*\n\n" +
-          "💡 Пример: `/train-sp` style:`Muay Thai`\n" +
-          "📋 Список стилей: `/styles-list`",
         inline: false,
       },
       {
@@ -339,7 +325,7 @@ function createAdminHelp() {
 function createAllCommandsHelp() {
   return new EmbedBuilder()
     .setColor("#b209d4")
-    .setTitle("📚 Полный список всех команд (28)")
+    .setTitle("📚 Полный список всех команд (27)")
     .setImage("https://iili.io/BP3OOut.png")
     .addFields(
       {
@@ -348,8 +334,8 @@ function createAllCommandsHelp() {
         inline: true,
       },
       {
-        name: "🥋 Тренировка (4)",
-        value: "/train-ap\n/train-sp\n/social-rp\n/styles-list",
+        name: "🥋 Тренировка (3)",
+        value: "/train-ap\n/social-rp\n/styles-list",
         inline: true,
       },
       {
@@ -370,7 +356,7 @@ function createAllCommandsHelp() {
       },
       {
         name: "🔍 Всего команд",
-        value: "**28 команд** — полный функционал RPG бота!",
+        value: "**27 команд** — полный функционал RPG бота!",
         inline: true,
       },
     )
