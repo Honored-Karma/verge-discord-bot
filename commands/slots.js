@@ -81,7 +81,7 @@ export async function execute(interaction) {
         );
 
         await i.update({
-            embeds: [createInfoEmbed('Ваши слоты', updated, 'slots']),
+            embeds: [createInfoEmbed('Ваши слоты', updated, 'slots')],
             components: [nextRow]
         });
     });
