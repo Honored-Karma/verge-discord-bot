@@ -131,15 +131,88 @@ function emptyBox(ctx, x, y, w, h, r = 8) {
     ctx.restore();
 }
 
-async function fetchImage(url, timeoutMs = 4000) {
+// ── Image cache & robust fetcher ─────────────────────────────────────
+// Keeps successfully decoded avatars in memory so transient CDN hiccups
+// don't cause the avatar to vanish on repeated /profile renders.
+const IMAGE_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
+const IMAGE_CACHE_MAX = 200;
+const NEG_CACHE_TTL_MS = 60 * 1000;        // 1 min for failures
+const imageCache = new Map();              // url -> { img, expires }
+const negativeCache = new Map();           // url -> expires
+
+function cacheGet(url) {
+    const e = imageCache.get(url);
+    if (!e) return null;
+    if (e.expires < Date.now()) { imageCache.delete(url); return null; }
+    // Refresh LRU position
+    imageCache.delete(url);
+    imageCache.set(url, e);
+    return e.img;
+}
+
+function cacheSet(url, img) {
+    if (imageCache.size >= IMAGE_CACHE_MAX) {
+        const firstKey = imageCache.keys().next().value;
+        if (firstKey !== undefined) imageCache.delete(firstKey);
+    }
+    imageCache.set(url, { img, expires: Date.now() + IMAGE_CACHE_TTL_MS });
+}
+
+function negGet(url) {
+    const exp = negativeCache.get(url);
+    if (!exp) return false;
+    if (exp < Date.now()) { negativeCache.delete(url); return false; }
+    return true;
+}
+
+function negSet(url) {
+    negativeCache.set(url, Date.now() + NEG_CACHE_TTL_MS);
+}
+
+async function fetchImageOnce(url, timeoutMs) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), timeoutMs);
-        const res = await fetch(url, { signal: ctrl.signal });
+        const res = await fetch(url, {
+            signal: ctrl.signal,
+            redirect: 'follow',
+            headers: {
+                // Some CDNs (imgur, etc.) reject requests without UA/Accept.
+                'User-Agent': 'Mozilla/5.0 (compatible; VergeBot/1.0; +https://discord.com)',
+                'Accept': 'image/*,*/*;q=0.8',
+            },
+        });
+        if (!res.ok) return { ok: false, status: res.status };
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (!buf.length) return { ok: false, status: 0 };
+        const img = await loadImage(buf);
+        return { ok: true, img };
+    } catch (e) {
+        return { ok: false, error: e };
+    } finally {
         clearTimeout(t);
-        if (!res.ok) return null;
-        return await loadImage(Buffer.from(await res.arrayBuffer()));
-    } catch { return null; }
+    }
+}
+
+async function fetchImage(url, { timeoutMs = 6000, retries = 2 } = {}) {
+    if (!url) return null;
+    const cached = cacheGet(url);
+    if (cached) return cached;
+    if (negGet(url)) return null;
+
+    let lastStatus = null;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        const r = await fetchImageOnce(url, timeoutMs);
+        if (r.ok) { cacheSet(url, r.img); return r.img; }
+        lastStatus = r.status ?? null;
+        // Don't retry on definitive client errors (404/410/403/401).
+        if (lastStatus && [400, 401, 403, 404, 410].includes(lastStatus)) break;
+        if (attempt < retries) {
+            await new Promise(res => setTimeout(res, 250 * (attempt + 1)));
+        }
+    }
+    negSet(url);
+    return null;
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -149,6 +222,7 @@ export async function generateProfileCard(data) {
     const {
         characterName = 'Неизвестно',
         avatarUrl,
+        fallbackAvatarUrl = null,
         styles = [],
         attributeName,
         attributeValue = 0,
@@ -201,6 +275,9 @@ export async function generateProfileCard(data) {
     ctx.restore();
 
     let avatarImg = avatarUrl ? await fetchImage(avatarUrl) : null;
+    if (!avatarImg && fallbackAvatarUrl && fallbackAvatarUrl !== avatarUrl) {
+        avatarImg = await fetchImage(fallbackAvatarUrl);
+    }
     ctx.save();
     ctx.beginPath();
     ctx.arc(avCX, avCY, avR, 0, Math.PI * 2);

@@ -75,6 +75,7 @@ export async function execute(interaction) {
         hudBuffer = await generateProfileCard({
             characterName: player.character_name || player.username,
             avatarUrl: player.character_avatar || targetUser.displayAvatarURL({ extension: 'png', size: 512 }),
+            fallbackAvatarUrl: targetUser.displayAvatarURL({ extension: 'png', size: 512 }),
             styles: topStyles,
             attributeName: player.attribute_name || null,
             attributeValue: player.ap,
