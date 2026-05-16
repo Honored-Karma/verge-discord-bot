@@ -1,8 +1,8 @@
 import cron from 'node-cron';
 import { EmbedBuilder } from 'discord.js';
 import { getDB } from '../utils/db.js';
-import { getWeeklySalary } from '../utils/rankSystem.js';
-import { getSalaryMultiplier } from '../utils/dataManager.js';
+import { getWeeklySalary, normalizeOrganization, normalizeRank } from '../utils/rankSystem.js';
+import { getAllSalaryMultipliers } from '../utils/dataManager.js';
 
 async function notifySalaryLogChannel(client, lines, totalAmount) {
     const channelId = process.env.SALARY_LOG_CHANNEL_ID;
@@ -32,13 +32,21 @@ export async function runWeeklySalary(client) {
     let totalAmount = 0;
     let paidCount = 0;
 
+    const allMultipliers = await getAllSalaryMultipliers();
+    const multMap = {};
+    for (const m of allMultipliers) {
+        multMap[`${m.organization}_${m.rank}`] = m.multiplier;
+    }
+
     for (const player of players) {
         const orgSalary = getWeeklySalary(player.organization, player.rank);
         if (!orgSalary || !orgSalary.amount) continue;
         const baseAmount = orgSalary.amount;
         const currency = orgSalary.currency;
 
-        const multiplier = await getSalaryMultiplier(player.organization, player.rank);
+        const normOrg = normalizeOrganization(player.organization);
+        const normRank = normalizeRank(player.rank);
+        const multiplier = (normOrg && normRank) ? multMap[`${normOrg}_${normRank}`] : null;
         const effectiveMultiplier = multiplier || 100;
         const amount = Math.floor(baseAmount * effectiveMultiplier / 100);
 

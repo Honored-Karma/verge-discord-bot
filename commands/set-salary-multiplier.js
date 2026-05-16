@@ -1,8 +1,8 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { setSalaryMultiplier, getAllSalaryMultipliers } from '../utils/dataManager.js';
+import { setSalaryMultiplier } from '../utils/dataManager.js';
 import { isAdmin } from '../utils/adminCheck.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
-import { isValidRankForOrganization, normalizeOrganization, normalizeRank, RANK_SETS, ORGANIZATIONS } from '../utils/rankSystem.js';
+import { isValidRankForOrganization, normalizeOrganization, normalizeRank, RANK_SETS } from '../utils/rankSystem.js';
 
 export const data = new SlashCommandBuilder()
     .setName('set-salary-multiplier')
