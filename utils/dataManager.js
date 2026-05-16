@@ -1,4 +1,5 @@
 import { getDB } from "./db.js";
+import { normalizeOrganization, normalizeRank } from "./rankSystem.js";
 
 const PLAYER_DEFAULTS = {
   character_avatar: null,
@@ -1147,5 +1148,65 @@ export async function setCharacterAvatar(playerId, avatarUrl) {
   } catch (error) {
     console.error("Error setting character avatar:", error);
     return false;
+  }
+}
+
+export async function getSalaryMultiplier(org, rank) {
+  try {
+    const db = getDB();
+    const normalizedOrg = normalizeOrganization(org);
+    const normalizedRank = normalizeRank(rank);
+    if (!normalizedOrg || !normalizedRank) return null;
+    const doc = await db.collection("salary_multipliers").findOne({
+      organization: normalizedOrg,
+      rank: normalizedRank,
+    });
+    return doc ? doc.multiplier : null;
+  } catch (error) {
+    console.error("Error getting salary multiplier:", error);
+    return null;
+  }
+}
+
+export async function setSalaryMultiplier(org, rank, multiplier, adminId) {
+  try {
+    const db = getDB();
+    const normalizedOrg = normalizeOrganization(org);
+    const normalizedRank = normalizeRank(rank);
+    if (!normalizedOrg || !normalizedRank) return false;
+
+    await db.collection("salary_multipliers").updateOne(
+      { organization: normalizedOrg, rank: normalizedRank },
+      {
+        $set: {
+          organization: normalizedOrg,
+          rank: normalizedRank,
+          multiplier,
+          updated_at: new Date(),
+        },
+      },
+      { upsert: true },
+    );
+
+    logAdminAction(
+      adminId,
+      "SET_SALARY_MULTIPLIER",
+      `Установил множитель зарплаты ${multiplier}% для ${normalizedOrg} ранг ${normalizedRank}`,
+    );
+    return true;
+  } catch (error) {
+    console.error("Error setting salary multiplier:", error);
+    return false;
+  }
+}
+
+export async function getAllSalaryMultipliers() {
+  try {
+    const db = getDB();
+    const docs = await db.collection("salary_multipliers").find({}).toArray();
+    return docs;
+  } catch (error) {
+    console.error("Error getting all salary multipliers:", error);
+    return [];
   }
 }

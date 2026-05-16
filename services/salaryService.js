@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { EmbedBuilder } from 'discord.js';
 import { getDB } from '../utils/db.js';
 import { getWeeklySalary } from '../utils/rankSystem.js';
+import { getSalaryMultiplier } from '../utils/dataManager.js';
 
 async function notifySalaryLogChannel(client, lines, totalAmount) {
     const channelId = process.env.SALARY_LOG_CHANNEL_ID;
@@ -34,8 +35,12 @@ export async function runWeeklySalary(client) {
     for (const player of players) {
         const orgSalary = getWeeklySalary(player.organization, player.rank);
         if (!orgSalary || !orgSalary.amount) continue;
-        const amount = orgSalary.amount;
+        const baseAmount = orgSalary.amount;
         const currency = orgSalary.currency;
+
+        const multiplier = await getSalaryMultiplier(player.organization, player.rank);
+        const effectiveMultiplier = multiplier || 100;
+        const amount = Math.floor(baseAmount * effectiveMultiplier / 100);
 
         await db.collection('players').updateOne(
             { id: player.id },
@@ -50,13 +55,16 @@ export async function runWeeklySalary(client) {
             organization: player.organization || null,
             rank: player.rank,
             currency,
+            base_amount: baseAmount,
+            multiplier: effectiveMultiplier,
             amount,
             paid_at: new Date()
         });
 
         paidCount += 1;
         totalAmount += amount;
-        lines.push(`👤 ${player.character_name || player.username || player.id} • ${player.organization || '-'} ${player.rank} • +${amount.toLocaleString('ru-RU')} ${currency.toUpperCase()}`);
+        const multText = effectiveMultiplier !== 100 ? ` (×${effectiveMultiplier}%)` : '';
+        lines.push(`👤 ${player.character_name || player.username || player.id} • ${player.organization || '-'} ${player.rank} • +${amount.toLocaleString('ru-RU')} ${currency.toUpperCase()}${multText}`);
     }
 
     console.log(`[salary] Weekly payouts completed: ${paidCount} users, total ${totalAmount} KRW`);

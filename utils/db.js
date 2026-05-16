@@ -115,6 +115,14 @@ async function initializeDatabase() {
             await db.collection('salary_logs').createIndex({ paid_at: -1 });
         }
 
+        if (!collectionNames.includes('salary_multipliers')) {
+            await db.createCollection('salary_multipliers');
+            await db.collection('salary_multipliers').createIndex(
+                { organization: 1, rank: 1 },
+                { unique: true }
+            );
+        }
+
         console.log('✅ Database initialized successfully');
         await backfillPlayerDefaults();
     } catch (error) {
