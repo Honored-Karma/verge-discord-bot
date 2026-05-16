@@ -22,7 +22,8 @@ async function backfillPlayerDefaults() {
         sp_multiplier_expires_at: 0,
         last_ap_change_at: 0,
         last_sp_change_at: 0,
-        last_salary_paid_at: 0
+        last_salary_paid_at: 0,
+        reputation: 20
     };
 
     for (const [field, value] of Object.entries(defaults)) {
@@ -113,6 +114,12 @@ async function initializeDatabase() {
             await db.createCollection('salary_logs');
             await db.collection('salary_logs').createIndex({ player_id: 1 });
             await db.collection('salary_logs').createIndex({ paid_at: -1 });
+        }
+
+        if (!collectionNames.includes('reputation_history')) {
+            await db.createCollection('reputation_history');
+            await db.collection('reputation_history').createIndex({ player_id: 1 });
+            await db.collection('reputation_history').createIndex({ changed_at: -1 });
         }
 
         console.log('✅ Database initialized successfully');
