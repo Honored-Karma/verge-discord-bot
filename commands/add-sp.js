@@ -112,13 +112,16 @@ export async function execute(interaction) {
         return;
     }
 
+    const oldSP = style.sp || 0;
     const newSP = await addSP(playerId, style.id, amount, interaction.user.id);
     
     if (newSP !== false) {
+        const actualGained = newSP - oldSP;
+        const sign = actualGained >= 0 ? '+' : '';
         const rank = newSP >= 2500 ? 'Мастер' : newSP >= 1000 ? 'Эксперт' : newSP >= 350 ? 'Владелец' : 'Новичок';
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('SP обновлено', 
-                `Добавлено **${amount} SP** к стилю **${style.name}** игроку **${player.character_name || player.username}**\n\nНовый баланс: **${newSP} SP** (${rank})`, 'addSp')],
+                `Запрошено: **+${amount} SP** к стилю **${style.name}** игроку **${player.character_name || player.username}**\nФактически начислено: **${sign}${actualGained} SP** (с учётом множителя)\n\nНовый баланс: **${newSP} SP** (${rank})`, 'addSp')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

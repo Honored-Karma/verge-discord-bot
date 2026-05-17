@@ -80,7 +80,7 @@ export async function execute(interaction) {
             attributeName: player.attribute_name || null,
             attributeValue: player.ap,
             totalSP,
-            orgName: player.organization || null,
+            orgName: player.organization || player.custom_org || null,
             orgRank: player.rank || null,
             playerId: player.id,
             slot,

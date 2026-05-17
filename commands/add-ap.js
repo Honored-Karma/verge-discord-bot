@@ -68,12 +68,15 @@ export async function execute(interaction) {
         autoDeleteMessageShort(msg);
         return;
     }
+    const oldAP = player.ap || 0;
     const newAP = await addAP(playerId, amount, 'admin');
     
     if (newAP !== false) {
+        const actualGained = newAP - oldAP;
+        const sign = actualGained >= 0 ? '+' : '';
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('AP обновлено', 
-                `Добавлено **${amount} AP** игроку **${player.character_name || player.username}**.\n\nНовый баланс: **${newAP} AP**`, 'addAp')],
+                `Запрошено: **${amount > 0 ? '+' : ''}${amount} AP**\nФактически начислено: **${sign}${actualGained} AP** (с учётом множителя)\n\nНовый баланс: **${newAP} AP**`, 'addAp')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

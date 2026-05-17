@@ -8,6 +8,8 @@ const PLAYER_DEFAULTS = {
   ap: 0,
   rank: null,
   organization: null,
+  custom_org: null,
+  salary_multiplier: 100,
   last_train_timestamp: 0,
   last_socialrp_timestamp: 0,
   unlocked_avatar: 0,
@@ -31,6 +33,7 @@ function normalizePlayerDocument(player) {
     ap: Number(player.ap || 0),
     ap_multiplier: Number(player.ap_multiplier || 100),
     sp_multiplier: Number(player.sp_multiplier || 100),
+    salary_multiplier: Number(player.salary_multiplier ?? 100),
     ap_multiplier_expires_at: Number(player.ap_multiplier_expires_at || 0),
     sp_multiplier_expires_at: Number(player.sp_multiplier_expires_at || 0),
     unlocked_avatar: Number(player.unlocked_avatar || 0),
@@ -1146,6 +1149,126 @@ export async function setCharacterAvatar(playerId, avatarUrl) {
     return result.modifiedCount > 0;
   } catch (error) {
     console.error("Error setting character avatar:", error);
+    return false;
+  }
+}
+
+/**
+ * Устанавливает индивидуальный множитель зарплаты для игрока/слота.
+ * Значение в процентах: 100 = стандартная зарплата, 150 = +50%, 50 = -50%.
+ */
+export async function setSalaryMultiplier(playerId, multiplier, adminId) {
+  try {
+    const db = getDB();
+    const validMultiplier = Math.max(0, Math.min(1000, multiplier));
+    await db.collection("players").updateOne(
+      { id: playerId },
+      { $set: { salary_multiplier: validMultiplier } },
+    );
+    logAdminAction(
+      adminId,
+      "SET_SALARY_MULTIPLIER",
+      `Установил множитель зарплаты ${validMultiplier}% для игрока ${playerId}`,
+    );
+    return validMultiplier;
+  } catch (error) {
+    console.error("Error setting salary multiplier:", error);
+    return false;
+  }
+}
+
+/**
+ * Создаёт кастомную организацию.
+ */
+export async function createCustomOrg(name, createdBy) {
+  try {
+    const db = getDB();
+    const existing = await db.collection("custom_orgs").findOne({
+      name: { $regex: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+    });
+    if (existing) return { success: false, reason: 'Организация с таким названием уже существует.' };
+
+    await db.collection("custom_orgs").insertOne({
+      name,
+      created_by: createdBy,
+      created_at: new Date(),
+    });
+    return { success: true };
+  } catch (error) {
+    console.error("Error creating custom org:", error);
+    return { success: false, reason: 'Ошибка базы данных.' };
+  }
+}
+
+/**
+ * Удаляет кастомную организацию.
+ */
+export async function deleteCustomOrg(name) {
+  try {
+    const db = getDB();
+    const result = await db.collection("custom_orgs").deleteOne({
+      name: { $regex: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+    });
+    return result.deletedCount > 0;
+  } catch (error) {
+    console.error("Error deleting custom org:", error);
+    return false;
+  }
+}
+
+/**
+ * Возвращает список всех кастомных организаций.
+ */
+export async function listCustomOrgs() {
+  try {
+    const db = getDB();
+    return await db.collection("custom_orgs").find({}).sort({ name: 1 }).toArray();
+  } catch (error) {
+    console.error("Error listing custom orgs:", error);
+    return [];
+  }
+}
+
+/**
+ * Назначает игроку кастомную организацию (без ранга).
+ */
+export async function setCustomOrg(playerId, orgName, adminId) {
+  try {
+    const db = getDB();
+    await db.collection("players").updateOne(
+      { id: playerId },
+      { $set: { custom_org: orgName } },
+    );
+    logAdminAction(
+      adminId,
+      "SET_CUSTOM_ORG",
+      `Назначил кастомную организацию "${orgName}" игроку ${playerId}`,
+    );
+    return true;
+  } catch (error) {
+    console.error("Error setting custom org:", error);
+    return false;
+  }
+}
+
+/**
+ * Убирает кастомную организацию у игрока.
+ */
+export async function removeCustomOrg(playerId, adminId) {
+  try {
+    const db = getDB();
+    await db.collection("players").updateOne(
+      { id: playerId },
+      { $unset: { custom_org: "" } },
+    );
+    logAdminAction(
+      adminId,
+      "REMOVE_CUSTOM_ORG",
+      `Убрал кастомную организацию у игрока ${playerId}`,
+    );
+    return true;
+  } catch (error) {
+    console.error("Error removing custom org:", error);
     return false;
   }
 }

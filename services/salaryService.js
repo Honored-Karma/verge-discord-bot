@@ -34,7 +34,9 @@ export async function runWeeklySalary(client) {
     for (const player of players) {
         const orgSalary = getWeeklySalary(player.organization, player.rank);
         if (!orgSalary || !orgSalary.amount) continue;
-        const amount = orgSalary.amount;
+        const salaryMult = Number(player.salary_multiplier ?? 100);
+        const amount = Math.floor(orgSalary.amount * salaryMult / 100);
+        if (amount <= 0) continue;
         const currency = orgSalary.currency;
 
         await db.collection('players').updateOne(
@@ -56,7 +58,7 @@ export async function runWeeklySalary(client) {
 
         paidCount += 1;
         totalAmount += amount;
-        lines.push(`👤 ${player.character_name || player.username || player.id} • ${player.organization || '-'} ${player.rank} • +${amount.toLocaleString('ru-RU')} ${currency.toUpperCase()}`);
+        lines.push(`👤 ${player.character_name || player.username || player.id} • ${player.organization || '-'} ${player.rank} • +${amount.toLocaleString('ru-RU')} ${currency.toUpperCase()}${salaryMult !== 100 ? ` (×${salaryMult}%)` : ''}`);
     }
 
     console.log(`[salary] Weekly payouts completed: ${paidCount} users, total ${totalAmount} KRW`);

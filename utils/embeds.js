@@ -143,7 +143,7 @@ export function createModernProfileEmbed(player, user, history = []) {
     .addFields(
       {
         name: "🏢 Организация",
-        value: player.organization || "Не указана",
+        value: player.organization || player.custom_org || "Не указана",
         inline: true,
       },
       {
@@ -318,7 +318,7 @@ export function createProfileMainPage(player, user) {
   });
   embed.addFields({
     name: "🏢 Организация",
-    value: player.organization || "Не указана",
+    value: player.organization || player.custom_org || "Не указана",
     inline: true,
   });
   embed.addFields({
