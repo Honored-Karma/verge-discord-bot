@@ -4,6 +4,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
 } from "discord.js";
+import { getReputationTier } from "./dataManager.js";
 
 const BANNERS = {
   default: "https://iili.io/BP3OOut.png",
@@ -348,6 +349,14 @@ export function createProfileMainPage(player, user) {
     name: "<:14LightningPurple:1494708639473074277>  Множители",
     value: multText,
     inline: true,
+  });
+
+  const rep = Number(player.reputation || 0);
+  const repTier = getReputationTier(rep);
+  embed.addFields({
+    name: "📈 Репутация",
+    value: `**${rep} Rtg** ${repTier.emoji} *${repTier.name}*`,
+    inline: false,
   });
 
   if (player.unlocked_avatar) {

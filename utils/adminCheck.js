@@ -40,7 +40,7 @@ export function hasCommandPermission(member, commandName) {
   // Full admins pass immediately
   if (isAdmin(member)) return true;
 
-  // Commands that Game Masters can use (AP, SP, currency, items)
+  // Commands that Game Masters can use (AP, SP, currency, items, reputation)
   const gmCommands = [
     "add-ap",
     "add-sp",
@@ -50,6 +50,9 @@ export function hasCommandPermission(member, commandName) {
     "set-sp",
     "set-currency",
     "give-item",
+    "add-reputation",
+    "deduct-reputation",
+    "set-reputation",
   ];
 
   // Commands that style-giver roles can use

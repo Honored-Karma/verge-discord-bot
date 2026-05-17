@@ -21,6 +21,7 @@ const PLAYER_DEFAULTS = {
   last_sp_change_at: 0,
   last_salary_paid_at: 0,
   last_sp_train_timestamp: 0,
+  reputation: 20,
 };
 
 function normalizePlayerDocument(player) {
@@ -43,6 +44,8 @@ function normalizePlayerDocument(player) {
     last_sp_change_at: Number(player.last_sp_change_at || 0),
     last_salary_paid_at: Number(player.last_salary_paid_at || 0),
     last_sp_train_timestamp: Number(player.last_sp_train_timestamp || 0),
+    reputation:
+      typeof player.reputation === "number" ? player.reputation : 20,
   };
 }
 
@@ -1270,5 +1273,174 @@ export async function removeCustomOrg(playerId, adminId) {
   } catch (error) {
     console.error("Error removing custom org:", error);
     return false;
+  }
+}
+
+// ─── Репутация ───────────────────────────────────────────────────────────────
+// Дефолтные значения и тиры по ТЗ (см. PR description).
+export const REPUTATION_DEFAULT = 20;
+
+const REPUTATION_TIERS = [
+  { min: 5000, name: "Мировой", emoji: "🌍" },
+  { min: 3000, name: "Страна", emoji: "🏳️" },
+  { min: 1500, name: "Городской", emoji: "🏙️" },
+  { min: 800, name: "Район", emoji: "🏘️" },
+  { min: 400, name: "Квартал", emoji: "🏠" },
+  { min: 0, name: "Никто", emoji: "👤" },
+];
+
+export function getReputationTier(reputation) {
+  const rep = Number(reputation || 0);
+  if (rep < 0) {
+    return { min: -Infinity, name: "Отрицательный", emoji: "⚠️" };
+  }
+  for (const tier of REPUTATION_TIERS) {
+    if (rep >= tier.min) return tier;
+  }
+  return REPUTATION_TIERS[REPUTATION_TIERS.length - 1];
+}
+
+async function addReputationHistory(
+  playerId,
+  oldValue,
+  newValue,
+  source,
+  reason,
+  adminId,
+) {
+  try {
+    const db = getDB();
+    await db.collection("reputation_history").insertOne({
+      player_id: playerId,
+      old_value: oldValue,
+      new_value: newValue,
+      delta: newValue - oldValue,
+      source: source || "system",
+      reason: reason || null,
+      admin_id: adminId || null,
+      changed_at: new Date(),
+    });
+  } catch (error) {
+    console.error("Error adding reputation history:", error);
+  }
+}
+
+export async function getReputation(playerId) {
+  try {
+    const player = await getPlayer(playerId);
+    if (!player) return null;
+    return Number(player.reputation || 0);
+  } catch (error) {
+    console.error("Error getting reputation:", error);
+    return null;
+  }
+}
+
+export async function addReputation(playerId, amount, adminId, reason = null) {
+  try {
+    const db = getDB();
+    const player = await getPlayer(playerId);
+    if (!player) return false;
+
+    const oldRep = Number(player.reputation || 0);
+    const newRep = oldRep + Number(amount);
+
+    await db
+      .collection("players")
+      .updateOne({ id: playerId }, { $set: { reputation: newRep } });
+
+    const action = Number(amount) >= 0 ? "ADD_REPUTATION" : "DEDUCT_REPUTATION";
+    const verb = Number(amount) >= 0 ? "Добавил" : "Списал";
+    const absAmount = Math.abs(Number(amount));
+    logAdminAction(
+      adminId,
+      action,
+      `${verb} ${absAmount} Rtg игроку ${playerId}${reason ? ` (причина: ${reason})` : ""}`,
+    );
+    await addReputationHistory(
+      playerId,
+      oldRep,
+      newRep,
+      action.toLowerCase(),
+      reason,
+      adminId,
+    );
+    return newRep;
+  } catch (error) {
+    console.error("Error adding reputation:", error);
+    return false;
+  }
+}
+
+export async function setReputation(playerId, amount, adminId, reason = null) {
+  try {
+    const db = getDB();
+    const player = await getPlayer(playerId);
+    if (!player) return false;
+
+    const oldRep = Number(player.reputation || 0);
+    const newRep = Number(amount);
+
+    await db
+      .collection("players")
+      .updateOne({ id: playerId }, { $set: { reputation: newRep } });
+
+    logAdminAction(
+      adminId,
+      "SET_REPUTATION",
+      `Установил Rtg на ${newRep} для игрока ${playerId}${reason ? ` (причина: ${reason})` : ""}`,
+    );
+    await addReputationHistory(
+      playerId,
+      oldRep,
+      newRep,
+      "set_reputation",
+      reason,
+      adminId,
+    );
+    return newRep;
+  } catch (error) {
+    console.error("Error setting reputation:", error);
+    return false;
+  }
+}
+
+export async function getReputationLeaderboard(limit = 10) {
+  try {
+    const db = getDB();
+    const result = await db
+      .collection("players")
+      .aggregate([
+        { $sort: { reputation: -1 } },
+        { $limit: limit },
+        {
+          $project: {
+            id: 1,
+            username: 1,
+            character_name: 1,
+            reputation: 1,
+          },
+        },
+      ])
+      .toArray();
+    return result.map((player) => normalizePlayerDocument(player));
+  } catch (error) {
+    console.error("Error getting reputation leaderboard:", error);
+    return [];
+  }
+}
+
+export async function getRecentReputationHistory(playerId, limit = 10) {
+  try {
+    const db = getDB();
+    return await db
+      .collection("reputation_history")
+      .find({ player_id: playerId })
+      .sort({ changed_at: -1 })
+      .limit(limit)
+      .toArray();
+  } catch (error) {
+    console.error("Error getting reputation history:", error);
+    return [];
   }
 }
