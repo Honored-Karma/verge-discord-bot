@@ -54,6 +54,18 @@ const BANNERS = {
   logEnable: "https://iili.io/BP3OsA7.png",
 };
 
+// Проверяет, является ли URL допустимым для Discord (http/https/attachment)
+function isValidDiscordUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('attachment://');
+}
+
+// Возвращает аватар персонажа, если он валиден, иначе — дефолтный аватар Discord
+function resolveAvatar(player, user) {
+  const avatar = player.character_avatar;
+  return isValidDiscordUrl(avatar) ? avatar : user.displayAvatarURL({ dynamic: true });
+}
+
 // Вспомогательные функции для вычисления эффективного множителя (идентичны логике в dataManager.js)
 function _getRankBonusPercent(rank) {
   const normalized = String(rank || "")
@@ -139,7 +151,7 @@ export function createModernProfileEmbed(player, user, history = []) {
     .setColor(0xb209d4)
     .setTitle(`🧬 Профиль: ${player.character_name || player.username}`)
     .setThumbnail(
-      player.character_avatar || user.displayAvatarURL({ dynamic: true }),
+      resolveAvatar(player, user),
     )
     .addFields(
       {
@@ -307,7 +319,7 @@ export function createProfileMainPage(player, user) {
     .setColor(0xb209d4)
     .setTitle(`🧬 Профиль — ${player.character_name || player.username}`)
     .setThumbnail(
-      player.character_avatar || user.displayAvatarURL({ dynamic: true }),
+      resolveAvatar(player, user),
     )
     .setImage(BANNERS.profile)
     .setTimestamp();
@@ -390,7 +402,7 @@ export function createProfileAPSPPage(player, user, totalSP = 0) {
     .setColor(0xb209d4)
     .setTitle(`📊 Прогресс — ${player.character_name || player.username}`)
     .setThumbnail(
-      player.character_avatar || user.displayAvatarURL({ dynamic: true }),
+      resolveAvatar(player, user),
     )
     .setImage(BANNERS.progress)
     .setTimestamp();
@@ -439,7 +451,7 @@ export function createProfileBalancePage(player, user) {
       `<:38126donatorpurple:1456772668572434443>  Баланс — ${player.character_name || player.username}`,
     )
     .setThumbnail(
-      player.character_avatar || user.displayAvatarURL({ dynamic: true }),
+      resolveAvatar(player, user),
     )
     .setImage(BANNERS.balance)
     .setTimestamp();
@@ -468,7 +480,7 @@ export function createProfileStylesPage(player, styles, user, page = 0) {
     .setColor(0xb209d4)
     .setTitle(`🥋 Боевые стили — ${player.character_name || player.username}`)
     .setThumbnail(
-      player.character_avatar || user.displayAvatarURL({ dynamic: true }),
+      resolveAvatar(player, user),
     )
     .setImage(BANNERS.styles)
     .setTimestamp();
@@ -702,7 +714,7 @@ export function createProfileHistoryPage(player, user, history = []) {
       `🕓 История изменений — ${player.character_name || player.username}`,
     )
     .setThumbnail(
-      player.character_avatar || user.displayAvatarURL({ dynamic: true }),
+      resolveAvatar(player, user),
     )
     .setDescription(historyText)
     .setImage(BANNERS.profileHistory)
