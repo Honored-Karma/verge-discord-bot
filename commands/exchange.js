@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, exchangeCurrency } from '../utils/dataManager.js';
-import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
+import { createSuccessEmbed } from '../utils/embeds.js';
+import { embedV2, errorV2, cooldownV2 } from '../utils/containers.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 import { makePlayerKey } from '../utils/playerKey.js';
 
@@ -23,8 +24,9 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
     const globalCooldown = checkGlobalCooldown(interaction.user.id);
     if (globalCooldown.onCooldown) {
+        const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
         const msg = await interaction.reply({
-            content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
+            ...cooldownV2('Обмен', retryAt),
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -40,7 +42,7 @@ export async function execute(interaction) {
     
     if (amount <= 0) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Ошибка', 'Сумма должна быть больше 0!')],
+            ...errorV2('Ошибка', 'Сумма должна быть больше 0!'),
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -51,7 +53,7 @@ export async function execute(interaction) {
     
     if (!player) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Пустой слот', 'В этом слоте нет персонажа. Используйте /register, чтобы создать персонажа в этом слоте.')],
+            ...errorV2('Пустой слот', 'В этом слоте нет персонажа. Используйте /register, чтобы создать персонажа в этом слоте.'),
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -62,7 +64,7 @@ export async function execute(interaction) {
     
     if (!result.success) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Ошибка обмена', result.reason)],
+            ...errorV2('Ошибка обмена', result.reason),
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -75,6 +77,6 @@ export async function execute(interaction) {
     
     const embed = createSuccessEmbed('Обмен успешен!', description, 'exchange');
     
-    const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
+    const msg = await interaction.reply({ ...embedV2(embed, { omitImage: true }), fetchReply: true });
     autoDeleteMessageShort(msg);
 }

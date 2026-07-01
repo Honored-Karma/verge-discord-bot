@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, AttachmentBuilder } from 'discord.js';
 import { getPlayer, getAllPlayerSP, getTotalSP, getRecentProgressionHistory } from '../utils/dataManager.js';
 import {
     createProfileMainPage,
@@ -8,9 +8,8 @@ import {
     createProfileHistoryPage,
     createProfileButtons,
     createStyleNavigationButtons,
-    createErrorEmbed,
-    createCooldownEmbed
 } from '../utils/embeds.js';
+import { v2Payload, containerFromEmbed, errorV2, cooldownV2 } from '../utils/containers.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 import { generateProfileCard } from '../utils/profileHtml.js';
 
@@ -36,7 +35,7 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
         const msg = await interaction.reply({
-            embeds: [createCooldownEmbed('Профиль', retryAt)],
+            ...cooldownV2('Профиль', retryAt),
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -56,7 +55,7 @@ export async function execute(interaction) {
 
     if (!player) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Пустой слот', `В этом слоте нет персонажа. Используйте /register, чтобы создать нового персонажа в этом слоте.`)],
+            ...errorV2('Пустой слот', 'В этом слоте нет персонажа. Используйте /register, чтобы создать нового персонажа в этом слоте.'),
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -90,20 +89,27 @@ export async function execute(interaction) {
         hudBuffer = null;
     }
 
-    // Old embed stays as the main content; card goes as the banner image below
-    let mainEmbed = createProfileMainPage(player, targetUser, slot);
     const files = [];
     if (hudBuffer) {
-        const attachment = new AttachmentBuilder(hudBuffer, { name: 'profile-hud.png' });
-        files.push(attachment);
-        mainEmbed.setImage('attachment://profile-hud.png');
+        files.push(new AttachmentBuilder(hudBuffer, { name: 'profile-hud.png' }));
     }
-    const buttons = createProfileButtons(0);
 
+    function toProfileV2(embed, { mediaUrls = [], buttons = [] } = {}) {
+        return v2Payload(
+            containerFromEmbed(embed, { omitImage: true, mediaGallery: mediaUrls }),
+            { extraComponents: buttons },
+        );
+    }
+
+    const buttons = createProfileButtons(0);
+    const mainEmbed = createProfileMainPage(player, targetUser, slot);
+    let lastV2Payload = toProfileV2(mainEmbed, {
+        mediaUrls: hudBuffer ? ['attachment://profile-hud.png'] : [],
+        buttons: [buttons],
+    });
     const response = await interaction.reply({
-        embeds: [mainEmbed],
+        ...lastV2Payload,
         files,
-        components: [buttons],
         fetchReply: true
     });
 
@@ -119,13 +125,13 @@ export async function execute(interaction) {
         let newEmbed;
         let newButtons;
         let newFiles = [];
+        let mediaUrls = [];
 
         if (i.customId === 'profile_main') {
             newEmbed = createProfileMainPage(player, targetUser, slot);
             if (hudBuffer) {
-                const att = new AttachmentBuilder(hudBuffer, { name: 'profile-hud.png' });
-                newFiles = [att];
-                newEmbed.setImage('attachment://profile-hud.png');
+                newFiles = [new AttachmentBuilder(hudBuffer, { name: 'profile-hud.png' })];
+                mediaUrls = ['attachment://profile-hud.png'];
             }
             newButtons = [createProfileButtons(0)];
         } else if (i.customId === 'profile_apsp') {
@@ -160,11 +166,15 @@ export async function execute(interaction) {
             newButtons = [createProfileButtons(4)];
         }
 
-        await i.update({ embeds: [newEmbed], files: newFiles, components: newButtons });
+        lastV2Payload = toProfileV2(newEmbed, { mediaUrls, buttons: newButtons });
+        await i.update({ ...lastV2Payload, files: newFiles });
     });
 
     collector.on('end', () => {
-        interaction.editReply({ components: [] }).catch(() => {});
+        interaction.editReply({
+            components: [lastV2Payload.components[0]],
+            flags: lastV2Payload.flags,
+        }).catch(() => {});
     });
 
     setTimeout(() => {

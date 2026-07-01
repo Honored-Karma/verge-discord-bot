@@ -1,6 +1,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder } from 'discord.js';
 import { getPlayer, transferCurrency } from '../utils/dataManager.js';
-import { createCooldownEmbed, createPayEmbed, createErrorEmbed, createInfoEmbed } from '../utils/embeds.js';
+import { createPayEmbed, createInfoEmbed } from '../utils/embeds.js';
+import { v2Payload, embedV2, errorV2, cooldownV2, createInfoContainer } from '../utils/containers.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 import { makePlayerKey } from '../utils/playerKey.js';
 
@@ -37,7 +38,7 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
         const msg = await interaction.reply({
-            embeds: [createCooldownEmbed('Перевод', retryAt)],
+            ...cooldownV2('Перевод', retryAt),
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -50,7 +51,7 @@ export async function execute(interaction) {
     // Нельзя переводить самому себе (включая другие слоты)
     if (userId === toUser.id) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Ошибка', 'Нельзя переводить самому себе!')],
+            ...errorV2('Ошибка', 'Нельзя переводить самому себе!'),
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -68,7 +69,7 @@ export async function execute(interaction) {
     
     if (amount <= 0) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Ошибка', 'Сумма должна быть больше 0!')],
+            ...errorV2('Ошибка', 'Сумма должна быть больше 0!'),
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -80,7 +81,7 @@ export async function execute(interaction) {
     
     if (!fromPlayer) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Не зарегистрирован', 'Сначала зарегистрируйтесь командой `/register`!')],
+            ...errorV2('Не зарегистрирован', 'Сначала зарегистрируйтесь командой `/register`!'),
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -89,7 +90,7 @@ export async function execute(interaction) {
     
     if (!toPlayer) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Ошибка', `${toUser.username} не зарегистрирован!`)],
+            ...errorV2('Ошибка', `${toUser.username} не зарегистрирован!`),
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -120,9 +121,10 @@ export async function execute(interaction) {
         'pay'
     );
 
+    let lastV2Payload = embedV2(previewEmbed, { omitImage: true, extraComponents: [confirmRow] });
+
     const msg = await interaction.reply({
-        embeds: [previewEmbed],
-        components: [confirmRow],
+        ...lastV2Payload,
         fetchReply: true
     });
 
@@ -134,20 +136,17 @@ export async function execute(interaction) {
 
         if (i.customId === 'pay_cancel') {
             collector.stop('cancelled');
-            return i.update({
-                embeds: [createInfoEmbed('Отменено', 'Перевод был отменен.', 'pay')],
-                components: []
-            });
+            const cancelled = createInfoContainer('Отменено', 'Перевод был отменен.');
+            lastV2Payload = v2Payload(cancelled);
+            return i.update(lastV2Payload);
         }
 
         if (i.customId === 'pay_confirm') {
             const result = await transferCurrency(fromId, toId, currency, amount);
             if (!result.success) {
                 collector.stop('failed');
-                return i.update({
-                    embeds: [createErrorEmbed('Ошибка перевода', result.reason)],
-                    components: []
-                });
+                lastV2Payload = errorV2('Ошибка перевода', result.reason);
+                return i.update(lastV2Payload);
             }
 
             const doneEmbed = createPayEmbed(
@@ -157,15 +156,15 @@ export async function execute(interaction) {
                 `**Получатель получил:** ${result.received.toLocaleString('ru-RU')} ${currencySymbol}`
             );
             collector.stop('confirmed');
-            return i.update({ embeds: [doneEmbed], components: [] });
+            lastV2Payload = embedV2(doneEmbed, { omitImage: true });
+            return i.update(lastV2Payload);
         }
     });
 
     collector.on('end', async (_collected, reason) => {
         if (['confirmed', 'cancelled', 'failed'].includes(reason)) return;
-        await interaction.editReply({
-            embeds: [createInfoEmbed('Время вышло', 'Подтверждение перевода истекло.', 'pay')],
-            components: []
-        }).catch(() => {});
+        const expired = createInfoContainer('Время вышло', 'Подтверждение перевода истекло.');
+        lastV2Payload = v2Payload(expired);
+        await interaction.editReply(lastV2Payload).catch(() => {});
     });
 }

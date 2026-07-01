@@ -1,6 +1,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder } from 'discord.js';
 import { getLeaderboard } from '../utils/dataManager.js';
-import { createCooldownEmbed, createInfoEmbed, createLeaderboardEmbed } from '../utils/embeds.js';
+import { createLeaderboardEmbed } from '../utils/embeds.js';
+import { embedV2, cooldownV2, createInfoContainer, v2Payload } from '../utils/containers.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
@@ -26,7 +27,7 @@ export async function execute(interaction) {
     if (globalCooldown.onCooldown) {
         const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
         const msg = await interaction.reply({
-            embeds: [createCooldownEmbed('Рейтинг', retryAt)],
+            ...cooldownV2('Рейтинг', retryAt),
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -91,11 +92,17 @@ export async function execute(interaction) {
         return createLeaderboardEmbed(title, leaderboardText, currentSort);
     }
 
+    function toLeaderboardV2(embed, sortButtons) {
+        return embedV2(embed, { omitImage: true, extraComponents: [sortButtons] });
+    }
+
     let leaderboard = await getLeaderboard(sortBy, limit);
     
     if (leaderboard.length === 0) {
         const msg = await interaction.reply({
-            embeds: [createInfoEmbed('📊 Таблица лидеров', 'Пока нет зарегистрированных игроков.', 'default')],
+            ...v2Payload(
+                createInfoContainer('📊 Таблица лидеров', 'Пока нет зарегистрированных игроков.'),
+            ),
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -104,7 +111,8 @@ export async function execute(interaction) {
     
     const embed = createLeaderboardText(leaderboard, sortBy);
     const row = buildSortButtons(sortBy);
-    const msg = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
+    let lastV2Payload = toLeaderboardV2(embed, row);
+    const msg = await interaction.reply({ ...lastV2Payload, fetchReply: true });
 
     const collector = msg.createMessageComponentCollector({ time: 180000 });
     collector.on('collect', async i => {
@@ -118,10 +126,14 @@ export async function execute(interaction) {
         leaderboard = await getLeaderboard(sortBy, limit);
         const nextEmbed = createLeaderboardText(leaderboard, sortBy);
         const nextRow = buildSortButtons(sortBy);
-        await i.update({ embeds: [nextEmbed], components: [nextRow] });
+        lastV2Payload = toLeaderboardV2(nextEmbed, nextRow);
+        await i.update(lastV2Payload);
     });
 
     collector.on('end', async () => {
-        await interaction.editReply({ components: [] }).catch(() => {});
+        await interaction.editReply({
+            components: [lastV2Payload.components[0]],
+            flags: lastV2Payload.flags,
+        }).catch(() => {});
     });
 }
