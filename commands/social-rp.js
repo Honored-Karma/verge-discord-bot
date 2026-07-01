@@ -12,8 +12,9 @@ import {
 } from "../utils/cooldowns.js";
 import {
   createSocialRPEmbed,
+  createErrorEmbed,
+  createCooldownEmbed,
 } from "../utils/embeds.js";
-import { embedV2, errorV2, cooldownV2 } from "../utils/containers.js";
 import { progressBar, getAPProgress } from "../utils/progressBar.js";
 import { logCommand } from "../utils/logs.js";
 import { makePlayerKey } from "../utils/playerKey.js";
@@ -38,7 +39,7 @@ export async function execute(interaction) {
   if (globalCooldown.onCooldown) {
     const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
     const msg = await interaction.reply({
-      ...cooldownV2("Социальное RP", retryAt),
+      embeds: [createCooldownEmbed("Социальное RP", retryAt)],
       fetchReply: true,
     });
     autoDeleteMessageShort(msg);
@@ -63,10 +64,12 @@ export async function execute(interaction) {
   let player = await getPlayer(playerId);
   if (!player) {
     const msg = await interaction.reply({
-      ...errorV2(
-        "Пустой слот",
-        "В этом слоте нет персонажа. Используйте /register, чтобы создать нового персонажа в этом слоте.",
-      ),
+      embeds: [
+        createErrorEmbed(
+          "Пустой слот",
+          "В этом слоте нет персонажа. Используйте /register, чтобы создать нового персонажа в этом слоте.",
+        ),
+      ],
       fetchReply: true,
     });
     autoDeleteMessageShort(msg);
@@ -75,10 +78,12 @@ export async function execute(interaction) {
 
   if (rpText.length < 50) {
     const msg = await interaction.reply({
-      ...errorV2(
-        "Текст слишком короткий",
-        "Текст должен содержать минимум 50 символов.",
-      ),
+      embeds: [
+        createErrorEmbed(
+          "Текст слишком короткий",
+          "Текст должен содержать минимум 50 символов.",
+        ),
+      ],
       fetchReply: true,
     });
     autoDeleteMessageShort(msg);
@@ -93,7 +98,7 @@ export async function execute(interaction) {
     const retryAt =
       Math.floor(Date.now() / 1000) + Math.ceil(cooldownCheck.remaining / 1000);
     const msg = await interaction.reply({
-      ...cooldownV2("Социальное RP", retryAt),
+      embeds: [createCooldownEmbed("Социальное RP", retryAt)],
       fetchReply: true,
     });
     autoDeleteMessageShort(msg);
@@ -107,7 +112,9 @@ export async function execute(interaction) {
 
   if (newAP === false) {
     const msg = await interaction.reply({
-      ...errorV2("Ошибка", "Не удалось добавить AP. Попробуйте снова."),
+      embeds: [
+        createErrorEmbed("Ошибка", "Не удалось добавить AP. Попробуйте снова."),
+      ],
       fetchReply: true,
     });
     autoDeleteMessageShort(msg);
@@ -140,9 +147,6 @@ export async function execute(interaction) {
     );
   }
 
-  const msg = await interaction.reply({
-    ...embedV2(embed, { omitImage: true }),
-    fetchReply: true,
-  });
+  const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
   autoDeleteMessageLong(msg);
 }

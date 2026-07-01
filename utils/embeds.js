@@ -5,7 +5,6 @@ import {
   ButtonStyle,
 } from "discord.js";
 import { getReputationTier } from "./dataManager.js";
-import { COLORS } from "./theme.js";
 
 const BANNERS = {
   default: "https://iili.io/BP3OOut.png",
@@ -91,7 +90,7 @@ function _getDynamicBonus(player) {
 
 export function createSuccessEmbed(title, description, bannerKey = "default") {
   return new EmbedBuilder()
-    .setColor(COLORS.success)
+    .setColor(0xb209d4)
     .setTitle(`<:37plus:1497656766459281428>  ${title}`)
     .setDescription(description)
     .setImage(BANNERS[bannerKey] || BANNERS.default)
@@ -100,7 +99,7 @@ export function createSuccessEmbed(title, description, bannerKey = "default") {
 
 export function createErrorEmbed(title, description) {
   return new EmbedBuilder()
-    .setColor(COLORS.error)
+    .setColor(0xb209d4)
     .setTitle(`<:38minus:1497656812772655154>  ${title}`)
     .setDescription(description)
     .setImage(BANNERS.error)
@@ -109,7 +108,7 @@ export function createErrorEmbed(title, description) {
 
 export function createInfoEmbed(title, description, bannerKey = "default") {
   return new EmbedBuilder()
-    .setColor(COLORS.info)
+    .setColor(0xb209d4)
     .setTitle(title)
     .setDescription(description)
     .setImage(BANNERS[bannerKey] || BANNERS.default)
@@ -118,7 +117,7 @@ export function createInfoEmbed(title, description, bannerKey = "default") {
 
 export function createCooldownEmbed(actionName, unixTimestamp) {
   return new EmbedBuilder()
-    .setColor(COLORS.warning)
+    .setColor(0xb209d4)
     .setTitle(`⏳ ${actionName}: кулдаун`)
     .setDescription(
       `Следующее действие будет доступно <t:${unixTimestamp}:R>.\nТочное время: <t:${unixTimestamp}:F>`,
@@ -149,7 +148,7 @@ export function createModernProfileEmbed(player, user, history = []) {
       : "Изменений пока нет";
 
   return new EmbedBuilder()
-    .setColor(COLORS.brand)
+    .setColor(0xb209d4)
     .setTitle(`🧬 Профиль: ${player.character_name || player.username}`)
     .setThumbnail(
       resolveAvatar(player, user),
@@ -198,7 +197,7 @@ export function createModernProfileEmbed(player, user, history = []) {
 
 export function createLeaderboardEmbed(title, description, sortBy) {
   const embed = new EmbedBuilder()
-    .setColor(COLORS.info)
+    .setColor(0xb209d4)
     .setTitle(title)
     .setDescription(description)
     .setTimestamp();
@@ -218,7 +217,7 @@ export function createLeaderboardEmbed(title, description, sortBy) {
 
 export function createTrainEmbed(title, description) {
   return new EmbedBuilder()
-    .setColor(COLORS.training)
+    .setColor(0xb209d4)
     .setTitle(`<:37plus:1497656766459281428>  ${title}`)
     .setDescription(description)
     .setImage(BANNERS.train)
@@ -227,7 +226,7 @@ export function createTrainEmbed(title, description) {
 
 export function createSocialRPEmbed(title, description) {
   return new EmbedBuilder()
-    .setColor(COLORS.training)
+    .setColor(0xb209d4)
     .setTitle(`<:37plus:1497656766459281428>  ${title}`)
     .setDescription(description)
     .setImage(BANNERS.social)
@@ -236,7 +235,7 @@ export function createSocialRPEmbed(title, description) {
 
 export function createPayEmbed(title, description) {
   return new EmbedBuilder()
-    .setColor(COLORS.economy)
+    .setColor(0xb209d4)
     .setTitle(`<:37plus:1497656766459281428>  ${title}`)
     .setDescription(description)
     .setImage(BANNERS.pay)
@@ -245,7 +244,7 @@ export function createPayEmbed(title, description) {
 
 export function createInventoryEmbed(title, description) {
   return new EmbedBuilder()
-    .setColor(COLORS.brand)
+    .setColor(0xb209d4)
     .setTitle(title)
     .setDescription(description)
     .setImage(BANNERS.inventory)
@@ -254,7 +253,7 @@ export function createInventoryEmbed(title, description) {
 
 export function createRegisterEmbed(title, description) {
   return new EmbedBuilder()
-    .setColor(COLORS.success)
+    .setColor(0xb209d4)
     .setTitle(`<:37plus:1497656766459281428>  ${title}`)
     .setDescription(description)
     .setImage(BANNERS.register)
@@ -268,7 +267,7 @@ export function createStylesListEmbed(
   totalPages = 1,
 ) {
   const embed = new EmbedBuilder()
-    .setColor(COLORS.style)
+    .setColor(0xb209d4)
     .setTitle(title)
     .setDescription(description)
     .setImage(BANNERS.stylesList)
@@ -317,7 +316,7 @@ export function createProfileMainPage(player, user) {
     }
   }
   const embed = new EmbedBuilder()
-    .setColor(COLORS.brand)
+    .setColor(0xb209d4)
     .setTitle(`🧬 Профиль — ${player.character_name || player.username}`)
     .setThumbnail(
       resolveAvatar(player, user),
@@ -400,7 +399,7 @@ export function createProfileMainPage(player, user) {
 
 export function createProfileAPSPPage(player, user, totalSP = 0) {
   const embed = new EmbedBuilder()
-    .setColor(COLORS.training)
+    .setColor(0xb209d4)
     .setTitle(`📊 Прогресс — ${player.character_name || player.username}`)
     .setThumbnail(
       resolveAvatar(player, user),
@@ -447,7 +446,7 @@ export function createProfileAPSPPage(player, user, totalSP = 0) {
 
 export function createProfileBalancePage(player, user) {
   const embed = new EmbedBuilder()
-    .setColor(COLORS.economy)
+    .setColor(0xb209d4)
     .setTitle(
       `<:38126donatorpurple:1456772668572434443>  Баланс — ${player.character_name || player.username}`,
     )
@@ -478,7 +477,7 @@ export function createProfileBalancePage(player, user) {
 
 export function createProfileStylesPage(player, styles, user, page = 0) {
   const embed = new EmbedBuilder()
-    .setColor(COLORS.style)
+    .setColor(0xb209d4)
     .setTitle(`🥋 Боевые стили — ${player.character_name || player.username}`)
     .setThumbnail(
       resolveAvatar(player, user),
@@ -710,7 +709,7 @@ export function createProfileHistoryPage(player, user, history = []) {
       : "Изменений пока нет";
 
   return new EmbedBuilder()
-    .setColor(COLORS.brand)
+    .setColor(0xb209d4)
     .setTitle(
       `🕓 История изменений — ${player.character_name || player.username}`,
     )
