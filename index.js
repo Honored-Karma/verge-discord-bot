@@ -1,4 +1,4 @@
-import { Client, Collection, Events, GatewayIntentBits } from 'discord.js';
+import { Client, Collection, Events, GatewayIntentBits, REST, Routes } from 'discord.js';
 import { config } from 'dotenv';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
@@ -7,11 +7,6 @@ import { createServer } from 'http';
 import { connectDatabase, closeDatabase } from './utils/db.js';
 import { startWeeklySalaryScheduler } from './services/salaryService.js';
 import { expireMultipliers } from './utils/dataManager.js';
-import {
-    deployApplicationCommands,
-    getDeployConfig,
-    formatDeployError,
-} from './utils/deployCommands.js';
 
 config();
 
@@ -69,32 +64,23 @@ client.once(Events.ClientReady, async readyClient => {
             commandsJSON.push(cmd.data.toJSON());
         }
 
-        const { token: deployToken, clientId, guildId } = getDeployConfig();
+        const rest = new REST().setToken(token);
+        const clientId = process.env.CLIENT_ID;
+        const guildId = process.env.GUILD_ID;
 
         if (clientId) {
-            const knownGuildIds = new Set(readyClient.guilds.cache.keys());
-            if (guildId && !knownGuildIds.has(guildId)) {
-                console.warn(`⚠️  GUILD_ID=${guildId}, но бот не состоит в этом сервере.`);
-                console.warn(`   Серверы бота: ${[...knownGuildIds].join(', ') || 'нет'}`);
-                console.warn('   Обновите GUILD_ID или пригласите бота на нужный сервер.');
+            if (guildId) {
+                await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: commandsJSON });
+                console.log(`✅ Deployed ${commandsJSON.length} commands to guild ${guildId}`);
             } else {
-                const data = await deployApplicationCommands(commandsJSON, {
-                    token: deployToken,
-                    clientId,
-                    guildId,
-                    cleanup: false,
-                    knownGuildIds,
-                });
-                const target = guildId ? `guild ${guildId}` : 'global';
-                console.log(`✅ Deployed ${data.length} commands to ${target}`);
+                await rest.put(Routes.applicationCommands(clientId), { body: commandsJSON });
+                console.log(`✅ Deployed ${commandsJSON.length} commands globally`);
             }
         } else {
             console.warn('⚠️  CLIENT_ID not set — skipping command deployment');
         }
     } catch (deployError) {
-        console.error('❌ Failed to deploy commands:');
-        const { clientId, guildId } = getDeployConfig();
-        console.error(deployError.formatted || formatDeployError(deployError, { clientId, guildId }));
+        console.error('❌ Failed to deploy commands:', deployError);
     }
 
     startWeeklySalaryScheduler(client);

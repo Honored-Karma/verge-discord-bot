@@ -1,12 +1,8 @@
+import { REST, Routes } from 'discord.js';
 import { config } from 'dotenv';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { readdirSync } from 'fs';
-import {
-    deployApplicationCommands,
-    getDeployConfig,
-    formatDeployError,
-} from './utils/deployCommands.js';
 
 config();
 
@@ -37,7 +33,9 @@ for (const file of commandFiles) {
     }
 }
 
-const { token, clientId, guildId } = getDeployConfig();
+const token = process.env.DISCORD_TOKEN || process.env.TOKEN;
+const clientId = process.env.CLIENT_ID;
+const guildId = process.env.GUILD_ID;
 
 if (!token) {
     console.error('❌ No Discord token found! Please set DISCORD_TOKEN or TOKEN in your secrets.');
@@ -49,26 +47,51 @@ if (!clientId) {
     process.exit(1);
 }
 
+const rest = new REST().setToken(token);
+
 (async () => {
     try {
         console.log(`🔄 Started refreshing ${commands.length} application (/) commands.`);
+        let data;
         if (guildId) {
-            console.log(`📍 Target guild: ${guildId}`);
+            // Удаляем все старые гильдейские команды
+            console.log(`📍 Removing old guild commands from: ${guildId}`);
+            const oldGuildCommands = await rest.get(Routes.applicationGuildCommands(clientId, guildId));
+            for (const cmd of oldGuildCommands) {
+                await rest.delete(Routes.applicationGuildCommand(clientId, guildId, cmd.id));
+                console.log(`🗑️ Deleted old guild command: ${cmd.name}`);
+            }
+            // Удаляем все старые глобальные команды
+            console.log('🌍 Removing old global commands');
+            const oldGlobalCommands = await rest.get(Routes.applicationCommands(clientId));
+            for (const cmd of oldGlobalCommands) {
+                await rest.delete(Routes.applicationCommand(clientId, cmd.id));
+                console.log(`🗑️ Deleted old global command: ${cmd.name}`);
+            }
+            // Деплоим новые
+            console.log(`📍 Deploying to guild: ${guildId}`);
+            data = await rest.put(
+                Routes.applicationGuildCommands(clientId, guildId),
+                { body: commands }
+            );
+            console.log(`✅ Successfully deployed to guild!`);
         } else {
-            console.log('🌍 Target: global commands (propagation up to ~1 hour)');
+            // Удаляем все старые глобальные команды
+            console.log('🌍 Removing old global commands');
+            const oldGlobalCommands = await rest.get(Routes.applicationCommands(clientId));
+            for (const cmd of oldGlobalCommands) {
+                await rest.delete(Routes.applicationCommand(clientId, cmd.id));
+                console.log(`🗑️ Deleted old global command: ${cmd.name}`);
+            }
+            // Деплоим новые
+            console.log('🌍 Deploying globally (this may take up to 1 hour to propagate)');
+            data = await rest.put(
+                Routes.applicationCommands(clientId),
+                { body: commands }
+            );
         }
-
-        const data = await deployApplicationCommands(commands, {
-            token,
-            clientId,
-            guildId,
-            cleanup: Boolean(guildId),
-        });
-
         console.log(`✅ Successfully reloaded ${data.length} application (/) commands.`);
     } catch (error) {
-        console.error('❌ Error deploying commands:');
-        console.error(error.formatted || formatDeployError(error, { clientId, guildId }));
-        process.exit(1);
+        console.error('❌ Error deploying commands:', error);
     }
 })();
