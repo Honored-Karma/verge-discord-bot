@@ -5,6 +5,7 @@ import {
   ButtonStyle,
 } from "discord.js";
 import { getReputationTier } from "./dataManager.js";
+import { isValidCharacterUrl, physicalStatsSummary } from "./physicalStats.js";
 
 const BANNERS = {
   default: "https://iili.io/BP3OOut.png",
@@ -392,7 +393,7 @@ export function createProfileMainPage(player, user) {
     });
   }
 
-  embed.setFooter({ text: `ID: ${player.id} • Страница 1/4` });
+  embed.setFooter({ text: `ID: ${player.id} • Страница 1/6` });
 
   return embed;
 }
@@ -439,7 +440,7 @@ export function createProfileAPSPPage(player, user, totalSP = 0) {
     multText += `\n*(база: AP ${apMult}% / SP ${spMult}% + бонус ${dynamicBonus}%)*`;
   embed.addFields({ name: "📈 Множители", value: multText, inline: true });
 
-  embed.setFooter({ text: `ID: ${player.id} • Страница 2/4` });
+  embed.setFooter({ text: `ID: ${player.id} • Страница 2/6` });
 
   return embed;
 }
@@ -470,7 +471,7 @@ export function createProfileBalancePage(player, user) {
   }
 
   embed.addFields({ name: "📊 Валюты", value: balanceText, inline: false });
-  embed.setFooter({ text: `ID: ${player.id} • Страница 4/4` });
+  embed.setFooter({ text: `ID: ${player.id} • Страница 4/6` });
 
   return embed;
 }
@@ -487,7 +488,7 @@ export function createProfileStylesPage(player, styles, user, page = 0) {
 
   if (!styles || styles.length === 0) {
     embed.setDescription("Нет изученных стилей");
-    embed.setFooter({ text: `ID: ${player.id} • Страница 3/4` });
+    embed.setFooter({ text: `ID: ${player.id} • Страница 3/6` });
     return { embed, totalPages: 1 };
   }
 
@@ -510,7 +511,7 @@ export function createProfileStylesPage(player, styles, user, page = 0) {
   });
 
   embed.setFooter({
-    text: `ID: ${player.id} • Страница 3/4 • Стили: ${page + 1}/${totalPages}`,
+    text: `ID: ${player.id} • Страница 3/6 • Стили: ${page + 1}/${totalPages}`,
   });
 
   return { embed, totalPages };
@@ -566,132 +567,54 @@ function getSPRankInfo(sp) {
   return { rank: "Новичок", emoji: "⚪", nextThreshold: 350 };
 }
 
-export function createProfileButtons(page) {
-  const row = new ActionRowBuilder();
+export function createProfilePhysicalPage(player, user) {
+  const embed = new EmbedBuilder()
+    .setColor(0xb209d4)
+    .setTitle(`⚠️ | Физические показатели — ${player.character_name || player.username}`)
+    .setThumbnail(resolveAvatar(player, user))
+    .setImage(BANNERS.progress)
+    .setTimestamp()
+    .setFooter({ text: `ID: ${player.id} • Страница 6/6` });
 
-  if (page === 0) {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId("profile_main")
-        .setLabel("Основная")
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(true),
-      new ButtonBuilder()
-        .setCustomId("profile_apsp")
-        .setLabel("AP/SP")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("profile_styles")
-        .setLabel("Стили")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("profile_balance")
-        .setLabel("Баланс")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("profile_history")
-        .setLabel("История")
-        .setStyle(ButtonStyle.Secondary),
+  const stats = player.physical_stats;
+  if (!stats) {
+    embed.setDescription(
+      "**Показатели ещё не зарегистрированы.**\nОбратитесь к анкетологу, модератору, ГМу или администратору.",
     );
-  } else if (page === 1) {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId("profile_main")
-        .setLabel("Основная")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("profile_apsp")
-        .setLabel("AP/SP")
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(true),
-      new ButtonBuilder()
-        .setCustomId("profile_styles")
-        .setLabel("Стили")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("profile_balance")
-        .setLabel("Баланс")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("profile_history")
-        .setLabel("История")
-        .setStyle(ButtonStyle.Secondary),
-    );
-  } else if (page === 2) {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId("profile_main")
-        .setLabel("Основная")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("profile_apsp")
-        .setLabel("AP/SP")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("profile_styles")
-        .setLabel("Стили")
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(true),
-      new ButtonBuilder()
-        .setCustomId("profile_balance")
-        .setLabel("Баланс")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("profile_history")
-        .setLabel("История")
-        .setStyle(ButtonStyle.Secondary),
-    );
-  } else if (page === 3) {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId("profile_main")
-        .setLabel("Основная")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("profile_apsp")
-        .setLabel("AP/SP")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("profile_styles")
-        .setLabel("Стили")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("profile_balance")
-        .setLabel("Баланс")
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(true),
-      new ButtonBuilder()
-        .setCustomId("profile_history")
-        .setLabel("История")
-        .setStyle(ButtonStyle.Secondary),
-    );
-  } else {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId("profile_main")
-        .setLabel("Основная")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("profile_apsp")
-        .setLabel("AP/SP")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("profile_styles")
-        .setLabel("Стили")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("profile_balance")
-        .setLabel("Баланс")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("profile_history")
-        .setLabel("История")
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(true),
-    );
+    return embed;
   }
 
-  return row;
+  let description = physicalStatsSummary(stats);
+  if (isValidCharacterUrl(stats.character_url)) {
+    const safeUrl = stats.character_url.replaceAll(")", "%29");
+    description += `\n\n🔗 **Персонаж:** [Открыть анкету](${safeUrl})`;
+  }
+  embed.setDescription(description);
+  return embed;
+}
+
+export function createProfileButtons(page) {
+  const tabs = [
+    { id: "profile_main", label: "Основная" },
+    { id: "profile_apsp", label: "AP/SP" },
+    { id: "profile_physical", label: "Физ. показатели" },
+    { id: "profile_styles", label: "Стили" },
+    { id: "profile_balance", label: "Баланс" },
+    { id: "profile_history", label: "История" },
+  ];
+
+  const buttons = tabs.map((tab, index) =>
+    new ButtonBuilder()
+      .setCustomId(tab.id)
+      .setLabel(tab.label)
+      .setStyle(page === index ? ButtonStyle.Primary : ButtonStyle.Secondary)
+      .setDisabled(page === index),
+  );
+
+  return [
+    new ActionRowBuilder().addComponents(buttons.slice(0, 3)),
+    new ActionRowBuilder().addComponents(buttons.slice(3)),
+  ];
 }
 
 export function createProfileHistoryPage(player, user, history = []) {
@@ -718,7 +641,7 @@ export function createProfileHistoryPage(player, user, history = []) {
     )
     .setDescription(historyText)
     .setImage(BANNERS.profileHistory)
-    .setFooter({ text: `ID: ${player.id} • Страница 4/4` })
+    .setFooter({ text: `ID: ${player.id} • Страница 5/6` })
     .setTimestamp();
 }
 

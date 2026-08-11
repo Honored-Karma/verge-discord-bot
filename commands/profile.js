@@ -6,6 +6,7 @@ import {
     createProfileStylesPage,
     createProfileBalancePage,
     createProfileHistoryPage,
+    createProfilePhysicalPage,
     createProfileButtons,
     createStyleNavigationButtons,
     createErrorEmbed,
@@ -103,7 +104,7 @@ export async function execute(interaction) {
     const response = await interaction.reply({
         embeds: [mainEmbed],
         files,
-        components: [buttons],
+        components: buttons,
         fetchReply: true
     });
 
@@ -127,16 +128,19 @@ export async function execute(interaction) {
                 newFiles = [att];
                 newEmbed.setImage('attachment://profile-hud.png');
             }
-            newButtons = [createProfileButtons(0)];
+            newButtons = createProfileButtons(0);
         } else if (i.customId === 'profile_apsp') {
             const totalSP = await getTotalSP(slotPlayerId);
             newEmbed = createProfileAPSPPage(player, targetUser, totalSP);
-            newButtons = [createProfileButtons(1)];
+            newButtons = createProfileButtons(1);
+        } else if (i.customId === 'profile_physical') {
+            newEmbed = createProfilePhysicalPage(player, targetUser);
+            newButtons = createProfileButtons(2);
         } else if (i.customId === 'profile_styles') {
             stylesPage = 0;
             const result = createProfileStylesPage(player, styles, targetUser, stylesPage);
             newEmbed = result.embed;
-            newButtons = [createProfileButtons(2)];
+            newButtons = createProfileButtons(3);
             if (result.totalPages > 1) {
                 newButtons.push(createStyleNavigationButtons(stylesPage, result.totalPages));
             }
@@ -144,20 +148,20 @@ export async function execute(interaction) {
             stylesPage = Math.max(0, stylesPage - 1);
             const result = createProfileStylesPage(player, styles, targetUser, stylesPage);
             newEmbed = result.embed;
-            newButtons = [createProfileButtons(2), createStyleNavigationButtons(stylesPage, result.totalPages)];
+            newButtons = [...createProfileButtons(3), createStyleNavigationButtons(stylesPage, result.totalPages)];
         } else if (i.customId === 'styles_next') {
             const nextAttempt = stylesPage + 1;
             const result = createProfileStylesPage(player, styles, targetUser, nextAttempt);
             if (nextAttempt < result.totalPages) stylesPage = nextAttempt;
             const refreshed = createProfileStylesPage(player, styles, targetUser, stylesPage);
             newEmbed = refreshed.embed;
-            newButtons = [createProfileButtons(2), createStyleNavigationButtons(stylesPage, refreshed.totalPages)];
+            newButtons = [...createProfileButtons(3), createStyleNavigationButtons(stylesPage, refreshed.totalPages)];
         } else if (i.customId === 'profile_balance') {
             newEmbed = createProfileBalancePage(player, targetUser);
-            newButtons = [createProfileButtons(3)];
+            newButtons = createProfileButtons(4);
         } else if (i.customId === 'profile_history') {
             newEmbed = createProfileHistoryPage(player, targetUser, history);
-            newButtons = [createProfileButtons(4)];
+            newButtons = createProfileButtons(5);
         }
 
         await i.update({ embeds: [newEmbed], files: newFiles, components: newButtons });

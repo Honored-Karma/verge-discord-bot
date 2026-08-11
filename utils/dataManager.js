@@ -243,6 +243,87 @@ export async function updatePlayer(playerId, updates) {
   }
 }
 
+export async function registerPhysicalStats(playerId, stats, adminId) {
+  try {
+    const db = getDB();
+    const now = new Date();
+    const result = await db.collection("players").updateOne(
+      { id: playerId, physical_stats: { $exists: false } },
+      {
+        $set: {
+          physical_stats: {
+            ...stats,
+            created_at: now,
+            updated_at: now,
+            updated_by: adminId,
+          },
+        },
+      },
+    );
+
+    if (result.matchedCount === 0) {
+      const playerExists = await db.collection("players").findOne(
+        { id: playerId },
+        { projection: { id: 1 } },
+      );
+      return {
+        success: false,
+        reason: playerExists ? "already_registered" : "player_not_found",
+      };
+    }
+
+    logAdminAction(
+      adminId,
+      "REGISTER_PHYSICAL_STATS",
+      `Зарегистрировал физические показатели для игрока ${playerId}`,
+    );
+    return { success: true };
+  } catch (error) {
+    console.error("Error registering physical stats:", error);
+    return { success: false, reason: "database_error" };
+  }
+}
+
+export async function editPhysicalStats(playerId, updates, adminId) {
+  try {
+    const db = getDB();
+    const setOperations = {
+      "physical_stats.updated_at": new Date(),
+      "physical_stats.updated_by": adminId,
+    };
+
+    for (const [field, value] of Object.entries(updates)) {
+      setOperations[`physical_stats.${field}`] = value;
+    }
+
+    const result = await db.collection("players").updateOne(
+      { id: playerId, physical_stats: { $exists: true } },
+      { $set: setOperations },
+    );
+
+    if (result.matchedCount === 0) {
+      const playerExists = await db.collection("players").findOne(
+        { id: playerId },
+        { projection: { id: 1 } },
+      );
+      return {
+        success: false,
+        reason: playerExists ? "not_registered" : "player_not_found",
+      };
+    }
+
+    logAdminAction(
+      adminId,
+      "EDIT_PHYSICAL_STATS",
+      `Изменил физические показатели игрока ${playerId}: ${Object.keys(updates).join(", ")}`,
+    );
+    return { success: true };
+  } catch (error) {
+    console.error("Error editing physical stats:", error);
+    return { success: false, reason: "database_error" };
+  }
+}
+
 export async function createPlayer(
   playerId,
   username,

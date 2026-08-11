@@ -58,6 +58,10 @@ export function hasCommandPermission(member, commandName) {
   // Commands that style-giver roles can use
   const styleGiverCommands = ["give-style", "remove-player-style"];
 
+  // Physical stats are managed by profile reviewers, moderators, GMs and admins.
+  // LIMITED_ADMIN_ROLE_IDS is kept as a compatibility fallback for existing setups.
+  const physicalStatsCommands = ["physical-register", "physical-edit"];
+
   // Check GM commands
   if (gmCommands.includes(commandName)) {
     const gmRoleIds = process.env.GM_ROLE_IDS
@@ -103,6 +107,31 @@ export function hasCommandPermission(member, commandName) {
       } catch (e) {
         console.error("Error checking style-giver roles:", e);
       }
+    }
+  }
+
+  if (physicalStatsCommands.includes(commandName)) {
+    const roleEnvNames = [
+      "ANKETOLOG_ROLE_IDS",
+      "MODERATOR_ROLE_IDS",
+      "GM_ROLE_IDS",
+      "LIMITED_ADMIN_ROLE_IDS",
+    ];
+    const allowedRoleIds = roleEnvNames.flatMap((envName) =>
+      process.env[envName]
+        ? process.env[envName].split(",").map((id) => id.trim()).filter(Boolean)
+        : [],
+    );
+
+    try {
+      if (
+        allowedRoleIds.length > 0 &&
+        member.roles?.cache?.some((role) => allowedRoleIds.includes(role.id))
+      ) {
+        return true;
+      }
+    } catch (e) {
+      console.error("Error checking physical stats roles:", e);
     }
   }
 
