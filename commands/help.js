@@ -96,13 +96,13 @@ function createMainHelp() {
       {
         name: "💰 Экономика",
         value:
-          "`/pay <user> <currency> <amount>` - Платёж\n`/exchange <from> <to> <amount>` - Обменять валюту\n`/inventory` - Инвентарь",
+          "`/pay <user> <currency> <amount>` - Перевод валюты\n`/exchange <currency> <amount>` - Обмен валюты\n`/inventory` - Инвентарь",
         inline: false,
       },
       {
         name: "⏱️ Полезно",
         value:
-          "`/leaderboard [type]` - Рейтинги\n`/help [category]` - Эта справка",
+          "`/leaderboard [sort_by] [limit]` - Интерактивный рейтинг\n`/help [category]` - Эта справка",
         inline: false,
       },
       {
@@ -216,19 +216,19 @@ function createEconomyHelp() {
       {
         name: "/pay <user> <krw/yen> <amount>",
         value:
-          "✅ **Отправить деньги другому игроку**\nПараметры:\n• `user` - Получатель\n• `krw/yen` - Тип валюты\n• `amount` - Сумма\n\n💸 Условия:\n• Нужна валюта на счёте\n• Без комиссии\n\n💡 Пример: /pay @John yen 100",
+          "✅ **Перевести валюту другому персонажу**\n• `user` — получатель\n• `currency` — KRW или YEN\n• `amount` — сумма до вычета налога\n• `slot` — слот получателя\n\n💸 Перед списанием появится точный расчёт. Налог составляет **2%** и вычитается из отправленной суммы.",
         inline: false,
       },
       {
-        name: "/exchange <from> <to> <amount>",
+        name: "/exchange <currency> <amount>",
         value:
-          "✅ **Обменять одну валюту на другую**\nПараметры:\n• `from` - Из какой валюты (krw/yen)\n• `to` - В какую валюту\n• `amount` - Сумма\n\n📊 Курсы меняются динамически!\n\n💡 Пример: /exchange krw yen 100",
+          "✅ **Обменять KRW и YEN**\n• `currency` — какую валюту отдать\n• `amount` — сумма обмена\n\n💱 Фиксированный курс: **1 ¥ = 9,4 ₩**. Перед обменом бот покажет точный результат и новые балансы; дробная часть округляется вниз.",
         inline: false,
       },
       {
-        name: "/leaderboard [type]",
+        name: "/leaderboard [sort_by] [limit]",
         value:
-          "✅ **Просмотреть рейтинги**\nПараметры:\n• `type` (опционально) - Тип рейтинга\n\n🏆 Доступные рейтинги:\n• `ap` - По AP (Атаке)\n• `sp` - По SP (Мастерству)\n• `krw` - По корейской воне\n• `yen` - По японской иене\n\n💡 Поднимайтесь на вершину рейтингов!",
+          "✅ **Открыть интерактивный рейтинг**\n• `sort_by` — стартовая вкладка AP, SP, KRW или YEN\n• `limit` — от 5 до 15 персонажей на странице\n\n🏆 На каждой вкладке видны пьедестал топ-3, полный рейтинг и позиция вашего активного персонажа. Данные можно обновить отдельной кнопкой.",
         inline: false,
       },
       {
@@ -307,9 +307,9 @@ function createAdminHelp() {
         inline: true,
       },
       {
-        name: "/give-item <user> <item>",
+        name: "/give-item <user> [quantity] [slot]",
         value:
-          '✅ Выдать предмет игроку\nПример: `/give-item @John "AP Tome (50)"`',
+          "✅ **Открыть центр выдачи предметов**\nВыберите готовый расходник из каталога или создайте новый AP-том, SP-свиток либо коллекционный предмет. Перед выдачей бот покажет редкость и эффект всей стопки.",
         inline: true,
       },
       {

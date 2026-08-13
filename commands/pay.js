@@ -1,171 +1,256 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder } from 'discord.js';
-import { getPlayer, transferCurrency } from '../utils/dataManager.js';
-import { createCooldownEmbed, createPayEmbed, createErrorEmbed, createInfoEmbed } from '../utils/embeds.js';
-import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
-import { makePlayerKey } from '../utils/playerKey.js';
+import { MessageFlags, SlashCommandBuilder } from "discord.js";
+import { calculateTransfer, CURRENCIES } from "../utils/banking.js";
+import {
+  createBankStatusComponents,
+  createPayPreviewComponents,
+  createPayReceiptComponents,
+  PAY_CANCEL_ID,
+  PAY_CONFIRM_ID,
+} from "../utils/bankingComponents.js";
+import {
+  getActiveSlot,
+  getPlayer,
+  transferCurrency,
+} from "../utils/dataManager.js";
+import { checkGlobalCooldown } from "../utils/cooldowns.js";
+import { logCommand } from "../utils/logs.js";
+import { makePlayerKey } from "../utils/playerKey.js";
+
+const CONFIRMATION_DURATION = 90 * 1000;
+
+function avatarUrl(player, user) {
+  const custom = String(player.character_avatar || "").trim();
+  return /^https?:\/\//i.test(custom)
+    ? custom
+    : user.displayAvatarURL({ extension: "png", size: 256 });
+}
+
+function transferError(result, currency) {
+  const symbol = CURRENCIES[currency].symbol;
+  switch (result.reason) {
+    case "insufficient_funds":
+      return `На балансе доступно только **${Number(result.available || 0).toLocaleString("ru-RU")} ${symbol}**. Укажите меньшую сумму.`;
+    case "recipient_not_found":
+      return "Персонаж получателя больше не существует. Перевод не выполнен.";
+    case "sender_not_found":
+      return "Активный персонаж отправителя больше не существует. Перевод не выполнен.";
+    case "below_minimum":
+      return "После налога получатель должен получить хотя бы одну единицу валюты.";
+    case "unsafe_balance":
+      return "Баланс слишком велик для безопасной операции. Обратитесь к администратору.";
+    default:
+      return "Не удалось провести перевод. Балансы не изменены — попробуйте ещё раз.";
+  }
+}
 
 export const data = new SlashCommandBuilder()
-    .setName('pay')
-    .setDescription('Перевести валюту другому игроку (налог 2%)')
-    .addUserOption(option =>
-        option.setName('user')
-            .setDescription('Получатель')
-            .setRequired(true))
-    .addStringOption(option =>
-        option.setName('currency')
-            .setDescription('Валюта для перевода')
-            .setRequired(true)
-            .addChoices(
-                { name: 'KRW (₩)', value: 'krw' },
-                { name: 'Йены (¥)', value: 'yen' }
-            ))
-    .addIntegerOption(option =>
-        option.setName('amount')
-            .setDescription('Сумма перевода')
-            .setRequired(true))
-    .addIntegerOption(option =>
-        option.setName('slot')
-            .setDescription('Слот получателя: 1 или 2 (по умолчанию активный слот получателя)')
-            .setRequired(false)
-            .addChoices(
-                { name: 'Слот 1', value: 1 },
-                { name: 'Слот 2', value: 2 }
-            ));
+  .setName("pay")
+  .setDescription("Перевести валюту другому персонажу с налогом 2%")
+  .addUserOption((option) => option
+    .setName("user")
+    .setDescription("Кому перевести валюту")
+    .setRequired(true))
+  .addStringOption((option) => option
+    .setName("currency")
+    .setDescription("Валюта перевода")
+    .setRequired(true)
+    .addChoices(
+      { name: "KRW — корейские воны", value: "krw" },
+      { name: "YEN — японские йены", value: "yen" },
+    ))
+  .addIntegerOption((option) => option
+    .setName("amount")
+    .setDescription("Сумма до вычета налога")
+    .setMinValue(2)
+    .setMaxValue(Number.MAX_SAFE_INTEGER)
+    .setRequired(true))
+  .addIntegerOption((option) => option
+    .setName("slot")
+    .setDescription("Слот получателя — по умолчанию активный")
+    .setRequired(false)
+    .addChoices(
+      { name: "Слот 1", value: 1 },
+      { name: "Слот 2", value: 2 },
+    ));
 
 export async function execute(interaction) {
-    const globalCooldown = checkGlobalCooldown(interaction.user.id);
-    if (globalCooldown.onCooldown) {
-        const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
-        const msg = await interaction.reply({
-            embeds: [createCooldownEmbed('Перевод', retryAt)],
-            fetchReply: true
-        });
-        autoDeleteMessageShort(msg);
-        return;
+  const cooldown = checkGlobalCooldown(interaction.user.id);
+  if (cooldown.onCooldown) {
+    const retryAt = Math.floor((Date.now() + cooldown.remaining) / 1000);
+    return interaction.reply({
+      components: createBankStatusComponents(
+        "Подождите перед переводом",
+        `Попробуйте снова <t:${retryAt}:R>.`,
+        "warning",
+      ),
+      flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+    });
+  }
+
+  const recipientUser = interaction.options.getUser("user");
+  if (recipientUser.id === interaction.user.id) {
+    return interaction.reply({
+      components: createBankStatusComponents(
+        "Выберите другого получателя",
+        "Между своими персонажами переводить валюту нельзя.",
+      ),
+      flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+    });
+  }
+
+  const [senderSlot, defaultRecipientSlot] = await Promise.all([
+    getActiveSlot(interaction.user.id),
+    getActiveSlot(recipientUser.id),
+  ]);
+  const recipientSlot = interaction.options.getInteger("slot")
+    || defaultRecipientSlot;
+  const senderId = makePlayerKey(interaction.user.id, senderSlot);
+  const recipientId = makePlayerKey(recipientUser.id, recipientSlot);
+  const currency = interaction.options.getString("currency");
+  const calculation = calculateTransfer(interaction.options.getInteger("amount"));
+  const [sender, recipient] = await Promise.all([
+    getPlayer(senderId),
+    getPlayer(recipientId),
+  ]);
+
+  if (!sender || !recipient || !calculation.valid) {
+    const message = !sender
+      ? "Создайте персонажа в активном слоте через `/register`."
+      : !recipient
+        ? `В слоте ${recipientSlot} у ${recipientUser.username} нет персонажа.`
+        : "После налога получатель должен получить хотя бы одну единицу валюты.";
+    return interaction.reply({
+      components: createBankStatusComponents("Перевод недоступен", message),
+      flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+    });
+  }
+
+  const senderBalance = Number(sender[currency] || 0);
+  if (!Number.isSafeInteger(senderBalance)) {
+    return interaction.reply({
+      components: createBankStatusComponents(
+        "Перевод недоступен",
+        "Баланс имеет некорректное значение. Обратитесь к администратору.",
+      ),
+      flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+    });
+  }
+  if (senderBalance < calculation.sent) {
+    return interaction.reply({
+      components: createBankStatusComponents(
+        "Недостаточно средств",
+        `На балансе доступно **${senderBalance.toLocaleString("ru-RU")} ${CURRENCIES[currency].symbol}**. Укажите меньшую сумму.`,
+      ),
+      flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+    });
+  }
+
+  const senderName = sender.character_name || sender.username;
+  const recipientName = recipient.character_name || recipient.username;
+  const senderAvatarUrl = avatarUrl(sender, interaction.user);
+  let completed = false;
+  let busy = false;
+  const response = await interaction.reply({
+    components: createPayPreviewComponents({
+      senderName,
+      senderAvatarUrl,
+      recipientName,
+      recipientSlot,
+      currency,
+      calculation,
+      senderBalance,
+    }),
+    flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+    fetchReply: true,
+  });
+  const collector = response.createMessageComponentCollector({
+    time: CONFIRMATION_DURATION,
+  });
+
+  collector.on("collect", async (componentInteraction) => {
+    if (componentInteraction.user.id !== interaction.user.id) return;
+    if (busy) {
+      await componentInteraction.reply({
+        content: "Перевод уже обрабатывается.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
     }
 
-    const userId = interaction.user.id;
-    const toUser = interaction.options.getUser('user');
+    if (componentInteraction.customId === PAY_CANCEL_ID) {
+      completed = true;
+      collector.stop("cancelled");
+      await componentInteraction.update({
+        components: createBankStatusComponents(
+          "Перевод отменён",
+          "Деньги остались на вашем балансе.",
+          "neutral",
+        ),
+      });
+      return;
+    }
+    if (componentInteraction.customId !== PAY_CONFIRM_ID) return;
 
-    // Нельзя переводить самому себе (включая другие слоты)
-    if (userId === toUser.id) {
-        const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Ошибка', 'Нельзя переводить самому себе!')],
-            fetchReply: true
-        });
-        autoDeleteMessageShort(msg);
-        return;
-    }
-
-    const { getActiveSlot } = await import('../utils/dataManager.js');
-    const fromSlot = await getActiveSlot(userId);
-    const requestedToSlot = interaction.options.getInteger('slot');
-    const toSlot = (requestedToSlot === 1 || requestedToSlot === 2) ? requestedToSlot : await getActiveSlot(toUser.id);
-    const fromId = makePlayerKey(userId, fromSlot);
-    const toId = makePlayerKey(toUser.id, toSlot);
-    const currency = interaction.options.getString('currency');
-    const amount = interaction.options.getInteger('amount');
-    
-    if (amount <= 0) {
-        const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Ошибка', 'Сумма должна быть больше 0!')],
-            fetchReply: true
-        });
-        autoDeleteMessageShort(msg);
-        return;
-    }
-    
-    const fromPlayer = await getPlayer(fromId);
-    const toPlayer = await getPlayer(toId);
-    
-    if (!fromPlayer) {
-        const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Не зарегистрирован', 'Сначала зарегистрируйтесь командой `/register`!')],
-            fetchReply: true
-        });
-        autoDeleteMessageShort(msg);
-        return;
-    }
-    
-    if (!toPlayer) {
-        const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Ошибка', `${toUser.username} не зарегистрирован!`)],
-            fetchReply: true
-        });
-        autoDeleteMessageShort(msg);
-        return;
-    }
-    
-    const currencySymbol = currency === 'krw' ? '₩' : '¥';
-    const taxPreview = Math.ceil(amount * 0.02);
-    const receivedPreview = amount - taxPreview;
-
-    const confirmRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId('pay_confirm')
-            .setLabel('Подтвердить')
-            .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-            .setCustomId('pay_cancel')
-            .setLabel('Отмена')
-            .setStyle(ButtonStyle.Secondary)
+    busy = true;
+    await componentInteraction.deferUpdate();
+    const result = await transferCurrency(
+      senderId,
+      recipientId,
+      currency,
+      calculation.sent,
     );
+    completed = true;
+    collector.stop(result.success ? "confirmed" : "failed");
 
-    const previewEmbed = createInfoEmbed(
-        '💸 Подтвердите перевод',
-        `Получатель: **${toPlayer.character_name || toPlayer.username}**\n` +
-        `Сумма: **${amount.toLocaleString('ru-RU')} ${currencySymbol}**\n` +
-        `Налог (2%): **${taxPreview.toLocaleString('ru-RU')} ${currencySymbol}**\n` +
-        `Получит: **${receivedPreview.toLocaleString('ru-RU')} ${currencySymbol}**`,
-        'pay'
-    );
+    if (!result.success) {
+      await interaction.editReply({
+        components: createBankStatusComponents(
+          "Перевод не выполнен",
+          transferError(result, currency),
+        ),
+      });
+      return;
+    }
 
-    const msg = await interaction.reply({
-        embeds: [previewEmbed],
-        components: [confirmRow],
-        fetchReply: true
+    await interaction.editReply({
+      components: createPayReceiptComponents({
+        senderName,
+        senderAvatarUrl,
+        recipientName,
+        currency,
+        result,
+      }),
     });
-
-    const collector = msg.createMessageComponentCollector({ time: 90000 });
-    collector.on('collect', async i => {
-        if (i.user.id !== interaction.user.id) {
-            return i.reply({ content: 'Это подтверждение не для вас.', flags: 64 });
-        }
-
-        if (i.customId === 'pay_cancel') {
-            collector.stop('cancelled');
-            return i.update({
-                embeds: [createInfoEmbed('Отменено', 'Перевод был отменен.', 'pay')],
-                components: []
-            });
-        }
-
-        if (i.customId === 'pay_confirm') {
-            const result = await transferCurrency(fromId, toId, currency, amount);
-            if (!result.success) {
-                collector.stop('failed');
-                return i.update({
-                    embeds: [createErrorEmbed('Ошибка перевода', result.reason)],
-                    components: []
-                });
-            }
-
-            const doneEmbed = createPayEmbed(
-                'Перевод выполнен!',
-                `💸 Вы перевели **${amount.toLocaleString('ru-RU')} ${currencySymbol}** игроку **${toPlayer.character_name || toPlayer.username}**\n\n` +
-                `**Налог (2%):** ${result.tax.toLocaleString('ru-RU')} ${currencySymbol}\n` +
-                `**Получатель получил:** ${result.received.toLocaleString('ru-RU')} ${currencySymbol}`
-            );
-            collector.stop('confirmed');
-            return i.update({ embeds: [doneEmbed], components: [] });
-        }
+    await logCommand({
+      client: interaction.client,
+      guildId: interaction.guildId,
+      channelId: interaction.channelId,
+      userId: senderId,
+      userTag: interaction.user.tag,
+      command: "pay",
+      targetId: recipientId,
+      targetTag: recipientName,
+      extra: {
+        currency,
+        sent: result.sent,
+        tax: result.tax,
+        received: result.received,
+      },
     });
+  });
 
-    collector.on('end', async (_collected, reason) => {
-        if (['confirmed', 'cancelled', 'failed'].includes(reason)) return;
-        await interaction.editReply({
-            embeds: [createInfoEmbed('Время вышло', 'Подтверждение перевода истекло.', 'pay')],
-            components: []
-        }).catch(() => {});
-    });
+  collector.on("end", async () => {
+    if (completed) return;
+    try {
+      await interaction.editReply({
+        components: createBankStatusComponents(
+          "Время подтверждения истекло",
+          "Деньги не списаны. Запустите `/pay` ещё раз, если перевод всё ещё нужен.",
+          "warning",
+        ),
+      });
+    } catch {}
+  });
+
+  return response;
 }

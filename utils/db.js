@@ -86,6 +86,7 @@ async function initializeDatabase() {
             await db.createCollection('inventory');
             await db.collection('inventory').createIndex({ player_id: 1 });
         }
+        await normalizeInventory();
 
         if (!collectionNames.includes('admin_actions')) {
             await db.createCollection('admin_actions');
@@ -134,6 +135,57 @@ async function initializeDatabase() {
 // Helper function to get database
 export function getDB() {
     return db;
+}
+
+async function normalizeInventory() {
+    const inventory = db.collection('inventory');
+    const indexes = await inventory.indexes();
+    if (indexes.some(index => index.name === 'inventory_player_item_unique')) return;
+    const duplicates = await inventory.aggregate([
+        {
+            $group: {
+                _id: { player_id: '$player_id', item_name: '$item_name' },
+                ids: { $push: '$_id' },
+                totalQty: { $sum: { $convert: { input: '$qty', to: 'long', onError: 0, onNull: 0 } } },
+                count: { $sum: 1 }
+            }
+        },
+        { $match: { count: { $gt: 1 } } }
+    ]).toArray();
+
+    for (const duplicate of duplicates) {
+        const [keepId, ...removeIds] = duplicate.ids;
+        const totalQty = Number(duplicate.totalQty || 0);
+        if (!Number.isSafeInteger(totalQty) || totalQty < 1) {
+            throw new Error(`Unsafe duplicate inventory quantity for ${duplicate._id.player_id}`);
+        }
+        await inventory.updateOne({ _id: keepId }, { $set: { qty: totalQty } });
+        if (removeIds.length > 0) {
+            await inventory.deleteMany({ _id: { $in: removeIds } });
+        }
+    }
+
+    await inventory.createIndex(
+        { player_id: 1, item_name: 1 },
+        { unique: true, name: 'inventory_player_item_unique' }
+    );
+}
+
+export async function withTransaction(work) {
+    if (!client || !db) throw new Error('Database is not connected');
+    const session = client.startSession();
+    try {
+        let result;
+        await session.withTransaction(async () => {
+            result = await work(session);
+        }, {
+            readConcern: { level: 'snapshot' },
+            writeConcern: { w: 'majority' }
+        });
+        return result;
+    } finally {
+        await session.endSession();
+    }
 }
 
 export async function closeDatabase() {

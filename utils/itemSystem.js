@@ -29,6 +29,29 @@ const ITEM_CATALOG = new Map(
   ]),
 );
 
+export function listCatalogItems() {
+  return [...ITEM_CATALOG.values()].map((item) => ({
+    id: String(item.id || item.name),
+    name: String(item.name || "").trim(),
+    description: String(item.description || "").trim(),
+    definition: getItemDefinition(item.name),
+  }));
+}
+
+export function createAPItemName(amount) {
+  const safeAmount = positiveInteger(amount, 0);
+  return safeAmount > 0 ? `AP Tome (${safeAmount})` : null;
+}
+
+export function createSPItemName(styleName, amount = 30) {
+  const safeStyle = String(styleName || "").trim();
+  const safeAmount = positiveInteger(amount, 0);
+  if (!safeStyle || safeAmount < 1) return null;
+  return safeAmount === 30
+    ? `SP Scroll: ${safeStyle}`
+    : `SP Scroll: ${safeStyle} (${safeAmount})`;
+}
+
 function rewardRarity(amount) {
   if (amount >= 250) return RARITIES.legendary;
   if (amount >= 100) return RARITIES.epic;

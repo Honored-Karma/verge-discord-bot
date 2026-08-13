@@ -1,4 +1,5 @@
-import { getDB } from "./db.js";
+import { getDB, withTransaction } from "./db.js";
+import { calculateExchange, calculateTransfer } from "./banking.js";
 import { getItemDefinition } from "./itemSystem.js";
 
 const PLAYER_DEFAULTS = {
@@ -1032,16 +1033,45 @@ export async function giveItem(playerId, itemName, qty, adminId) {
     const safeName = String(itemName || "").trim();
     const safeQuantity = Number(qty);
     if (!safeName || safeName.length > 100
-      || !Number.isSafeInteger(safeQuantity) || safeQuantity < 1) return false;
+      || !Number.isSafeInteger(safeQuantity) || safeQuantity < 1) {
+      return { success: false, reason: "invalid_item" };
+    }
 
-    await db.collection("inventory").updateOne(
-      { player_id: playerId, item_name: safeName },
-      {
-        $inc: { qty: safeQuantity },
-        $setOnInsert: { player_id: playerId, item_name: safeName },
-      },
-      { upsert: true },
+    const playerExists = await db.collection("players").findOne(
+      { id: playerId },
+      { projection: { id: 1 } },
     );
+    if (!playerExists) return { success: false, reason: "player_not_found" };
+
+    const inventory = db.collection("inventory");
+    const filter = {
+      player_id: playerId,
+      item_name: safeName,
+      $or: [
+        { qty: { $lte: Number.MAX_SAFE_INTEGER - safeQuantity } },
+        { qty: { $exists: false } },
+      ],
+    };
+    const update = {
+      $inc: { qty: safeQuantity },
+      $setOnInsert: { player_id: playerId, item_name: safeName },
+    };
+    let result;
+    try {
+      result = await inventory.findOneAndUpdate(
+        filter,
+        update,
+        { upsert: true, returnDocument: "after" },
+      );
+    } catch (updateError) {
+      if (updateError?.code !== 11000) throw updateError;
+      result = await inventory.findOneAndUpdate(
+        filter,
+        { $inc: { qty: safeQuantity } },
+        { returnDocument: "after" },
+      );
+    }
+    if (!result) return { success: false, reason: "quantity_too_large" };
 
     if (adminId !== "system") {
       logAdminAction(
@@ -1050,10 +1080,18 @@ export async function giveItem(playerId, itemName, qty, adminId) {
         `Выдал ${safeQuantity}x ${safeName} игроку ${playerId}`,
       );
     }
-    return true;
+    return {
+      success: true,
+      itemName: safeName,
+      quantity: safeQuantity,
+      totalQuantity: Number(result.qty || 0),
+    };
   } catch (error) {
     console.error("Error giving item:", error);
-    return false;
+    return {
+      success: false,
+      reason: "error",
+    };
   }
 }
 
@@ -1291,6 +1329,119 @@ export async function useItem(playerId, itemName, qty) {
   }
 }
 
+const LEADERBOARD_FIELDS = new Set(["ap", "sp", "krw", "yen"]);
+
+export async function getLeaderboardPage(
+  sortBy = "ap",
+  playerId = null,
+  page = 0,
+  pageSize = 10,
+) {
+  try {
+    const db = getDB();
+    const metric = LEADERBOARD_FIELDS.has(sortBy) ? sortBy : "ap";
+    const safePage = Number.isSafeInteger(page) && page >= 0 ? page : 0;
+    const safePageSize = Number.isSafeInteger(pageSize)
+      ? Math.max(5, Math.min(20, pageSize))
+      : 10;
+    const metricStages = metric === "sp"
+      ? [
+          {
+            $lookup: {
+              from: "player_sp",
+              localField: "id",
+              foreignField: "player_id",
+              as: "leaderboard_styles",
+            },
+          },
+          {
+            $set: {
+              leaderboard_value: {
+                $convert: {
+                  input: { $sum: "$leaderboard_styles.sp" },
+                  to: "double",
+                  onError: 0,
+                  onNull: 0,
+                },
+              },
+            },
+          },
+        ]
+      : [
+          {
+            $set: {
+              leaderboard_value: {
+                $convert: {
+                  input: `$${metric}`,
+                  to: "double",
+                  onError: 0,
+                  onNull: 0,
+                },
+              },
+            },
+          },
+        ];
+
+    const [snapshot] = await db.collection("players").aggregate([
+      ...metricStages,
+      {
+        $setWindowFields: {
+          sortBy: { leaderboard_value: -1, id: 1 },
+          output: { leaderboard_position: { $documentNumber: {} } },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          id: 1,
+          username: 1,
+          character_name: 1,
+          leaderboard_value: 1,
+          leaderboard_position: 1,
+        },
+      },
+      {
+        $facet: {
+          podium: [{ $limit: 3 }],
+          rows: [
+            { $skip: safePage * safePageSize },
+            { $limit: safePageSize },
+          ],
+          currentPlayer: playerId
+            ? [{ $match: { id: playerId } }, { $limit: 1 }]
+            : [{ $match: { id: "__missing_leaderboard_player__" } }],
+          metadata: [{ $count: "total" }],
+        },
+      },
+    ]).toArray();
+
+    const total = Number(snapshot?.metadata?.[0]?.total || 0);
+    return {
+      metric,
+      page: safePage,
+      pageSize: safePageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / safePageSize)),
+      podium: snapshot?.podium || [],
+      rows: snapshot?.rows || [],
+      currentPlayer: snapshot?.currentPlayer?.[0] || null,
+    };
+  } catch (error) {
+    console.error("Error getting leaderboard page:", error);
+    return {
+      metric: LEADERBOARD_FIELDS.has(sortBy) ? sortBy : "ap",
+      page: 0,
+      pageSize: 10,
+      total: 0,
+      totalPages: 1,
+      podium: [],
+      rows: [],
+      currentPlayer: null,
+      error: true,
+    };
+  }
+}
+
 export async function addCurrency(playerId, currency, amount, adminId) {
   try {
     const db = getDB();
@@ -1345,40 +1496,65 @@ export async function setCurrency(playerId, currency, amount, adminId) {
 export async function transferCurrency(fromId, toId, currency, amount) {
   try {
     const db = getDB();
-    if (currency !== "krw" && currency !== "yen")
-      return { success: false, reason: "Неверная валюта" };
+    if (currency !== "krw" && currency !== "yen") {
+      return { success: false, reason: "invalid_currency" };
+    }
+    if (fromId === toId) return { success: false, reason: "same_player" };
+    const calculation = calculateTransfer(amount);
+    if (!calculation.valid) {
+      return { success: false, reason: calculation.reason };
+    }
 
-    const from = await getPlayer(fromId);
-    const to = await getPlayer(toId);
+    return await withTransaction(async (session) => {
+      const players = db.collection("players");
+      const from = await players.findOne({ id: fromId }, { session });
+      const to = await players.findOne({ id: toId }, { session });
+      if (!from) return { success: false, reason: "sender_not_found" };
+      if (!to) return { success: false, reason: "recipient_not_found" };
 
-    if (!from || !to) return { success: false, reason: "Игрок не найден" };
+      const fromBalance = Number(from[currency] || 0);
+      const toBalance = Number(to[currency] || 0);
+      if (!Number.isSafeInteger(fromBalance) || !Number.isSafeInteger(toBalance)) {
+        return { success: false, reason: "unsafe_balance" };
+      }
+      if (fromBalance < calculation.sent) {
+        return {
+          success: false,
+          reason: "insufficient_funds",
+          available: fromBalance,
+        };
+      }
+      if (!Number.isSafeInteger(toBalance + calculation.received)) {
+        return { success: false, reason: "unsafe_balance" };
+      }
 
-    const fromBalance = Number(from[currency]) || 0;
-    const numAmount = Number(amount);
-    if (fromBalance < numAmount)
-      return { success: false, reason: "Недостаточно средств" };
+      const debit = await players.updateOne(
+        { id: fromId, [currency]: { $gte: calculation.sent } },
+        { $inc: { [currency]: -calculation.sent } },
+        { session },
+      );
+      if (debit.modifiedCount !== 1) {
+        return { success: false, reason: "insufficient_funds" };
+      }
+      const credit = await players.updateOne(
+        { id: toId },
+        { $inc: { [currency]: calculation.received } },
+        { session },
+      );
+      if (credit.modifiedCount !== 1) {
+        throw new Error("Recipient disappeared during transfer");
+      }
 
-    const tax = Math.ceil(numAmount * 0.02);
-    const received = numAmount - tax;
-
-    const updateObj1 = {};
-    updateObj1[currency] = fromBalance - numAmount;
-
-    const updateObj2 = {};
-    updateObj2[currency] = (Number(to[currency]) || 0) + received;
-
-    await db
-      .collection("players")
-      .updateOne({ id: fromId }, { $set: updateObj1 });
-
-    await db
-      .collection("players")
-      .updateOne({ id: toId }, { $set: updateObj2 });
-
-    return { success: true, tax, received };
+      return {
+        success: true,
+        ...calculation,
+        senderBalance: fromBalance - calculation.sent,
+        recipientBalance: toBalance + calculation.received,
+      };
+    });
   } catch (error) {
     console.error("Error transferring currency:", error);
-    return { success: false, reason: "Ошибка перевода" };
+    return { success: false, reason: "error" };
   }
 }
 
@@ -1580,67 +1756,59 @@ export async function giveStyle(playerId, styleName, initialSp = 0, adminId) {
 export async function exchangeCurrency(playerId, currency, amount) {
   try {
     const db = getDB();
-    const player = await getPlayer(playerId);
-    if (!player) return { success: false, reason: "Игрок не найден" };
-
-    // Курс: 1 йен = 9.4 воны
-    const EXCHANGE_RATE = 9.4;
-    const numAmount = Number(amount);
-
-    if (currency === "yen") {
-      // Обменять йены на воны
-      const playerYen = Number(player.yen) || 0;
-      if (playerYen < numAmount)
-        return {
-          success: false,
-          reason: `Недостаточно йен! У вас только ${playerYen.toLocaleString("ru-RU")} ¥`,
-        };
-
-      const krwReceived = Math.floor(numAmount * EXCHANGE_RATE);
-      await db.collection("players").updateOne(
-        { id: playerId },
-        {
-          $set: {
-            yen: playerYen - numAmount,
-            krw: (Number(player.krw) || 0) + krwReceived,
-          },
-        },
-      );
-
-      return { success: true, received: krwReceived };
-    } else if (currency === "krw") {
-      // Обменять воны на йены
-      const playerKrw = Number(player.krw) || 0;
-      if (playerKrw < numAmount)
-        return {
-          success: false,
-          reason: `Недостаточно вон! У вас только ${playerKrw.toLocaleString("ru-RU")} ₩`,
-        };
-
-      const yenReceived = Math.floor(numAmount / EXCHANGE_RATE);
-      if (yenReceived === 0)
-        return {
-          success: false,
-          reason: `Слишком мало вон! Минимум ${Math.ceil(EXCHANGE_RATE)} ₩`,
-        };
-
-      await db.collection("players").updateOne(
-        { id: playerId },
-        {
-          $set: {
-            krw: playerKrw - numAmount,
-            yen: (Number(player.yen) || 0) + yenReceived,
-          },
-        },
-      );
-
-      return { success: true, received: yenReceived };
+    const calculation = calculateExchange(currency, amount);
+    if (!calculation.valid) {
+      return { success: false, reason: calculation.reason, ...calculation };
     }
 
-    return { success: false, reason: "Неверная валюта" };
+    const player = await db.collection("players").findOne(
+      { id: playerId },
+      { projection: { krw: 1, yen: 1 } },
+    );
+    if (!player) return { success: false, reason: "player_not_found" };
+    const sourceBalance = Number(player[currency] || 0);
+    const targetBalance = Number(player[calculation.targetCurrency] || 0);
+    if (!Number.isSafeInteger(sourceBalance) || !Number.isSafeInteger(targetBalance)) {
+      return { success: false, reason: "unsafe_balance" };
+    }
+    if (sourceBalance < calculation.spent) {
+      return {
+        success: false,
+        reason: "insufficient_funds",
+        available: sourceBalance,
+      };
+    }
+    if (!Number.isSafeInteger(targetBalance + calculation.received)) {
+      return { success: false, reason: "unsafe_balance" };
+    }
+
+    const updated = await db.collection("players").findOneAndUpdate(
+      {
+        id: playerId,
+        [currency]: { $gte: calculation.spent },
+        [calculation.targetCurrency]: {
+          $lte: Number.MAX_SAFE_INTEGER - calculation.received,
+        },
+      },
+      {
+        $inc: {
+          [currency]: -calculation.spent,
+          [calculation.targetCurrency]: calculation.received,
+        },
+      },
+      { returnDocument: "after" },
+    );
+    if (!updated) return { success: false, reason: "balance_changed" };
+
+    return {
+      success: true,
+      ...calculation,
+      sourceBalance: Number(updated[currency] || 0),
+      targetBalance: Number(updated[calculation.targetCurrency] || 0),
+    };
   } catch (error) {
     console.error("Error exchanging currency:", error);
-    return { success: false, reason: "Ошибка обмена" };
+    return { success: false, reason: "error" };
   }
 }
 
