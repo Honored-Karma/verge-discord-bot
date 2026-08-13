@@ -6,6 +6,7 @@ import {
 } from "discord.js";
 import { getReputationTier } from "./dataManager.js";
 import { isValidCharacterUrl, physicalStatsSummary } from "./physicalStats.js";
+import { getAdaptiveProgressScale } from "./progressScale.js";
 
 const BANNERS = {
   default: "https://iili.io/BP3OOut.png",
@@ -446,21 +447,24 @@ export function createProfileAPSPPage(player, user, totalSP = 0, renderedCard = 
     return embed;
   }
 
-  const nextMilestone = (Math.floor(player.ap / 100) + 1) * 100;
-  const previousMilestone = Math.floor(player.ap / 100) * 100;
-  const progressInRange = player.ap - previousMilestone;
-
-  const apBar = createProgressBar(progressInRange, 100, 20);
+  const apScale = getAdaptiveProgressScale(player.ap, 100);
+  const apBar = createProgressBar(apScale.current, apScale.next, 20);
+  const apText = Number(player.ap || 0).toLocaleString("ru-RU");
+  const apNextText = apScale.next.toLocaleString("ru-RU");
   embed.addFields({
     name: "⚡ Прогресс AP",
-    value: `${apBar}\n**${player.ap}** AP (следующая отметка: ${nextMilestone} AP)`,
+    value: `${apBar}\n**${apText}** AP (следующая отметка: ${apNextText} AP)`,
     inline: false,
   });
 
+  const spScale = getAdaptiveProgressScale(totalSP, 500);
+  const spBar = createProgressBar(spScale.current, spScale.next, 20);
+  const spText = Number(totalSP || 0).toLocaleString("ru-RU");
+  const spNextText = spScale.next.toLocaleString("ru-RU");
   embed.addFields({
     name: "🥋 Всего SP",
-    value: `${totalSP} SP`,
-    inline: true,
+    value: `${spBar}\n**${spText}** SP (следующая отметка: ${spNextText} SP)`,
+    inline: false,
   });
 
   let multText = `AP: **${multipliers.ap}%**`;
@@ -556,7 +560,9 @@ function createProgressBar(current, max, length = 20) {
   const filled = "█".repeat(filledBlocks);
   const empty = "░".repeat(emptyBlocks);
 
-  return `${filled}${empty} ${percentage.toFixed(0)}% (${current}/${max})`;
+  const currentText = Number(current).toLocaleString("ru-RU");
+  const maxText = Number(max).toLocaleString("ru-RU");
+  return `${filled}${empty} ${percentage.toFixed(0)}% (${currentText}/${maxText})`;
 }
 
 function createSPProgressBar(sp) {

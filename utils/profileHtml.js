@@ -2,6 +2,7 @@ import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
 import { existsSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { getAdaptiveProgressScale } from './progressScale.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FONT_DIR = join(__dirname, '..', 'assets', 'fonts');
@@ -385,16 +386,16 @@ export async function generateProfileCard(data) {
     const apBarY = 100;
 
     txt(ctx, 'AP', barX, apBarY - 12, { font: `bold 14px ${F}`, color: TEXT_LIGHT });
-    txt(ctx, `${attributeValue} AP`, barX + barW, apBarY - 12, { font: `bold 14px ${F}`, color: TEXT_DIM, align: 'right' });
-    const apRatio = attributeValue > 0 ? Math.min(attributeValue / 10000, 1) : 0;
-    drawBar(ctx, barX, apBarY, barW, barH, apRatio, AP_GRAD);
+    txt(ctx, `${formatStatValue(attributeValue)} AP`, barX + barW, apBarY - 12, { font: `bold 14px ${F}`, color: TEXT_DIM, align: 'right' });
+    const apScale = getAdaptiveProgressScale(attributeValue, 100);
+    drawBar(ctx, barX, apBarY, barW, barH, apScale.ratio, AP_GRAD);
 
     // ── 5. SP Bar ────────────────────────────────────────────────────
     const spBarY = 142;
     txt(ctx, 'SP', barX, spBarY - 12, { font: `bold 14px ${F}`, color: TEXT_LIGHT });
-    txt(ctx, `${totalSP} SP`, barX + barW, spBarY - 12, { font: `bold 14px ${F}`, color: TEXT_DIM, align: 'right' });
-    const spRatio = totalSP > 0 ? Math.min(totalSP / 1000, 1) : 0;
-    drawBar(ctx, barX, spBarY, barW, barH, spRatio, SP_GRAD);
+    txt(ctx, `${formatStatValue(totalSP)} SP`, barX + barW, spBarY - 12, { font: `bold 14px ${F}`, color: TEXT_DIM, align: 'right' });
+    const spScale = getAdaptiveProgressScale(totalSP, 500);
+    drawBar(ctx, barX, spBarY, barW, barH, spScale.ratio, SP_GRAD);
 
     // ── 6. Style tags ────────────────────────────────────────────────
     const topStyles = styles.slice(0, 3);
@@ -768,33 +769,29 @@ export async function generateAPSPStatsCard(data) {
     drawMetric(startX, attributeName ? `${String(attributeName).toUpperCase()} • AP` : 'ОБЩИЙ AP', apValue, 'AP', AP_GRAD);
     drawMetric(startX + metricW + gap, 'ОБЩИЙ SP', spValue, 'SP', SP_GRAD);
 
-    const apPrevious = Math.floor(apValue / 100) * 100;
-    const apNext = apPrevious + 100;
-    const apProgress = apValue - apPrevious;
-    txt(ctx, `ДО ОТМЕТКИ ${formatStatValue(apNext)} AP`, startX, 117, {
+    const apScale = getAdaptiveProgressScale(apValue, 100);
+    txt(ctx, `ДО ОТМЕТКИ ${formatStatValue(apScale.next)} AP`, startX, 117, {
         font: `bold 12px ${F}`,
         color: TEXT_LIGHT,
     });
-    txt(ctx, `${formatStatValue(apProgress)} / 100`, W - 28, 117, {
+    txt(ctx, `${formatStatValue(apScale.current)} / ${formatStatValue(apScale.next)}`, W - 28, 117, {
         font: `bold 12px ${F}`,
         color: TEXT_DIM,
         align: 'right',
     });
-    drawBar(ctx, startX, 132, contentW, 15, apProgress / 100, AP_GRAD);
+    drawBar(ctx, startX, 132, contentW, 15, apScale.ratio, AP_GRAD);
 
-    const spPrevious = Math.floor(spValue / 500) * 500;
-    const spNext = spPrevious + 500;
-    const spProgress = spValue - spPrevious;
-    txt(ctx, `ДО ОТМЕТКИ ${formatStatValue(spNext)} SP`, startX, 174, {
+    const spScale = getAdaptiveProgressScale(spValue, 500);
+    txt(ctx, `ДО ОТМЕТКИ ${formatStatValue(spScale.next)} SP`, startX, 174, {
         font: `bold 12px ${F}`,
         color: TEXT_LIGHT,
     });
-    txt(ctx, `${formatStatValue(spProgress)} / 500`, W - 28, 174, {
+    txt(ctx, `${formatStatValue(spScale.current)} / ${formatStatValue(spScale.next)}`, W - 28, 174, {
         font: `bold 12px ${F}`,
         color: TEXT_DIM,
         align: 'right',
     });
-    drawBar(ctx, startX, 189, contentW, 15, spProgress / 500, SP_GRAD);
+    drawBar(ctx, startX, 189, contentW, 15, spScale.ratio, SP_GRAD);
 
     const pillY = 229;
     const pillW = (contentW - gap) / 2;
