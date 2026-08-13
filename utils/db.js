@@ -22,6 +22,7 @@ async function backfillPlayerDefaults() {
         sp_multiplier_expires_at: 0,
         last_ap_change_at: 0,
         last_sp_change_at: 0,
+        last_sp_train_timestamp: 0,
         last_salary_paid_at: 0,
         reputation: 20
     };

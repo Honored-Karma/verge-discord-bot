@@ -1,5 +1,6 @@
 import { getDB } from './db.js';
 import { EmbedBuilder } from 'discord.js';
+import { modernizeResponsePayload } from './modernResponses.js';
 
 export async function logCommand({ client, guildId, channelId, userId, userTag, command, targetId = null, targetTag = null, extra = null }) {
     try {
@@ -57,7 +58,7 @@ export async function logCommand({ client, guildId, channelId, userId, userTag, 
                             }
                             
                             embed.setTimestamp();
-                            await logsChannel.send({ embeds: [embed] });
+                            await logsChannel.send(modernizeResponsePayload({ embeds: [embed] }));
                         }
                     } catch (err) {
                         console.error(`Failed to send log to channel ${logChannelDoc.channel_id}:`, err);

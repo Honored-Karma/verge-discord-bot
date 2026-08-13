@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { EmbedBuilder } from 'discord.js';
 import { getDB } from '../utils/db.js';
 import { getWeeklySalary } from '../utils/rankSystem.js';
+import { modernizeResponsePayload } from '../utils/modernResponses.js';
 
 async function notifySalaryLogChannel(client, lines, totalAmount) {
     const channelId = process.env.SALARY_LOG_CHANNEL_ID;
@@ -18,7 +19,7 @@ async function notifySalaryLogChannel(client, lines, totalAmount) {
             .addFields({ name: 'Итого выплачено', value: `${totalAmount.toLocaleString('ru-RU')}`, inline: true })
             .setTimestamp();
 
-        await channel.send({ embeds: [embed] });
+        await channel.send(modernizeResponsePayload({ embeds: [embed] }));
     } catch (error) {
         console.error('[salary] failed to send log channel message:', error);
     }

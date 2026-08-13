@@ -19,7 +19,7 @@ export const data = new SlashCommandBuilder()
         { name: "🥋 Тренировка", value: "training" },
         { name: "💰 Экономика", value: "economy" },
         { name: "🛡️ Админ", value: "admin" },
-        { name: "📚 Полный список", value: "all" },
+        { name: "📚 Основные команды", value: "all" },
       ),
   );
 
@@ -46,7 +46,7 @@ export async function execute(interaction) {
         { label: "Тренировка", value: "training", emoji: "🥋" },
         { label: "Экономика", value: "economy", emoji: "💰" },
         { label: "Админ", value: "admin", emoji: "🛡️" },
-        { label: "Полный список", value: "all", emoji: "📚" },
+        { label: "Основные команды", value: "all", emoji: "📚" },
       ),
   );
 
@@ -90,7 +90,7 @@ function createMainHelp() {
       {
         name: "🥋 Тренировка",
         value:
-          "`/train-ap` — Тренировка для получения AP\n`/social-rp` — Социальный RP (+AP)\n`/styles-list` — Список боевых стилей",
+          "`/train-ap` — Физическая тренировка (+AP)\n`/train-sp` — Тренировка боевого стиля (+SP)\n`/social-rp` — Социальная сцена (+AP)\n`/styles-list` — Список боевых стилей",
         inline: false,
       },
       {
@@ -112,7 +112,7 @@ function createMainHelp() {
         inline: false,
       },
     )
-    .setFooter({ text: "Используйте стрелки для выбора категории" });
+    .setFooter({ text: "Выберите нужный раздел в меню ниже" });
 }
 
 function createProfileHelp() {
@@ -170,6 +170,19 @@ function createTrainingHelp() {
         inline: false,
       },
       {
+        name: "/train-sp",
+        value:
+          "✅ **Развить изученный боевой стиль — получить SP**\n" +
+          "Сначала выберите стиль из списка, затем заполните форму тренировки.\n" +
+          "• Объём: **500–4 000 символов**\n" +
+          "• Доступны только стили вашего активного персонажа\n\n" +
+          "🥋 Награды:\n" +
+          "• +10 SP (базовое значение × множитель)\n" +
+          "• Уровни: Новичок → Владелец → Эксперт → Мастер\n" +
+          "• Кулдаун: **5 часов**",
+        inline: false,
+      },
+      {
         name: "/social-rp",
         value:
           "✅ **Социальное RP — получить AP**\n" +
@@ -187,7 +200,7 @@ function createTrainingHelp() {
         value:
           "✅ **Просмотреть все боевые стили**\n\n" +
           "🥋 Показывает все стили из базы данных\n" +
-          "💡 Используй точное название стиля в `/train-sp`",
+          "💡 Для тренировки используйте `/train-sp` — доступный стиль выбирается из списка",
         inline: false,
       },
     )
@@ -327,7 +340,7 @@ function createAdminHelp() {
 function createAllCommandsHelp() {
   return new EmbedBuilder()
     .setColor("#b209d4")
-    .setTitle("📚 Полный список всех команд (27)")
+    .setTitle("📚 Основные команды Verge RPG")
     .setImage("https://iili.io/BP3OOut.png")
     .addFields(
       {
@@ -336,8 +349,8 @@ function createAllCommandsHelp() {
         inline: true,
       },
       {
-        name: "🥋 Тренировка (3)",
-        value: "/train-ap\n/social-rp\n/styles-list",
+        name: "🥋 Тренировка (4)",
+        value: "/train-ap\n/train-sp\n/social-rp\n/styles-list",
         inline: true,
       },
       {
@@ -357,10 +370,10 @@ function createAllCommandsHelp() {
         inline: true,
       },
       {
-        name: "🔍 Всего команд",
-        value: "**27 команд** — полный функционал RPG бота!",
+        name: "🔍 Доступно в боте",
+        value: "**47 slash-команд** — игровые, персональные и административные инструменты.",
         inline: true,
       },
     )
-    .setFooter({ text: "📚 Полный список всех команд" });
+    .setFooter({ text: "📚 Основные команды для игроков" });
 }

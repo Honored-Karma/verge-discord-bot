@@ -56,6 +56,12 @@ const BANNERS = {
   logEnable: "https://iili.io/BP3OsA7.png",
 };
 
+const LEGACY_BANNER_URLS = new Set(Object.values(BANNERS));
+
+export function isLegacyBannerUrl(url) {
+  return LEGACY_BANNER_URLS.has(String(url || ""));
+}
+
 // Проверяет, является ли URL допустимым для Discord (http/https/attachment)
 function isValidDiscordUrl(url) {
   if (!url || typeof url !== 'string') return false;
@@ -81,7 +87,8 @@ function _getActivityBonusPercent(player) {
   const now = Math.floor(Date.now() / 1000);
   const lastTrain = Number(player.last_train_timestamp || 0);
   const lastSocial = Number(player.last_socialrp_timestamp || 0);
-  const latest = Math.max(lastTrain, lastSocial);
+  const lastSPTrain = Number(player.last_sp_train_timestamp || 0);
+  const latest = Math.max(lastTrain, lastSocial, lastSPTrain);
   if (!latest) return 0;
   return now - latest <= 7 * 24 * 60 * 60 ? 5 : 0;
 }

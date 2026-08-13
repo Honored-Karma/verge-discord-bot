@@ -53,7 +53,8 @@ function formatHistory(history) {
       const date = new Date(entry.changed_at).getTime();
       const timestamp = Number.isFinite(date) ? Math.floor(date / 1000) : null;
       const relativeTime = timestamp ? ` • <t:${timestamp}:R>` : "";
-      return `**${String(entry.type || "Изменение").toUpperCase()}**  ${sign}${formatted}${relativeTime}`;
+      const styleName = entry.style_name ? ` • ${entry.style_name}` : "";
+      return `**${String(entry.type || "Изменение").toUpperCase()}**  ${sign}${formatted}${styleName}${relativeTime}`;
     })
     .join("\n");
 }

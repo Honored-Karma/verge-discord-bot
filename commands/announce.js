@@ -6,6 +6,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
 } from "discord.js";
+import { modernizeResponsePayload } from "../utils/modernResponses.js";
 
 export const data = new SlashCommandBuilder()
   .setName("announce")
@@ -239,7 +240,7 @@ export async function execute(interaction) {
           if (image) dmEmbed.setImage(image);
           if (thumbnail) dmEmbed.setThumbnail(thumbnail);
 
-          await user.send({ embeds: [dmEmbed] });
+          await user.send(modernizeResponsePayload({ embeds: [dmEmbed] }));
           successCount++;
 
           // Небольшая задержка между отправками для избежания rate limit

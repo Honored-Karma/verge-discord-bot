@@ -7,6 +7,7 @@ import { createServer } from 'http';
 import { connectDatabase, closeDatabase } from './utils/db.js';
 import { startWeeklySalaryScheduler } from './services/salaryService.js';
 import { expireMultipliers } from './utils/dataManager.js';
+import { installModernResponseAdapter } from './utils/modernResponses.js';
 
 config();
 
@@ -90,6 +91,9 @@ client.once(Events.ClientReady, async readyClient => {
 });
 
 client.on(Events.InteractionCreate, async interaction => {
+    // Give every command and component interaction the same Components V2 visual language.
+    installModernResponseAdapter(interaction);
+
     if (interaction.isModalSubmit()) {
         const command = [...client.commands.values()].find(candidate =>
             typeof candidate.handlesModal === 'function' && candidate.handlesModal(interaction)
@@ -121,30 +125,6 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 
     if (!interaction.isChatInputCommand()) return;
-    // Wrap reply/followUp to convert deprecated `ephemeral: true` into flags: 64
-    try {
-        const origReply = interaction.reply.bind(interaction);
-        interaction.reply = (options) => {
-            if (options && options.ephemeral) {
-                options.flags = (options.flags || 0) | 64;
-                delete options.ephemeral;
-            }
-            return origReply(options);
-        };
-        if (interaction.followUp) {
-            const origFollow = interaction.followUp.bind(interaction);
-            interaction.followUp = (options) => {
-                if (options && options.ephemeral) {
-                    options.flags = (options.flags || 0) | 64;
-                    delete options.ephemeral;
-                }
-                return origFollow(options);
-            };
-        }
-    } catch (e) {
-        // noop
-    }
-    
     const command = client.commands.get(interaction.commandName);
     
     if (!command) {

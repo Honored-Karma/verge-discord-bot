@@ -107,7 +107,8 @@ function getActivityBonusPercent(player) {
   const now = Math.floor(Date.now() / 1000);
   const lastTrain = Number(player.last_train_timestamp || 0);
   const lastSocial = Number(player.last_socialrp_timestamp || 0);
-  const latest = Math.max(lastTrain, lastSocial);
+  const lastSPTrain = Number(player.last_sp_train_timestamp || 0);
+  const latest = Math.max(lastTrain, lastSocial, lastSPTrain);
   if (!latest) return 0;
   // Bonus for active players (activity in last 7 days)
   return now - latest <= 7 * 24 * 60 * 60 ? 5 : 0;
@@ -202,6 +203,7 @@ async function addProgressionHistory(
   oldValue,
   newValue,
   source = "system",
+  details = null,
 ) {
   try {
     const db = getDB();
@@ -212,6 +214,7 @@ async function addProgressionHistory(
       new_value: newValue,
       delta: newValue - oldValue,
       source,
+      ...(details && typeof details === "object" ? details : {}),
       changed_at: new Date(),
     });
   } catch (error) {
@@ -354,6 +357,7 @@ export async function createPlayer(
       ap: 0,
       last_train_timestamp: 0,
       last_socialrp_timestamp: 0,
+      last_sp_train_timestamp: 0,
       unlocked_avatar: 0,
       ap_multiplier: 100.0,
       sp_multiplier: 100.0,
@@ -622,7 +626,7 @@ export async function getAllPlayerSP(playerId) {
     const db = getDB();
     const result = await db
       .collection("player_sp")
-      .find({ player_id: playerId, sp: { $gt: 0 } })
+      .find({ player_id: playerId })
       .sort({ sp: -1 })
       .toArray();
 
@@ -640,6 +644,43 @@ export async function getAllPlayerSP(playerId) {
     return styles;
   } catch (error) {
     console.error("Error getting all player SP:", error);
+    return [];
+  }
+}
+
+export async function getLearnedPlayerStyles(playerId) {
+  try {
+    const db = getDB();
+    const records = await db
+      .collection("player_sp")
+      .aggregate([
+        { $match: { player_id: playerId } },
+        {
+          $lookup: {
+            from: "styles",
+            localField: "style_id",
+            foreignField: "id",
+            as: "style",
+          },
+        },
+        { $unwind: "$style" },
+        {
+          $project: {
+            _id: 0,
+            id: "$style.id",
+            name: "$style.name",
+            sp: { $max: [{ $ifNull: ["$sp", 0] }, 0] },
+          },
+        },
+        { $sort: { sp: -1, name: 1 } },
+      ])
+      .toArray();
+    return records.map((record) => ({
+      ...record,
+      sp: Math.max(0, Number(record.sp || 0)),
+    }));
+  } catch (error) {
+    console.error("Error getting learned player styles:", error);
     return [];
   }
 }
@@ -720,6 +761,148 @@ export async function addSP(
   } catch (error) {
     console.error("Error adding SP:", error);
     return false;
+  }
+}
+
+/**
+ * Atomically completes a player's SP training for an already learned style.
+ * The player timestamp is updated in the same transaction-like operation as
+ * the SP reward, preventing two open forms from granting duplicate rewards.
+ */
+export async function completeSPTraining(
+  playerId,
+  styleId,
+  baseAmount,
+  cooldownMs,
+) {
+  let claim = null;
+  try {
+    const db = getDB();
+    const player = await getPlayer(playerId);
+    if (!player) return { success: false, reason: "not_found" };
+
+    const style = await db.collection("styles").findOne({ id: styleId });
+    if (!style) return { success: false, reason: "style_not_found" };
+
+    const learnedStyle = await db.collection("player_sp").findOne({
+      player_id: playerId,
+      style_id: styleId,
+    });
+    if (!learnedStyle) return { success: false, reason: "style_not_owned" };
+
+    const now = Math.floor(Date.now() / 1000);
+    const cooldownSeconds = Math.ceil(Number(cooldownMs) / 1000);
+    const availableBefore = now - cooldownSeconds;
+    const lastTraining = Number(player.last_sp_train_timestamp || 0);
+
+    if (lastTraining > availableBefore) {
+      return {
+        success: false,
+        reason: "cooldown",
+        retryAt: lastTraining + cooldownSeconds,
+      };
+    }
+
+    const multiplierExpired =
+      Number(player.sp_multiplier_expires_at || 0) > 0 &&
+      now >= Number(player.sp_multiplier_expires_at);
+    const baseMultiplier = multiplierExpired
+      ? 100
+      : Number(player.sp_multiplier || 100);
+    const dynamicBonus =
+      getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
+    const multiplier = baseMultiplier + dynamicBonus;
+    const gained = Math.max(
+      0,
+      Math.round(Number(baseAmount) * (multiplier / 100)),
+    );
+
+    const previousPlayerState = {
+      last_sp_train_timestamp: lastTraining,
+      last_sp_change_at: Number(player.last_sp_change_at || 0),
+      sp_multiplier: Number(player.sp_multiplier || 100),
+      sp_multiplier_expires_at: Number(player.sp_multiplier_expires_at || 0),
+    };
+    const setOperations = {
+      last_sp_train_timestamp: now,
+      last_sp_change_at: now,
+    };
+    if (multiplierExpired) {
+      setOperations.sp_multiplier = 100;
+      setOperations.sp_multiplier_expires_at = 0;
+    }
+
+    const claimedPlayer = await db.collection("players").findOneAndUpdate(
+      {
+        id: playerId,
+        $or: [
+          { last_sp_train_timestamp: { $lte: availableBefore } },
+          { last_sp_train_timestamp: { $exists: false } },
+        ],
+      },
+      { $set: setOperations },
+      { returnDocument: "after" },
+    );
+
+    if (!claimedPlayer) {
+      const latest = await getPlayer(playerId);
+      const latestTraining = Number(latest?.last_sp_train_timestamp || now);
+      return {
+        success: false,
+        reason: "cooldown",
+        retryAt: latestTraining + cooldownSeconds,
+      };
+    }
+    claim = { db, playerId, now, previousPlayerState };
+
+    const updatedStyle = await db.collection("player_sp").findOneAndUpdate(
+      { player_id: playerId, style_id: styleId },
+      { $inc: { sp: gained } },
+      { returnDocument: "after" },
+    );
+
+    if (!updatedStyle) {
+      await db.collection("players").updateOne(
+        { id: playerId, last_sp_train_timestamp: now },
+        { $set: previousPlayerState },
+      );
+      claim = null;
+      return { success: false, reason: "style_not_owned" };
+    }
+
+    const newSP = Number(updatedStyle.sp || 0);
+    const oldSP = newSP - gained;
+    await addProgressionHistory(
+      playerId,
+      "sp",
+      oldSP,
+      newSP,
+      `train-sp:${style.id}`,
+      { style_id: style.id, style_name: style.name },
+    );
+
+    return {
+      success: true,
+      style: { id: style.id, name: style.name },
+      oldSP,
+      newSP,
+      gained,
+      multiplier,
+      baseMultiplier,
+      dynamicBonus,
+      retryAt: now + cooldownSeconds,
+    };
+  } catch (error) {
+    if (claim) {
+      await claim.db.collection("players").updateOne(
+        { id: claim.playerId, last_sp_train_timestamp: claim.now },
+        { $set: claim.previousPlayerState },
+      ).catch((rollbackError) => {
+        console.error("Error rolling back SP training cooldown:", rollbackError);
+      });
+    }
+    console.error("Error completing SP training:", error);
+    return { success: false, reason: "error" };
   }
 }
 
@@ -819,7 +1002,6 @@ export async function getStylePlayerCount(styleId) {
     const db = getDB();
     const count = await db.collection("player_sp").countDocuments({
       style_id: styleId,
-      sp: { $gt: 0 },
     });
     return count;
   } catch (error) {

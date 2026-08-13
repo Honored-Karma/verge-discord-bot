@@ -118,9 +118,39 @@ export function validateSocialRPText(text) {
         return { valid: false, reason: `Сократите текст социальной сцены до 4 000 символов. Сейчас: ${text.length}` };
     }
 
-    const meaningfulCount = (text.match(/[a-zA-Zа-яА-ЯёЁ0-9\s]/g) || []).length;
+    const meaningfulCount = (text.match(/[\p{L}\p{N}\s]/gu) || []).length;
     const meaningfulPercentage = (meaningfulCount / text.length) * 100;
     if (meaningfulPercentage < 50) {
+        return {
+            valid: false,
+            reason: 'Используйте связный текст: не менее половины содержимого должны составлять буквы, цифры и пробелы.',
+        };
+    }
+
+    return { valid: true };
+}
+
+export function validateSPTrainingText(text) {
+    if (typeof text !== 'string') {
+        return { valid: false, reason: 'Введите текст тренировки боевого стиля.' };
+    }
+
+    if (text.length < 500) {
+        return {
+            valid: false,
+            reason: `Опишите тренировку подробнее: нужно не менее 500 символов. Сейчас: ${text.length}.`,
+        };
+    }
+
+    if (text.length > 4000) {
+        return {
+            valid: false,
+            reason: `Сократите тренировку до 4 000 символов. Сейчас: ${text.length}.`,
+        };
+    }
+
+    const meaningfulCount = (text.match(/[a-zA-Zа-яА-ЯёЁ0-9\s]/g) || []).length;
+    if ((meaningfulCount / text.length) * 100 < 50) {
         return {
             valid: false,
             reason: 'Используйте связный текст: не менее половины содержимого должны составлять буквы, цифры и пробелы.',
