@@ -1,4 +1,5 @@
 import { getDB } from "./db.js";
+import { getItemDefinition } from "./itemSystem.js";
 
 const PLAYER_DEFAULTS = {
   character_avatar: null,
@@ -1028,31 +1029,25 @@ export async function getPlayerInventory(playerId) {
 export async function giveItem(playerId, itemName, qty, adminId) {
   try {
     const db = getDB();
-    const existing = await db.collection("inventory").findOne({
-      player_id: playerId,
-      item_name: itemName,
-    });
+    const safeName = String(itemName || "").trim();
+    const safeQuantity = Number(qty);
+    if (!safeName || safeName.length > 100
+      || !Number.isSafeInteger(safeQuantity) || safeQuantity < 1) return false;
 
-    if (existing) {
-      await db
-        .collection("inventory")
-        .updateOne(
-          { player_id: playerId, item_name: itemName },
-          { $inc: { qty } },
-        );
-    } else {
-      await db.collection("inventory").insertOne({
-        player_id: playerId,
-        item_name: itemName,
-        qty,
-      });
-    }
+    await db.collection("inventory").updateOne(
+      { player_id: playerId, item_name: safeName },
+      {
+        $inc: { qty: safeQuantity },
+        $setOnInsert: { player_id: playerId, item_name: safeName },
+      },
+      { upsert: true },
+    );
 
     if (adminId !== "system") {
       logAdminAction(
         adminId,
         "GIVE_ITEM",
-        `Выдал ${qty}x ${itemName} игроку ${playerId}`,
+        `Выдал ${safeQuantity}x ${safeName} игроку ${playerId}`,
       );
     }
     return true;
@@ -1131,34 +1126,168 @@ export async function getLeaderboard(sortBy = "ap", limit = 10) {
 export async function useItem(playerId, itemName, qty) {
   try {
     const db = getDB();
-    const inv = await db.collection("inventory").findOne({
-      player_id: playerId,
-      item_name: itemName,
-    });
+    const amountUsed = Number(qty);
+    if (!Number.isSafeInteger(amountUsed) || amountUsed < 1) {
+      return { success: false, reason: "invalid_quantity" };
+    }
 
-    if (!inv) return { success: false, reason: "Предмет не в инвентаре" };
-    if (inv.qty < qty)
-      return { success: false, reason: "Недостаточно предметов" };
+    const player = await getPlayer(playerId);
+    if (!player) return { success: false, reason: "player_not_found" };
 
-    const newQty = inv.qty - qty;
-    if (newQty === 0) {
-      await db.collection("inventory").deleteOne({
+    const definition = getItemDefinition(itemName);
+    if (!definition.usable) {
+      return { success: false, reason: "not_usable", definition };
+    }
+
+    let style = null;
+    let learnedStyle = null;
+    if (definition.kind === "sp") {
+      style = await db.collection("styles").findOne({ name: definition.styleName });
+      if (!style) {
+        return { success: false, reason: "style_not_found", definition };
+      }
+      learnedStyle = await db.collection("player_sp").findOne({
+        player_id: playerId,
+        style_id: style.id,
+      });
+      if (!learnedStyle) {
+        return { success: false, reason: "style_not_owned", definition, style };
+      }
+    }
+
+    const reward = definition.amount * amountUsed;
+    if (!Number.isSafeInteger(reward) || reward < 1) {
+      return { success: false, reason: "amount_too_large", definition };
+    }
+    const currentValue = definition.kind === "ap"
+      ? Number(player.ap || 0)
+      : Number(learnedStyle?.sp || 0);
+    if (!Number.isSafeInteger(currentValue)
+      || !Number.isSafeInteger(currentValue + reward)) {
+      return { success: false, reason: "amount_too_large", definition };
+    }
+
+    const claimedItem = await db.collection("inventory").findOneAndUpdate(
+      {
+        player_id: playerId,
+        item_name: itemName,
+        qty: { $gte: amountUsed },
+      },
+      { $inc: { qty: -amountUsed } },
+      { returnDocument: "before" },
+    );
+
+    if (!claimedItem) {
+      const existing = await db.collection("inventory").findOne({
         player_id: playerId,
         item_name: itemName,
       });
-    } else {
-      await db
-        .collection("inventory")
-        .updateOne(
-          { player_id: playerId, item_name: itemName },
-          { $set: { qty: newQty } },
-        );
+      return {
+        success: false,
+        reason: existing ? "insufficient_quantity" : "not_found",
+        available: Number(existing?.qty || 0),
+        definition,
+      };
     }
 
-    return { success: true, itemName };
+    const previousQuantity = Number(claimedItem.qty || 0);
+    const remainingQuantity = previousQuantity - amountUsed;
+    const now = Math.floor(Date.now() / 1000);
+    let appliedEffect = null;
+
+    try {
+      let oldValue;
+      let newValue;
+      if (definition.kind === "ap") {
+        const updatedPlayer = await db.collection("players").findOneAndUpdate(
+          {
+            id: playerId,
+            ap: { $lte: Number.MAX_SAFE_INTEGER - reward },
+          },
+          {
+            $inc: { ap: reward },
+            $set: {
+              last_ap_change_at: now,
+              ...(Number(player.ap || 0) + reward >= 1000 ? { unlocked_avatar: 1 } : {}),
+            },
+          },
+          { returnDocument: "after" },
+        );
+        if (!updatedPlayer) throw new Error("Player AP could not be safely updated");
+        appliedEffect = { kind: "ap" };
+        newValue = Number(updatedPlayer.ap || 0);
+        oldValue = newValue - reward;
+        await addProgressionHistory(playerId, "ap", oldValue, newValue, "item", {
+          item_name: itemName,
+          quantity: amountUsed,
+        });
+      } else {
+        const updatedStyle = await db.collection("player_sp").findOneAndUpdate(
+          {
+            player_id: playerId,
+            style_id: style.id,
+            sp: { $lte: Number.MAX_SAFE_INTEGER - reward },
+          },
+          { $inc: { sp: reward } },
+          { returnDocument: "after" },
+        );
+        if (!updatedStyle) throw new Error("Style SP could not be safely updated");
+        appliedEffect = { kind: "sp", styleId: style.id };
+        newValue = Number(updatedStyle.sp || 0);
+        oldValue = newValue - reward;
+        await db.collection("players").updateOne(
+          { id: playerId },
+          { $set: { last_sp_change_at: now } },
+        );
+        await addProgressionHistory(playerId, "sp", oldValue, newValue, "item", {
+          item_name: itemName,
+          quantity: amountUsed,
+          style_id: style.id,
+          style_name: style.name,
+        });
+      }
+
+      if (remainingQuantity === 0) {
+        await db.collection("inventory").deleteOne({
+          _id: claimedItem._id,
+          qty: 0,
+        }).catch((cleanupError) => {
+          console.error("Error cleaning up an empty inventory item:", cleanupError);
+        });
+      }
+
+      return {
+        success: true,
+        itemName,
+        quantity: amountUsed,
+        remainingQuantity,
+        definition,
+        reward,
+        oldValue,
+        newValue,
+        style: style ? { id: style.id, name: style.name } : null,
+      };
+    } catch (effectError) {
+      if (appliedEffect?.kind === "ap") {
+        await db.collection("players").updateOne(
+          { id: playerId },
+          { $inc: { ap: -reward } },
+        ).catch(() => {});
+      } else if (appliedEffect?.kind === "sp") {
+        await db.collection("player_sp").updateOne(
+          { player_id: playerId, style_id: appliedEffect.styleId },
+          { $inc: { sp: -reward } },
+        ).catch(() => {});
+      }
+      await db.collection("inventory").updateOne(
+        { _id: claimedItem._id },
+        { $inc: { qty: amountUsed } },
+      );
+      throw effectError;
+    }
   } catch (error) {
     console.error("Error using item:", error);
-    return { success: false, reason: "Ошибка использования предмета" };
+    return { success: false, reason: "error" };
   }
 }
 

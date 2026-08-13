@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, giveItem } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
-import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
+import { hasCommandPermission } from '../utils/adminCheck.js';
 import { resolveMember } from '../utils/memberHelper.js';
 import { logCommand } from '../utils/logs.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
@@ -16,10 +16,14 @@ export const data = new SlashCommandBuilder()
     .addStringOption(option =>
         option.setName('item_name')
             .setDescription('Название предмета (любое)')
+            .setMinLength(1)
+            .setMaxLength(100)
             .setRequired(true))
     .addIntegerOption(option =>
         option.setName('qty')
             .setDescription('Количество (по умолчанию: 1)')
+            .setMinValue(1)
+            .setMaxValue(1000000)
             .setRequired(false))
     .addIntegerOption(option =>
         option.setName('slot')
@@ -59,7 +63,7 @@ export async function execute(interaction) {
     }
     if (slot !== 1 && slot !== 2) slot = 1;
     const playerId = slot === 1 ? userId : `${userId}_${slot}`;
-    const itemName = interaction.options.getString('item_name');
+    const itemName = interaction.options.getString('item_name').trim();
     const qty = interaction.options.getInteger('qty') || 1;
     const player = await getPlayer(playerId);
         if (!player) {
