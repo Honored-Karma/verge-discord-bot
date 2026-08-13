@@ -1,20 +1,26 @@
-import { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder } from 'discord.js';
-import { getPlayer, getAllPlayerSP, getTotalSP, getRecentProgressionHistory } from '../utils/dataManager.js';
 import {
-    createProfileMainPage,
-    createProfileAPSPPage,
-    createProfileStylesPage,
-    createProfileBalancePage,
-    createProfileHistoryPage,
-    createProfilePhysicalPage,
-    getProfileMultipliers,
-    createProfileButtons,
-    createStyleNavigationButtons,
+    AttachmentBuilder,
+    MessageFlags,
+    SlashCommandBuilder,
+} from 'discord.js';
+import {
+    getAllPlayerSP,
+    getPlayer,
+    getRecentProgressionHistory,
+    getReputationTier,
+    getTotalSP,
+} from '../utils/dataManager.js';
+import {
+    createCooldownEmbed,
     createErrorEmbed,
-    createCooldownEmbed
+    getProfileMultipliers,
 } from '../utils/embeds.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
-import { generateAPSPStatsCard, generatePhysicalStatsCard, generateProfileCard } from '../utils/profileHtml.js';
+import {
+    generatePhysicalStatsCard,
+    generateUnifiedProfileCard,
+} from '../utils/profileHtml.js';
+import { createProfileV2Components } from '../utils/profileComponents.js';
 
 export const data = new SlashCommandBuilder()
     .setName('profile')
@@ -29,9 +35,8 @@ export const data = new SlashCommandBuilder()
             .setRequired(false)
             .addChoices(
                 { name: 'Слот 1', value: 1 },
-                { name: 'Слот 2', value: 2 }
-            )
-    );
+                { name: 'Слот 2', value: 2 },
+            ));
 
 export async function execute(interaction) {
     const globalCooldown = checkGlobalCooldown(interaction.user.id);
@@ -39,7 +44,7 @@ export async function execute(interaction) {
         const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
         const msg = await interaction.reply({
             embeds: [createCooldownEmbed('Профиль', retryAt)],
-            fetchReply: true
+            fetchReply: true,
         });
         autoDeleteMessageShort(msg);
         return;
@@ -53,168 +58,142 @@ export async function execute(interaction) {
         slot = await getActiveSlot(userId);
     }
     if (slot !== 1 && slot !== 2) slot = 1;
+
     const slotPlayerId = slot === 1 ? userId : `${userId}_${slot}`;
     const player = await getPlayer(slotPlayerId);
-
     if (!player) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Пустой слот', `В этом слоте нет персонажа. Используйте /register, чтобы создать нового персонажа в этом слоте.`)],
-            fetchReply: true
+            embeds: [createErrorEmbed(
+                'Пустой слот',
+                'В этом слоте нет персонажа. Используйте /register, чтобы создать нового персонажа.',
+            )],
+            fetchReply: true,
         });
         autoDeleteMessageShort(msg);
         return;
     }
 
-    const history = await getRecentProgressionHistory(slotPlayerId, 8);
-    const styles = await getAllPlayerSP(slotPlayerId);
-    const totalSP = await getTotalSP(slotPlayerId);
+    const [history, styles, totalSP] = await Promise.all([
+        getRecentProgressionHistory(slotPlayerId, 8),
+        getAllPlayerSP(slotPlayerId),
+        getTotalSP(slotPlayerId),
+    ]);
 
-    // ── Build profile card banner ─────────────────────────────────
-    const topStyles = styles.slice(0, 3);
+    const characterName = player.character_name || player.username;
+    const avatarUrl = player.character_avatar
+        || targetUser.displayAvatarURL({ extension: 'png', size: 512 });
+    const fallbackAvatarUrl = targetUser.displayAvatarURL({ extension: 'png', size: 512 });
+    const multipliers = getProfileMultipliers(player);
+    const reputationTier = getReputationTier(player.reputation);
 
-    let hudBuffer;
-    try {
-        hudBuffer = await generateProfileCard({
-            characterName: player.character_name || player.username,
-            avatarUrl: player.character_avatar || targetUser.displayAvatarURL({ extension: 'png', size: 512 }),
-            fallbackAvatarUrl: targetUser.displayAvatarURL({ extension: 'png', size: 512 }),
-            styles: topStyles,
-            attributeName: player.attribute_name || null,
-            attributeValue: player.ap,
-            totalSP,
-            orgName: player.organization || player.custom_org || null,
-            orgRank: player.rank || null,
+    const mainCardPromise = generateUnifiedProfileCard({
+        characterName,
+        avatarUrl,
+        fallbackAvatarUrl,
+        styles,
+        attributeName: player.attribute_name || null,
+        ap: player.ap,
+        totalSP,
+        apMultiplier: multipliers.ap,
+        spMultiplier: multipliers.sp,
+        salaryMultiplier: Number(player.salary_multiplier ?? 100),
+        krw: player.krw,
+        yen: player.yen,
+        reputation: player.reputation,
+        reputationTier: reputationTier.name,
+        orgName: player.organization || player.custom_org || null,
+        orgRank: player.rank || null,
+        playerId: player.id,
+        slot,
+    }).catch((error) => {
+        console.error('Unified profile card render error:', error);
+        return null;
+    });
+
+    const physicalCardPromise = player.physical_stats
+        ? generatePhysicalStatsCard({
+            characterName,
+            avatarUrl,
+            fallbackAvatarUrl,
+            stats: player.physical_stats,
             playerId: player.id,
             slot,
-        });
-    } catch (err) {
-        console.error('Profile card render error:', err);
-        hudBuffer = null;
-    }
+        }).catch((error) => {
+            console.error('Physical stats card render error:', error);
+            return null;
+        })
+        : Promise.resolve(null);
 
-    let physicalStatsBuffer = null;
-    if (player.physical_stats) {
-        try {
-            physicalStatsBuffer = await generatePhysicalStatsCard({
-                characterName: player.character_name || player.username,
-                avatarUrl: player.character_avatar || targetUser.displayAvatarURL({ extension: 'png', size: 512 }),
-                fallbackAvatarUrl: targetUser.displayAvatarURL({ extension: 'png', size: 512 }),
-                stats: player.physical_stats,
-                playerId: player.id,
+    const [mainCardBuffer, physicalCardBuffer] = await Promise.all([
+        mainCardPromise,
+        physicalCardPromise,
+    ]);
+
+    const buildView = (page, disabled = false) => {
+        const isMain = page === 'main';
+        const isPhysical = page === 'physical';
+        const buffer = isMain ? mainCardBuffer : isPhysical ? physicalCardBuffer : null;
+        const imageName = buffer
+            ? (isMain ? 'profile-main.png' : 'physical-stats.png')
+            : null;
+
+        return {
+            components: createProfileV2Components({
+                page,
+                player,
+                user: targetUser,
                 slot,
-            });
-        } catch (err) {
-            console.error('Physical stats card render error:', err);
-        }
-    }
+                totalSP,
+                history,
+                imageName,
+                disabled,
+            }),
+            files: buffer ? [new AttachmentBuilder(buffer, { name: imageName })] : [],
+            imageName,
+        };
+    };
 
-    let apspStatsBuffer = null;
-    try {
-        const multipliers = getProfileMultipliers(player);
-        apspStatsBuffer = await generateAPSPStatsCard({
-            characterName: player.character_name || player.username,
-            avatarUrl: player.character_avatar || targetUser.displayAvatarURL({ extension: 'png', size: 512 }),
-            fallbackAvatarUrl: targetUser.displayAvatarURL({ extension: 'png', size: 512 }),
-            ap: player.ap,
-            totalSP,
-            attributeName: player.attribute_name || null,
-            apMultiplier: multipliers.ap,
-            spMultiplier: multipliers.sp,
-            dynamicBonus: multipliers.dynamicBonus,
-            playerId: player.id,
-            slot,
-        });
-    } catch (err) {
-        console.error('AP/SP stats card render error:', err);
-    }
-
-    // Old embed stays as the main content; card goes as the banner image below
-    let mainEmbed = createProfileMainPage(player, targetUser, slot);
-    const files = [];
-    if (hudBuffer) {
-        const attachment = new AttachmentBuilder(hudBuffer, { name: 'profile-hud.png' });
-        files.push(attachment);
-        mainEmbed.setImage('attachment://profile-hud.png');
-    }
-    const buttons = createProfileButtons(0);
-
+    let currentPage = 'main';
+    const initialView = buildView(currentPage);
     const response = await interaction.reply({
-        embeds: [mainEmbed],
-        files,
-        components: buttons,
-        fetchReply: true
+        flags: MessageFlags.IsComponentsV2,
+        components: initialView.components,
+        files: initialView.files,
+        fetchReply: true,
     });
 
-    const collector = response.createMessageComponentCollector({ time: 300000 });
-    let stylesPage = 0;
+    const collector = response.createMessageComponentCollector({ time: 3 * 60 * 1000 });
+    const pageByButton = {
+        profile_main: 'main',
+        profile_physical: 'physical',
+        profile_history: 'history',
+    };
 
-    collector.on('collect', async i => {
-        if (i.user.id !== interaction.user.id) {
-            return i.reply({ content: 'Это не ваш профиль!', flags: 64 });
+    collector.on('collect', async (componentInteraction) => {
+        if (componentInteraction.user.id !== interaction.user.id) {
+            await componentInteraction.reply({
+                content: 'Это не ваш интерфейс профиля.',
+                flags: MessageFlags.Ephemeral,
+            });
+            return;
         }
 
-        const styles = await getAllPlayerSP(slotPlayerId);
-        let newEmbed;
-        let newButtons;
-        let newFiles = [];
+        const nextPage = pageByButton[componentInteraction.customId];
+        if (!nextPage) return;
 
-        if (i.customId === 'profile_main') {
-            newEmbed = createProfileMainPage(player, targetUser, slot);
-            if (hudBuffer) {
-                const att = new AttachmentBuilder(hudBuffer, { name: 'profile-hud.png' });
-                newFiles = [att];
-                newEmbed.setImage('attachment://profile-hud.png');
-            }
-            newButtons = createProfileButtons(0);
-        } else if (i.customId === 'profile_apsp') {
-            const totalSP = await getTotalSP(slotPlayerId);
-            newEmbed = createProfileAPSPPage(player, targetUser, totalSP, Boolean(apspStatsBuffer));
-            if (apspStatsBuffer) {
-                newFiles = [new AttachmentBuilder(apspStatsBuffer, { name: 'apsp-stats.png' })];
-            }
-            newButtons = createProfileButtons(1);
-        } else if (i.customId === 'profile_physical') {
-            newEmbed = createProfilePhysicalPage(player, targetUser, Boolean(physicalStatsBuffer));
-            if (physicalStatsBuffer) {
-                newFiles = [new AttachmentBuilder(physicalStatsBuffer, { name: 'physical-stats.png' })];
-            }
-            newButtons = createProfileButtons(2);
-        } else if (i.customId === 'profile_styles') {
-            stylesPage = 0;
-            const result = createProfileStylesPage(player, styles, targetUser, stylesPage);
-            newEmbed = result.embed;
-            newButtons = createProfileButtons(3);
-            if (result.totalPages > 1) {
-                newButtons.push(createStyleNavigationButtons(stylesPage, result.totalPages));
-            }
-        } else if (i.customId === 'styles_prev') {
-            stylesPage = Math.max(0, stylesPage - 1);
-            const result = createProfileStylesPage(player, styles, targetUser, stylesPage);
-            newEmbed = result.embed;
-            newButtons = [...createProfileButtons(3), createStyleNavigationButtons(stylesPage, result.totalPages)];
-        } else if (i.customId === 'styles_next') {
-            const nextAttempt = stylesPage + 1;
-            const result = createProfileStylesPage(player, styles, targetUser, nextAttempt);
-            if (nextAttempt < result.totalPages) stylesPage = nextAttempt;
-            const refreshed = createProfileStylesPage(player, styles, targetUser, stylesPage);
-            newEmbed = refreshed.embed;
-            newButtons = [...createProfileButtons(3), createStyleNavigationButtons(stylesPage, refreshed.totalPages)];
-        } else if (i.customId === 'profile_balance') {
-            newEmbed = createProfileBalancePage(player, targetUser);
-            newButtons = createProfileButtons(4);
-        } else if (i.customId === 'profile_history') {
-            newEmbed = createProfileHistoryPage(player, targetUser, history);
-            newButtons = createProfileButtons(5);
-        }
-
-        await i.update({ embeds: [newEmbed], files: newFiles, components: newButtons });
+        currentPage = nextPage;
+        const nextView = buildView(currentPage);
+        await componentInteraction.update({
+            components: nextView.components,
+            files: nextView.files,
+            attachments: [],
+        });
     });
 
-    collector.on('end', () => {
-        interaction.editReply({ components: [] }).catch(() => {});
+    collector.on('end', async () => {
+        try {
+            const expiredView = buildView(currentPage, true);
+            await interaction.editReply({ components: expiredView.components });
+        } catch {}
     });
-
-    setTimeout(() => {
-        response.delete().catch(() => {});
-    }, 3 * 60 * 1000);
 }
