@@ -89,6 +89,29 @@ function _getDynamicBonus(player) {
   return _getRankBonusPercent(player.rank) + _getActivityBonusPercent(player);
 }
 
+export function getProfileMultipliers(player) {
+  const now = Math.floor(Date.now() / 1000);
+  const dynamicBonus = _getDynamicBonus(player);
+  const apExpiresAt = Number(player.ap_multiplier_expires_at || 0);
+  const spExpiresAt = Number(player.sp_multiplier_expires_at || 0);
+  const baseAP = apExpiresAt > 0 && apExpiresAt <= now
+    ? 100
+    : Number(player.ap_multiplier || 100);
+  const baseSP = spExpiresAt > 0 && spExpiresAt <= now
+    ? 100
+    : Number(player.sp_multiplier || 100);
+
+  return {
+    ap: baseAP + dynamicBonus,
+    sp: baseSP + dynamicBonus,
+    baseAP,
+    baseSP,
+    dynamicBonus,
+    apExpiresAt: apExpiresAt > now ? apExpiresAt : 0,
+    spExpiresAt: spExpiresAt > now ? spExpiresAt : 0,
+  };
+}
+
 export function createSuccessEmbed(title, description, bannerKey = "default") {
   return new EmbedBuilder()
     .setColor(0xb209d4)
@@ -398,17 +421,32 @@ export function createProfileMainPage(player, user) {
   return embed;
 }
 
-export function createProfileAPSPPage(player, user, totalSP = 0) {
+export function createProfileAPSPPage(player, user, totalSP = 0, renderedCard = false) {
   const embed = new EmbedBuilder()
     .setColor(0xb209d4)
     .setTitle(`📊 Прогресс — ${player.character_name || player.username}`)
     .setThumbnail(
       resolveAvatar(player, user),
     )
-    .setImage(BANNERS.progress)
+    .setImage(renderedCard ? "attachment://apsp-stats.png" : BANNERS.progress)
     .setTimestamp();
 
-  const nextMilestone = Math.ceil(player.ap / 100) * 100;
+  const multipliers = getProfileMultipliers(player);
+
+  if (renderedCard) {
+    const expiryLines = [];
+    if (multipliers.apExpiresAt > 0) {
+      expiryLines.push(`⚡ Множитель AP действует до <t:${multipliers.apExpiresAt}:R>`);
+    }
+    if (multipliers.spExpiresAt > 0) {
+      expiryLines.push(`🥋 Множитель SP действует до <t:${multipliers.spExpiresAt}:R>`);
+    }
+    if (expiryLines.length > 0) embed.setDescription(expiryLines.join("\n"));
+    embed.setFooter({ text: `ID: ${player.id} • Страница 2/6` });
+    return embed;
+  }
+
+  const nextMilestone = (Math.floor(player.ap / 100) + 1) * 100;
   const previousMilestone = Math.floor(player.ap / 100) * 100;
   const progressInRange = player.ap - previousMilestone;
 
@@ -425,19 +463,12 @@ export function createProfileAPSPPage(player, user, totalSP = 0) {
     inline: true,
   });
 
-  const apMult = Number(player.ap_multiplier || 100);
-  const spMult = Number(player.sp_multiplier || 100);
-  const apExp = Number(player.ap_multiplier_expires_at || 0);
-  const spExp = Number(player.sp_multiplier_expires_at || 0);
-  const dynamicBonus = _getDynamicBonus(player);
-  const effectiveAPMult = apMult + dynamicBonus;
-  const effectiveSPMult = spMult + dynamicBonus;
-  let multText = `AP: **${effectiveAPMult}%**`;
-  if (apExp > 0) multText += ` (до <t:${apExp}:R>)`;
-  multText += `\nSP: **${effectiveSPMult}%**`;
-  if (spExp > 0) multText += ` (до <t:${spExp}:R>)`;
-  if (dynamicBonus > 0)
-    multText += `\n*(база: AP ${apMult}% / SP ${spMult}% + бонус ${dynamicBonus}%)*`;
+  let multText = `AP: **${multipliers.ap}%**`;
+  if (multipliers.apExpiresAt > 0) multText += ` (до <t:${multipliers.apExpiresAt}:R>)`;
+  multText += `\nSP: **${multipliers.sp}%**`;
+  if (multipliers.spExpiresAt > 0) multText += ` (до <t:${multipliers.spExpiresAt}:R>)`;
+  if (multipliers.dynamicBonus > 0)
+    multText += `\n*(база: AP ${multipliers.baseAP}% / SP ${multipliers.baseSP}% + бонус ${multipliers.dynamicBonus}%)*`;
   embed.addFields({ name: "📈 Множители", value: multText, inline: true });
 
   embed.setFooter({ text: `ID: ${player.id} • Страница 2/6` });

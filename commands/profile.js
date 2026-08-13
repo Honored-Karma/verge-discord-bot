@@ -7,13 +7,14 @@ import {
     createProfileBalancePage,
     createProfileHistoryPage,
     createProfilePhysicalPage,
+    getProfileMultipliers,
     createProfileButtons,
     createStyleNavigationButtons,
     createErrorEmbed,
     createCooldownEmbed
 } from '../utils/embeds.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
-import { generatePhysicalStatsCard, generateProfileCard } from '../utils/profileHtml.js';
+import { generateAPSPStatsCard, generatePhysicalStatsCard, generateProfileCard } from '../utils/profileHtml.js';
 
 export const data = new SlashCommandBuilder()
     .setName('profile')
@@ -107,6 +108,26 @@ export async function execute(interaction) {
         }
     }
 
+    let apspStatsBuffer = null;
+    try {
+        const multipliers = getProfileMultipliers(player);
+        apspStatsBuffer = await generateAPSPStatsCard({
+            characterName: player.character_name || player.username,
+            avatarUrl: player.character_avatar || targetUser.displayAvatarURL({ extension: 'png', size: 512 }),
+            fallbackAvatarUrl: targetUser.displayAvatarURL({ extension: 'png', size: 512 }),
+            ap: player.ap,
+            totalSP,
+            attributeName: player.attribute_name || null,
+            apMultiplier: multipliers.ap,
+            spMultiplier: multipliers.sp,
+            dynamicBonus: multipliers.dynamicBonus,
+            playerId: player.id,
+            slot,
+        });
+    } catch (err) {
+        console.error('AP/SP stats card render error:', err);
+    }
+
     // Old embed stays as the main content; card goes as the banner image below
     let mainEmbed = createProfileMainPage(player, targetUser, slot);
     const files = [];
@@ -147,7 +168,10 @@ export async function execute(interaction) {
             newButtons = createProfileButtons(0);
         } else if (i.customId === 'profile_apsp') {
             const totalSP = await getTotalSP(slotPlayerId);
-            newEmbed = createProfileAPSPPage(player, targetUser, totalSP);
+            newEmbed = createProfileAPSPPage(player, targetUser, totalSP, Boolean(apspStatsBuffer));
+            if (apspStatsBuffer) {
+                newFiles = [new AttachmentBuilder(apspStatsBuffer, { name: 'apsp-stats.png' })];
+            }
             newButtons = createProfileButtons(1);
         } else if (i.customId === 'profile_physical') {
             newEmbed = createProfilePhysicalPage(player, targetUser, Boolean(physicalStatsBuffer));
