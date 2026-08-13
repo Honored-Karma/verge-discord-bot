@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "scrolls",
+      "name": "Свитки и тома",
+      "emoji": "📜",
+      "description": "Разовые предметы для развития AP и изученных боевых стилей."
+    },
+    {
+      "id": "elixirs",
+      "name": "Эликсиры",
+      "emoji": "🧪",
+      "description": "Временные усиления тренировок. Одновременно действует только самый сильный бонус."
+    },
+    {
+      "id": "cybernetics",
+      "name": "Киберклиника",
+      "emoji": "🦾",
+      "description": "Протезы оформляются через заявку и требуют ручной выдачи ответственным."
+    },
+    {
+      "id": "mutations",
+      "name": "Лаборатория мутаций",
+      "emoji": "🧬",
+      "description": "Рискованные постоянные изменения с обязательным недостатком и проверкой стаффа."
+    },
+    {
+      "id": "artifacts",
+      "name": "Брокер артефактов",
+      "emoji": "💠",
+      "description": "Редкие заказы. Деньги резервируются, а свойства утверждает Глава анкетологов или администратор."
+    }
+  ],
+  "items": [
+    {
+      "id": "ap_tome_25",
+      "category": "scrolls",
+      "name": "Том боевой дисциплины",
+      "emoji": "📘",
+      "rarity": "uncommon",
+      "description": "Мгновенно добавляет 25 AP активному персонажу при использовании.",
+      "price_yen": 250000,
+      "weekly_limit": 2,
+      "delivery": { "kind": "inventory", "item_name": "AP Tome (25)" }
+    },
+    {
+      "id": "ap_tome_50",
+      "category": "scrolls",
+      "name": "Большой том дисциплины",
+      "emoji": "📕",
+      "rarity": "rare",
+      "description": "Мгновенно добавляет 50 AP. Дорогой способ ускорить развитие, но не заменить отыгрыш.",
+      "price_yen": 700000,
+      "weekly_limit": 1,
+      "delivery": { "kind": "inventory", "item_name": "AP Tome (50)" }
+    },
+    {
+      "id": "sp_scroll_20",
+      "category": "scrolls",
+      "name": "Свиток наставника",
+      "emoji": "🥋",
+      "rarity": "rare",
+      "description": "После покупки выберите изученный стиль. Свиток добавит ему 20 SP при использовании.",
+      "price_yen": 400000,
+      "weekly_limit": 2,
+      "delivery": { "kind": "sp_scroll", "amount": 20 }
+    },
+    {
+      "id": "focus_elixir_12h",
+      "category": "elixirs",
+      "name": "Эликсир сосредоточения",
+      "emoji": "🧪",
+      "rarity": "rare",
+      "description": "На 12 часов добавляет 15% к наградам обычных AP- и SP-тренировок.",
+      "price_yen": 350000,
+      "weekly_limit": 2,
+      "delivery": {
+        "kind": "active_effect",
+        "effect_key": "focus_elixir_15",
+        "applies_to": ["ap", "sp"],
+        "bonus_percent": 15,
+        "duration_seconds": 43200
+      }
+    },
+    {
+      "id": "majinin_serum_24h",
+      "category": "elixirs",
+      "name": "Сыворотка Маджин",
+      "emoji": "⚗️",
+      "rarity": "epic",
+      "description": "На 24 часа добавляет 25% к наградам обычных AP- и SP-тренировок. Не складывается с другими эликсирами.",
+      "price_yen": 900000,
+      "weekly_limit": 1,
+      "delivery": {
+        "kind": "active_effect",
+        "effect_key": "majinin_serum_25",
+        "applies_to": ["ap", "sp"],
+        "bonus_percent": 25,
+        "duration_seconds": 86400
+      }
+    },
+    {
+      "id": "civilian_prosthesis",
+      "category": "cybernetics",
+      "name": "Гражданский киберпротез",
+      "emoji": "🦿",
+      "rarity": "uncommon",
+      "description": "Сюжетный протез без сильной боевой способности. После покупки упомяните Главу анкетологов или администратора для оформления.",
+      "price_yen": 1200000,
+      "weekly_limit": 1,
+      "delivery": { "kind": "order", "order_type": "cyber_prosthesis", "tier": "civilian" }
+    },
+    {
+      "id": "combat_prosthesis",
+      "category": "cybernetics",
+      "name": "Боевой киберпротез",
+      "emoji": "🦾",
+      "rarity": "epic",
+      "description": "Протез с одной утверждаемой боевой особенностью и ограничением. После покупки упомяните Главу анкетологов или администратора для выдачи.",
+      "price_yen": 5000000,
+      "weekly_limit": 1,
+      "delivery": { "kind": "order", "order_type": "cyber_prosthesis", "tier": "combat" }
+    },
+    {
+      "id": "controlled_mutation",
+      "category": "mutations",
+      "name": "Контролируемая мутация",
+      "emoji": "🧬",
+      "rarity": "epic",
+      "description": "Одно преимущество и один обязательный недостаток. После покупки упомяните Главу анкетологов или администратора для согласования.",
+      "price_yen": 8000000,
+      "weekly_limit": 1,
+      "delivery": { "kind": "order", "order_type": "mutation", "tier": "controlled" }
+    },
+    {
+      "id": "weak_artifact_order",
+      "category": "artifacts",
+      "name": "Заказ слабого артефакта",
+      "emoji": "🔹",
+      "rarity": "rare",
+      "description": "До одной способности. После покупки упомяните Главу анкетологов или администратора: артефакт выдаётся только после утверждения.",
+      "price_yen": 5000000,
+      "weekly_limit": 1,
+      "delivery": { "kind": "order", "order_type": "artifact", "tier": "weak" }
+    },
+    {
+      "id": "medium_artifact_order",
+      "category": "artifacts",
+      "name": "Заказ среднего артефакта",
+      "emoji": "🔷",
+      "rarity": "epic",
+      "description": "До двух способностей, сюжетное основание и ограничения. После покупки упомяните Главу анкетологов или администратора для утверждения и выдачи.",
+      "price_yen": 15000000,
+      "weekly_limit": 1,
+      "delivery": { "kind": "order", "order_type": "artifact", "tier": "medium" }
+    },
+    {
+      "id": "strong_artifact_order",
+      "category": "artifacts",
+      "name": "Заказ сильного артефакта",
+      "emoji": "💠",
+      "rarity": "legendary",
+      "description": "До трёх способностей, серьёзная цена использования и сюжетное условие. Покупка создаёт заявку; упомяните Главу анкетологов или администратора для решения о выдаче.",
+      "price_yen": 50000000,
+      "weekly_limit": 1,
+      "delivery": { "kind": "order", "order_type": "artifact", "tier": "strong" }
+    }
+  ]
+}

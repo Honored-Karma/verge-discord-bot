@@ -96,7 +96,7 @@ function createMainHelp() {
       {
         name: "💰 Экономика",
         value:
-          "`/pay <user> <currency> <amount>` - Перевод валюты\n`/transfer-item <user> [quantity] [slot]` - Передача предмета\n`/exchange <currency> <amount>` - Обмен валюты\n`/inventory` - Инвентарь",
+          "`/shop` — Магазин свитков, эликсиров и редких заявок\n`/pay <user> <currency> <amount>` - Перевод валюты\n`/transfer-item <user> [quantity] [slot]` - Передача предмета\n`/exchange <currency> <amount>` - Обмен валюты\n`/inventory` - Инвентарь",
         inline: false,
       },
       {
@@ -214,6 +214,12 @@ function createEconomyHelp() {
     .setImage("https://iili.io/BP3OOut.png")
     .addFields(
       {
+        name: "/shop",
+        value:
+          "🛍️ **Открыть интерактивный магазин**\nСвитки AP/SP выдаются в инвентарь, временные эликсиры сразу усиливают тренировки, а артефакты, киберпротезы и мутации создают оплаченную заявку.\n\nРедкие заявки рассматривает Глава анкетологов или администратор. При отклонении оплата возвращается автоматически. Цены доступны в YEN и KRW по курсу магазина.",
+        inline: false,
+      },
+      {
         name: "/pay <user> <krw/yen> <amount>",
         value:
           "✅ **Перевести валюту другому персонажу**\n• `user` — получатель\n• `currency` — KRW или YEN\n• `amount` — сумма до вычета налога\n• `slot` — слот получателя\n\n💸 Перед списанием появится точный расчёт. Налог составляет **2%** и вычитается из отправленной суммы.",
@@ -319,6 +325,18 @@ function createAdminHelp() {
         inline: true,
       },
       {
+        name: "/shop-order <order> <action> [reason]",
+        value:
+          "✅ **Обработать оплаченную заявку магазина**\nПосле фактической выдачи отмечает заказ выполненным. При отклонении безопасно возвращает игроку полную стоимость.",
+        inline: true,
+      },
+      {
+        name: "/shop-admin <действие>",
+        value:
+          "🛠️ **Управлять каталогом магазина**\nДобавление и редактирование карточек, цены, способа выдачи, недельного лимита, остатка и состояния товара. Доступно только администраторам сервера.",
+        inline: true,
+      },
+      {
         name: "/give-style <user> <style>",
         value:
           '✅ Выдать боевой стиль\nПример: `/give-style @John "Muay Thai"`',
@@ -360,14 +378,14 @@ function createAllCommandsHelp() {
         inline: true,
       },
       {
-        name: "💰 Экономика (5)",
-        value: "/pay\n/transfer-item\n/exchange\n/leaderboard\n/use",
+        name: "💰 Экономика (6)",
+        value: "/shop\n/pay\n/transfer-item\n/exchange\n/leaderboard\n/use",
         inline: true,
       },
       {
-        name: "🛡️ Админ (15)",
+        name: "🛡️ Админ (17)",
         value:
-          "/announce\n/purge-offtop\n/add-ap\n/set-ap\n/add-sp\n/set-sp\n/add-currency\n/set-currency\n/add-style\n/delete-style\n/give-item\n/give-style\n/set-ap-multiplier\n/set-sp-multiplier\n/delete-user",
+          "/announce\n/purge-offtop\n/add-ap\n/set-ap\n/add-sp\n/set-sp\n/add-currency\n/set-currency\n/add-style\n/delete-style\n/give-item\n/shop-order\n/shop-admin\n/give-style\n/set-ap-multiplier\n/set-sp-multiplier\n/delete-user",
         inline: true,
       },
       {
@@ -377,7 +395,7 @@ function createAllCommandsHelp() {
       },
       {
         name: "🔍 Доступно в боте",
-        value: "**47 slash-команд** — игровые, персональные и административные инструменты.",
+        value: "**51 slash-команда** — игровые, персональные и административные инструменты.",
         inline: true,
       },
     )

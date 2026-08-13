@@ -11,6 +11,7 @@ import {
   transferItemCompensated,
   transferItemInTransaction,
 } from "./itemTransferStore.js";
+import { getShopTrainingBonus } from "./shopStore.js";
 
 const PLAYER_DEFAULTS = {
   character_avatar: null,
@@ -32,6 +33,7 @@ const PLAYER_DEFAULTS = {
   last_ap_change_at: 0,
   last_sp_change_at: 0,
   last_salary_paid_at: 0,
+  last_salary_period_key: null,
   last_sp_train_timestamp: 0,
   reputation: 20,
 };
@@ -502,7 +504,8 @@ async function completeAPActivity(
       : Number(player.ap_multiplier || 100);
     const dynamicBonus =
       getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
-    const multiplier = baseMultiplier + dynamicBonus;
+    const shopBonus = await getShopTrainingBonus(playerId, "ap");
+    const multiplier = baseMultiplier + dynamicBonus + shopBonus;
     const gained = Math.max(
       0,
       Math.round(Number(baseAmount) * (multiplier / 100)),
@@ -561,6 +564,7 @@ async function completeAPActivity(
       multiplier,
       baseMultiplier,
       dynamicBonus,
+      shopBonus,
       retryAt: now + cooldownSeconds,
     };
   } catch (error) {
@@ -823,7 +827,8 @@ export async function completeSPTraining(
       : Number(player.sp_multiplier || 100);
     const dynamicBonus =
       getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
-    const multiplier = baseMultiplier + dynamicBonus;
+    const shopBonus = await getShopTrainingBonus(playerId, "sp");
+    const multiplier = baseMultiplier + dynamicBonus + shopBonus;
     const gained = Math.max(
       0,
       Math.round(Number(baseAmount) * (multiplier / 100)),
@@ -902,6 +907,7 @@ export async function completeSPTraining(
       multiplier,
       baseMultiplier,
       dynamicBonus,
+      shopBonus,
       retryAt: now + cooldownSeconds,
     };
   } catch (error) {
@@ -1841,7 +1847,7 @@ export async function setCharacterAvatar(playerId, avatarUrl) {
 export async function setSalaryMultiplier(playerId, multiplier, adminId) {
   try {
     const db = getDB();
-    const validMultiplier = Math.max(0, Math.min(1000, multiplier));
+    const validMultiplier = Math.max(0, Math.min(200, multiplier));
     await db.collection("players").updateOne(
       { id: playerId },
       { $set: { salary_multiplier: validMultiplier } },

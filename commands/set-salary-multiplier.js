@@ -19,7 +19,7 @@ export const data = new SlashCommandBuilder()
             .setDescription('Множитель в процентах (100 = стандарт, 150 = +50%, 50 = -50%, 0 = без зарплаты)')
             .setRequired(true)
             .setMinValue(0)
-            .setMaxValue(1000))
+            .setMaxValue(200))
     .addIntegerOption(option =>
         option.setName('slot')
             .setDescription('Слот персонажа (1 или 2). Если не указан — активный слот.')

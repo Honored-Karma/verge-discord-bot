@@ -310,6 +310,7 @@ export async function handleModalSubmit(interaction) {
       gained: result.gained,
       multiplier: result.multiplier,
       dynamicBonus: result.dynamicBonus,
+      shopBonus: result.shopBonus,
       oldSP: result.oldSP,
       newSP: result.newSP,
       retryAt: result.retryAt,

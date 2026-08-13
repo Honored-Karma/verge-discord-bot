@@ -1,5 +1,6 @@
 import { MongoClient } from 'mongodb';
 import { config } from 'dotenv';
+import { initializeShopCatalog } from './shopCatalog.js';
 
 config();
 
@@ -24,6 +25,7 @@ async function backfillPlayerDefaults() {
         last_sp_change_at: 0,
         last_sp_train_timestamp: 0,
         last_salary_paid_at: 0,
+        last_salary_period_key: null,
         reputation: 20
     };
 
@@ -117,6 +119,14 @@ async function initializeDatabase() {
             await db.collection('salary_logs').createIndex({ player_id: 1 });
             await db.collection('salary_logs').createIndex({ paid_at: -1 });
         }
+        await db.collection('salary_logs').createIndex(
+            { player_id: 1, period_key: 1 },
+            {
+                unique: true,
+                partialFilterExpression: { period_key: { $type: 'string' } },
+                name: 'salary_player_period_unique'
+            }
+        );
 
         if (!collectionNames.includes('reputation_history')) {
             await db.createCollection('reputation_history');
@@ -124,6 +134,90 @@ async function initializeDatabase() {
             await db.collection('reputation_history').createIndex({ changed_at: -1 });
         }
 
+        if (!collectionNames.includes('shop_purchases')) {
+            await db.createCollection('shop_purchases');
+        }
+
+        if (!collectionNames.includes('shop_catalog_items')) {
+            await db.createCollection('shop_catalog_items');
+        }
+        await db.collection('shop_catalog_items').createIndex(
+            { id: 1 },
+            { unique: true, name: 'shop_catalog_item_id_unique' }
+        );
+        await db.collection('shop_catalog_items').createIndex(
+            { category: 1, enabled: 1, archived: 1, sort_order: 1 },
+            { name: 'shop_catalog_visible_items' }
+        );
+        if (!collectionNames.includes('shop_catalog_audit')) {
+            await db.createCollection('shop_catalog_audit');
+        }
+        await db.collection('shop_catalog_audit').createIndex(
+            { item_id: 1, created_at: -1 },
+            { name: 'shop_catalog_audit_history' }
+        );
+        await db.collection('shop_purchases').createIndex(
+            { operation_id: 1 },
+            { unique: true, name: 'shop_purchase_operation_unique' }
+        );
+        await db.collection('shop_purchases').createIndex(
+            { limit_key: 1 },
+            {
+                unique: true,
+                sparse: true,
+                name: 'shop_purchase_limit_unique'
+            }
+        );
+        await db.collection('shop_purchases').createIndex(
+            { player_id: 1, item_id: 1, period_key: 1, status: 1 },
+            { name: 'shop_purchase_player_period' }
+        );
+
+        if (!collectionNames.includes('shop_orders')) {
+            await db.createCollection('shop_orders');
+        }
+        await db.collection('shop_orders').createIndex(
+            { public_id: 1 },
+            { unique: true, name: 'shop_order_public_unique' }
+        );
+        await db.collection('shop_orders').createIndex(
+            { operation_id: 1 },
+            { unique: true, name: 'shop_order_operation_unique' }
+        );
+        await db.collection('shop_orders').createIndex(
+            { status: 1, created_at: -1 },
+            { name: 'shop_order_review_queue' }
+        );
+        await db.collection('shop_orders').createIndex(
+            { player_id: 1, created_at: -1 },
+            { name: 'shop_order_player_history' }
+        );
+
+        if (!collectionNames.includes('active_effects')) {
+            await db.createCollection('active_effects');
+        }
+        await db.collection('active_effects').createIndex(
+            { player_id: 1, effect_key: 1 },
+            { unique: true, name: 'active_effect_player_key_unique' }
+        );
+        await db.collection('active_effects').createIndex(
+            { expires_at: 1 },
+            { expireAfterSeconds: 0, name: 'active_effect_expiry_ttl' }
+        );
+
+        if (!collectionNames.includes('economy_ledger')) {
+            await db.createCollection('economy_ledger');
+        }
+        await db.collection('economy_ledger').createIndex(
+            { operation_id: 1 },
+            { unique: true, name: 'economy_ledger_operation_unique' }
+        );
+        await db.collection('economy_ledger').createIndex(
+            { player_id: 1, created_at: -1 },
+            { name: 'economy_ledger_player_history' }
+        );
+
+        await initializeShopCatalog(db);
         console.log('✅ Database initialized successfully');
         await backfillPlayerDefaults();
     } catch (error) {

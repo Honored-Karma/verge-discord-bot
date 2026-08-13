@@ -141,6 +141,7 @@ export function createSPTrainingSuccessComponents({
   gained,
   multiplier,
   dynamicBonus,
+  shopBonus = 0,
   oldSP,
   newSP,
   retryAt,
@@ -162,6 +163,9 @@ export function createSPTrainingSuccessComponents({
   const bonusLine = Number(dynamicBonus) > 0
     ? `\n-# Бонус ранга и активности: +${formatNumber(dynamicBonus)}%`
     : "";
+  const shopBonusLine = Number(shopBonus) > 0
+    ? `\n-# Активный эффект магазина: +${formatNumber(shopBonus)}%`
+    : "";
 
   const summary = new SectionBuilder()
     .addTextDisplayComponents(
@@ -169,7 +173,7 @@ export function createSPTrainingSuccessComponents({
         `## Тренировка стиля завершена\n` +
         `**${characterName}** получает **+${formatNumber(gained)} SP** в стиле **${styleName}**.\n\n` +
         `Базовая награда: **${formatNumber(baseReward)} SP**\n` +
-        `Множитель: **${formatNumber(multiplier)}%**${bonusLine}`,
+        `Множитель: **${formatNumber(multiplier)}%**${bonusLine}${shopBonusLine}`,
       ),
     )
     .setThumbnailAccessory(

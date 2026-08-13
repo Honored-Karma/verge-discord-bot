@@ -169,6 +169,7 @@ export async function handleModalSubmit(interaction) {
       gained: result.gained,
       multiplier: result.multiplier,
       dynamicBonus: result.dynamicBonus,
+      shopBonus: result.shopBonus,
       newAP: result.newAP,
       retryAt: result.retryAt,
       activityText: trainingText,
