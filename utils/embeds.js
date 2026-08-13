@@ -567,12 +567,12 @@ function getSPRankInfo(sp) {
   return { rank: "Новичок", emoji: "⚪", nextThreshold: 350 };
 }
 
-export function createProfilePhysicalPage(player, user) {
+export function createProfilePhysicalPage(player, user, renderedCard = false) {
   const embed = new EmbedBuilder()
     .setColor(0xb209d4)
     .setTitle(`⚠️ | Физические показатели — ${player.character_name || player.username}`)
     .setThumbnail(resolveAvatar(player, user))
-    .setImage(BANNERS.progress)
+    .setImage(renderedCard ? "attachment://physical-stats.png" : BANNERS.progress)
     .setTimestamp()
     .setFooter({ text: `ID: ${player.id} • Страница 6/6` });
 
@@ -584,12 +584,12 @@ export function createProfilePhysicalPage(player, user) {
     return embed;
   }
 
-  let description = physicalStatsSummary(stats);
+  let description = renderedCard ? "" : physicalStatsSummary(stats);
   if (isValidCharacterUrl(stats.character_url)) {
     const safeUrl = stats.character_url.replaceAll(")", "%29");
-    description += `\n\n🔗 **Персонаж:** [Открыть анкету](${safeUrl})`;
+    description += `${description ? "\n\n" : ""}🔗 **Персонаж:** [Открыть анкету](${safeUrl})`;
   }
-  embed.setDescription(description);
+  if (description) embed.setDescription(description);
   return embed;
 }
 

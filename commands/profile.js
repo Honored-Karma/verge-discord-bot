@@ -13,7 +13,7 @@ import {
     createCooldownEmbed
 } from '../utils/embeds.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
-import { generateProfileCard } from '../utils/profileHtml.js';
+import { generatePhysicalStatsCard, generateProfileCard } from '../utils/profileHtml.js';
 
 export const data = new SlashCommandBuilder()
     .setName('profile')
@@ -91,6 +91,22 @@ export async function execute(interaction) {
         hudBuffer = null;
     }
 
+    let physicalStatsBuffer = null;
+    if (player.physical_stats) {
+        try {
+            physicalStatsBuffer = await generatePhysicalStatsCard({
+                characterName: player.character_name || player.username,
+                avatarUrl: player.character_avatar || targetUser.displayAvatarURL({ extension: 'png', size: 512 }),
+                fallbackAvatarUrl: targetUser.displayAvatarURL({ extension: 'png', size: 512 }),
+                stats: player.physical_stats,
+                playerId: player.id,
+                slot,
+            });
+        } catch (err) {
+            console.error('Physical stats card render error:', err);
+        }
+    }
+
     // Old embed stays as the main content; card goes as the banner image below
     let mainEmbed = createProfileMainPage(player, targetUser, slot);
     const files = [];
@@ -134,7 +150,10 @@ export async function execute(interaction) {
             newEmbed = createProfileAPSPPage(player, targetUser, totalSP);
             newButtons = createProfileButtons(1);
         } else if (i.customId === 'profile_physical') {
-            newEmbed = createProfilePhysicalPage(player, targetUser);
+            newEmbed = createProfilePhysicalPage(player, targetUser, Boolean(physicalStatsBuffer));
+            if (physicalStatsBuffer) {
+                newFiles = [new AttachmentBuilder(physicalStatsBuffer, { name: 'physical-stats.png' })];
+            }
             newButtons = createProfileButtons(2);
         } else if (i.customId === 'profile_styles') {
             stylesPage = 0;

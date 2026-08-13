@@ -18,6 +18,22 @@ async function ensureFont() {
         return;
     }
 
+    // Reliable Cyrillic-capable fallbacks for local Windows development and
+    // common Linux hosts. Registering under the card family also prevents
+    // missing-glyph squares when the bundled Inter subset is Latin-only.
+    const systemFontPaths = [
+        'C:/Windows/Fonts/arialbd.ttf',
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+        '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf',
+    ];
+    for (const fontPath of systemFontPaths) {
+        if (existsSync(fontPath)) {
+            GlobalFonts.registerFromPath(fontPath, FONT_FAMILY);
+            fontReady = true;
+            return;
+        }
+    }
+
     if (!existsSync(FONT_DIR)) mkdirSync(FONT_DIR, { recursive: true });
 
     // Full font with Cyrillic + Latin support
@@ -57,6 +73,7 @@ const F = `'${FONT_FAMILY}', sans-serif`;
 
 const W = 840;
 const H = 240;
+const PHYSICAL_H = 320;
 
 const PURPLE = '#8b5cf6';
 const PURPLE_DIM = 'rgba(139,92,246,0.35)';
@@ -129,6 +146,31 @@ function emptyBox(ctx, x, y, w, h, r = 8) {
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.restore();
+}
+
+function formatStatValue(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '—';
+    return number.toLocaleString('ru-RU', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+    });
+}
+
+function physicalBarRatio(key, rawValue) {
+    const value = Math.max(0, Number(rawValue) || 0);
+
+    // The stats don't share a common maximum. These curves keep the bars useful
+    // for both realistic and enhanced characters without changing stored values.
+    if (key === 'stamina_percent') return Math.min(value / 100, 1);
+    if (key === 'reaction_ms') return value > 0 ? 250 / (value + 250) : 0;
+
+    const visualScale = {
+        punch_strength_kg: 100,
+        lifting_strength_kg: 200,
+        speed_kmh: 30,
+    }[key] || 100;
+    return value / (value + visualScale);
 }
 
 // ── Image cache & robust fetcher ─────────────────────────────────────
@@ -396,6 +438,180 @@ export async function generateProfileCard(data) {
 
     // ── 7. Footer ────────────────────────────────────────────────────
     txt(ctx, `ID: ${playerId}`, W - 16, H - 16, { font: `10px ${F}`, color: 'rgba(255,255,255,0.25)', align: 'right' });
+
+    return canvas.toBuffer('image/png');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+export async function generatePhysicalStatsCard(data) {
+    await ensureFont();
+
+    const {
+        characterName = 'Неизвестно',
+        avatarUrl,
+        fallbackAvatarUrl = null,
+        stats = {},
+        playerId = '',
+        slot = 1,
+    } = data;
+
+    const canvas = createCanvas(W, PHYSICAL_H);
+    const ctx = canvas.getContext('2d');
+
+    // Same dark violet/blue visual language as the main profile banner.
+    const bgGrad = ctx.createLinearGradient(0, 0, W, PHYSICAL_H);
+    bgGrad.addColorStop(0, '#1a0a2e');
+    bgGrad.addColorStop(0.42, '#16213e');
+    bgGrad.addColorStop(1, '#0f3460');
+    ctx.fillStyle = bgGrad;
+    roundRect(ctx, 0, 0, W, PHYSICAL_H, 20);
+    ctx.fill();
+
+    const leftGlow = ctx.createRadialGradient(105, PHYSICAL_H / 2, 18, 105, PHYSICAL_H / 2, 280);
+    leftGlow.addColorStop(0, 'rgba(139,92,246,0.20)');
+    leftGlow.addColorStop(1, 'transparent');
+    ctx.fillStyle = leftGlow;
+    ctx.fillRect(0, 0, W, PHYSICAL_H);
+
+    const rightGlow = ctx.createRadialGradient(W - 80, 20, 0, W - 80, 20, 320);
+    rightGlow.addColorStop(0, 'rgba(6,182,212,0.10)');
+    rightGlow.addColorStop(1, 'transparent');
+    ctx.fillStyle = rightGlow;
+    ctx.fillRect(0, 0, W, PHYSICAL_H);
+
+    // Subtle diagonal HUD lines.
+    ctx.save();
+    roundRect(ctx, 0, 0, W, PHYSICAL_H, 20);
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+    ctx.lineWidth = 1;
+    for (let x = 250; x < W + PHYSICAL_H; x += 32) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x - PHYSICAL_H, PHYSICAL_H);
+        ctx.stroke();
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = PURPLE_DIM;
+    ctx.lineWidth = 2;
+    roundRect(ctx, 1, 1, W - 2, PHYSICAL_H - 2, 20);
+    ctx.stroke();
+    ctx.restore();
+
+    // Avatar block.
+    const avCX = 102, avCY = 151, avR = 58;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(avCX, avCY, avR + 5, 0, Math.PI * 2);
+    const ringGrad = ctx.createLinearGradient(avCX - avR, avCY - avR, avCX + avR, avCY + avR);
+    ringGrad.addColorStop(0, '#8b5cf6');
+    ringGrad.addColorStop(0.5, '#06b6d4');
+    ringGrad.addColorStop(1, '#8b5cf6');
+    ctx.fillStyle = ringGrad;
+    ctx.shadowColor = PURPLE;
+    ctx.shadowBlur = 18;
+    ctx.fill();
+    ctx.restore();
+
+    let avatarImg = avatarUrl ? await fetchImage(avatarUrl) : null;
+    if (!avatarImg && fallbackAvatarUrl && fallbackAvatarUrl !== avatarUrl) {
+        avatarImg = await fetchImage(fallbackAvatarUrl);
+    }
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(avCX, avCY, avR, 0, Math.PI * 2);
+    ctx.clip();
+    if (avatarImg) {
+        const scale = Math.max(avR * 2 / avatarImg.width, avR * 2 / avatarImg.height);
+        const dw = avatarImg.width * scale;
+        const dh = avatarImg.height * scale;
+        ctx.drawImage(avatarImg, avCX - dw / 2, avCY - dh / 2, dw, dh);
+    } else {
+        ctx.fillStyle = '#2C003E';
+        ctx.fillRect(avCX - avR, avCY - avR, avR * 2, avR * 2);
+        txt(ctx, '?', avCX, avCY, { font: `bold 36px ${F}`, align: 'center' });
+    }
+    ctx.restore();
+
+    txt(ctx, 'ФИЗИЧЕСКИЙ ПРОФИЛЬ', avCX, 46, {
+        font: `bold 11px ${F}`,
+        color: '#a78bfa',
+        align: 'center',
+    });
+    txt(ctx, characterName, avCX, 232, {
+        font: `bold 18px ${F}`,
+        align: 'center',
+        maxW: 160,
+    });
+    txt(ctx, `СЛОТ ${slot}`, avCX, 258, {
+        font: `bold 11px ${F}`,
+        color: TEXT_DIM,
+        align: 'center',
+    });
+
+    // Divider between identity and stats.
+    const divider = ctx.createLinearGradient(0, 42, 0, PHYSICAL_H - 42);
+    divider.addColorStop(0, 'transparent');
+    divider.addColorStop(0.5, 'rgba(139,92,246,0.55)');
+    divider.addColorStop(1, 'transparent');
+    ctx.fillStyle = divider;
+    ctx.fillRect(193, 28, 1, PHYSICAL_H - 56);
+
+    const startX = 224;
+    const barW = W - startX - 28;
+    txt(ctx, 'ФИЗИЧЕСКИЕ ПОКАЗАТЕЛИ', startX, 31, {
+        font: `bold 22px ${F}`,
+    });
+    txt(ctx, 'Визуальная шкала параметров', W - 28, 31, {
+        font: `12px ${F}`,
+        color: TEXT_DIM,
+        align: 'right',
+    });
+
+    const rows = [
+        { key: 'punch_strength_kg', label: 'СИЛА УДАРА', unit: 'кг', colors: ['#f59e0b', '#ef4444'] },
+        { key: 'lifting_strength_kg', label: 'СИЛА НА ПОДЪЁМ', unit: 'кг', colors: ['#facc15', '#f97316'] },
+        { key: 'speed_kmh', label: 'СКОРОСТЬ', unit: 'км/ч', colors: ['#22d3ee', '#3b82f6'] },
+        { key: 'stamina_percent', label: 'СТАМИНА', unit: '%', colors: ['#34d399', '#14b8a6'] },
+        { key: 'reaction_ms', label: 'РЕАКЦИЯ', unit: 'мс', colors: ['#a78bfa', '#ec4899'] },
+    ];
+
+    rows.forEach((row, index) => {
+        const y = 70 + index * 47;
+        const value = stats[row.key];
+        const displayValue = formatStatValue(value);
+
+        ctx.save();
+        ctx.fillStyle = row.colors[0];
+        ctx.shadowColor = row.colors[0];
+        ctx.shadowBlur = 7;
+        ctx.beginPath();
+        ctx.arc(startX + 4, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        txt(ctx, row.label, startX + 18, y, {
+            font: `bold 13px ${F}`,
+            color: TEXT_LIGHT,
+        });
+        txt(ctx, displayValue === '—' ? displayValue : `${displayValue} ${row.unit}`, W - 28, y, {
+            font: `bold 15px ${F}`,
+            align: 'right',
+        });
+        drawBar(ctx, startX, y + 14, barW, 9, physicalBarRatio(row.key, value), row.colors);
+    });
+
+    txt(ctx, 'Чем меньше время реакции, тем лучше результат', startX, PHYSICAL_H - 16, {
+        font: `10px ${F}`,
+        color: 'rgba(255,255,255,0.30)',
+    });
+    txt(ctx, `ID: ${playerId}`, W - 16, PHYSICAL_H - 16, {
+        font: `10px ${F}`,
+        color: 'rgba(255,255,255,0.25)',
+        align: 'right',
+    });
 
     return canvas.toBuffer('image/png');
 }
