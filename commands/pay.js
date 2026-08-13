@@ -38,6 +38,10 @@ function transferError(result, currency) {
       return "После налога получатель должен получить хотя бы одну единицу валюты.";
     case "unsafe_balance":
       return "Баланс слишком велик для безопасной операции. Обратитесь к администратору.";
+    case "balance_changed":
+      return "Баланс изменился во время подтверждения. Проверьте сумму и повторите перевод.";
+    case "rollback_failed":
+      return "Перевод остановлен из-за ошибки синхронизации. Обратитесь к администратору для проверки баланса.";
     default:
       return "Не удалось провести перевод. Балансы не изменены — попробуйте ещё раз.";
   }
@@ -170,10 +174,16 @@ export async function execute(interaction) {
   collector.on("collect", async (componentInteraction) => {
     if (componentInteraction.user.id !== interaction.user.id) return;
     if (busy) {
-      await componentInteraction.reply({
-        content: "Перевод уже обрабатывается.",
-        flags: MessageFlags.Ephemeral,
-      });
+      if (!componentInteraction.replied && !componentInteraction.deferred) {
+        await componentInteraction.reply({
+          components: createBankStatusComponents(
+            "Перевод уже обрабатывается",
+            "Дождитесь результата текущей операции.",
+            "warning",
+          ),
+          flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+        }).catch(() => {});
+      }
       return;
     }
 
@@ -192,51 +202,111 @@ export async function execute(interaction) {
     if (componentInteraction.customId !== PAY_CONFIRM_ID) return;
 
     busy = true;
-    await componentInteraction.deferUpdate();
-    const result = await transferCurrency(
-      senderId,
-      recipientId,
-      currency,
-      calculation.sent,
-    );
-    completed = true;
-    collector.stop(result.success ? "confirmed" : "failed");
+    let transferCompleted = false;
+    try {
+      await componentInteraction.deferUpdate();
+      const result = await transferCurrency(
+        senderId,
+        recipientId,
+        currency,
+        calculation.sent,
+      );
 
-    if (!result.success) {
+      if (!result.success) {
+        busy = false;
+        const freshSender = await getPlayer(senderId);
+        const freshBalance = Number(freshSender?.[currency] || 0);
+        await interaction.editReply({
+          components: Number.isSafeInteger(freshBalance)
+            && freshBalance >= calculation.sent
+            ? createPayPreviewComponents({
+              senderName,
+              senderAvatarUrl,
+              recipientName,
+              recipientSlot,
+              currency,
+              calculation,
+              senderBalance: freshBalance,
+            })
+            : createBankStatusComponents(
+              "Перевод не выполнен",
+              transferError(result, currency),
+            ),
+        });
+        await componentInteraction.followUp({
+          components: createBankStatusComponents(
+            "Перевод не выполнен",
+            transferError(result, currency),
+          ),
+          flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+        }).catch(() => {});
+        return;
+      }
+
+      transferCompleted = true;
+      completed = true;
+      collector.stop("confirmed");
       await interaction.editReply({
+        components: createPayReceiptComponents({
+          senderName,
+          senderAvatarUrl,
+          recipientName,
+          currency,
+          result,
+        }),
+      });
+      await logCommand({
+        client: interaction.client,
+        guildId: interaction.guildId,
+        channelId: interaction.channelId,
+        userId: senderId,
+        userTag: interaction.user.tag,
+        command: "pay",
+        targetId: recipientId,
+        targetTag: recipientName,
+        extra: {
+          currency,
+          sent: result.sent,
+          tax: result.tax,
+          received: result.received,
+          mode: result.mode,
+        },
+      }).catch((error) => console.error("Error logging pay command:", error));
+    } catch (error) {
+      busy = false;
+      console.error("Error handling pay confirmation:", error);
+      if (transferCompleted) {
+        completed = true;
+        collector.stop("confirmed");
+        await componentInteraction.followUp({
+          components: createBankStatusComponents(
+            "Перевод выполнен",
+            "Деньги уже переведены, но квитанцию не удалось обновить. Проверьте баланс перед новым переводом.",
+            "warning",
+          ),
+          flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+        }).catch(() => {});
+        return;
+      }
+      await interaction.editReply({
+        components: createPayPreviewComponents({
+          senderName,
+          senderAvatarUrl,
+          recipientName,
+          recipientSlot,
+          currency,
+          calculation,
+          senderBalance,
+        }),
+      }).catch(() => {});
+      await componentInteraction.followUp({
         components: createBankStatusComponents(
           "Перевод не выполнен",
-          transferError(result, currency),
+          "Не удалось связаться с хранилищем. Баланс не списан — повторите перевод.",
         ),
-      });
-      return;
+        flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+      }).catch(() => {});
     }
-
-    await interaction.editReply({
-      components: createPayReceiptComponents({
-        senderName,
-        senderAvatarUrl,
-        recipientName,
-        currency,
-        result,
-      }),
-    });
-    await logCommand({
-      client: interaction.client,
-      guildId: interaction.guildId,
-      channelId: interaction.channelId,
-      userId: senderId,
-      userTag: interaction.user.tag,
-      command: "pay",
-      targetId: recipientId,
-      targetTag: recipientName,
-      extra: {
-        currency,
-        sent: result.sent,
-        tax: result.tax,
-        received: result.received,
-      },
-    });
   });
 
   collector.on("end", async () => {

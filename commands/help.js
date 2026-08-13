@@ -307,7 +307,7 @@ function createAdminHelp() {
         inline: true,
       },
       {
-        name: "/give-item <user> [quantity] [slot]",
+        name: "/give-item <user> [item] [quantity] [slot]",
         value:
           "✅ **Открыть центр выдачи предметов**\nВыберите готовый расходник из каталога или создайте новый AP-том, SP-свиток либо коллекционный предмет. Перед выдачей бот покажет редкость и эффект всей стопки.",
         inline: true,

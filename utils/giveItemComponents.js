@@ -22,6 +22,9 @@ export const GIVE_ITEM_CATALOG_NEXT_ID = "give_item_catalog_next";
 export const GIVE_ITEM_CUSTOM_AP_ID = "give_item_custom_ap";
 export const GIVE_ITEM_CUSTOM_SP_ID = "give_item_custom_sp";
 export const GIVE_ITEM_COLLECTIBLE_ID = "give_item_collectible";
+export const GIVE_ITEM_CUSTOM_ID = "give_item_custom";
+export const GIVE_ITEM_QUANTITY_ID = "give_item_quantity";
+export const GIVE_ITEM_REPEAT_ID = "give_item_repeat";
 export const GIVE_ITEM_STYLE_SELECT_ID = "give_item_style";
 export const GIVE_ITEM_STYLE_PREV_ID = "give_item_style_prev";
 export const GIVE_ITEM_STYLE_NEXT_ID = "give_item_style_next";
@@ -32,8 +35,11 @@ export const GIVE_ITEM_CANCEL_ID = "give_item_cancel";
 export const GIVE_ITEM_AP_MODAL_PREFIX = "give_item_ap:";
 export const GIVE_ITEM_SP_MODAL_PREFIX = "give_item_sp:";
 export const GIVE_ITEM_COLLECTIBLE_MODAL_PREFIX = "give_item_collectible:";
+export const GIVE_ITEM_CUSTOM_MODAL_PREFIX = "give_item_custom:";
+export const GIVE_ITEM_QUANTITY_MODAL_PREFIX = "give_item_quantity:";
 export const GIVE_ITEM_AMOUNT_INPUT_ID = "give_item_amount";
 export const GIVE_ITEM_NAME_INPUT_ID = "give_item_name";
+export const GIVE_ITEM_QUANTITY_INPUT_ID = "give_item_quantity_value";
 
 const ITEMS_PER_PAGE = 20;
 const STYLES_PER_PAGE = 25;
@@ -184,8 +190,20 @@ export function createGiveItemCenterComponents({
           .setDisabled(disabled),
         new ButtonBuilder()
           .setCustomId(GIVE_ITEM_COLLECTIBLE_ID)
-          .setLabel("Создать коллекционный")
+          .setLabel("Создать сюжетный")
           .setEmoji("💎")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(disabled),
+        new ButtonBuilder()
+          .setCustomId(GIVE_ITEM_CUSTOM_ID)
+          .setLabel("Ввести название")
+          .setEmoji("✏️")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(disabled),
+        new ButtonBuilder()
+          .setCustomId(GIVE_ITEM_QUANTITY_ID)
+          .setLabel("Изменить количество")
+          .setEmoji("🔢")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(disabled),
       ),
@@ -324,6 +342,8 @@ export function createGiveItemReceiptComponents({
   avatarUrl,
   slot,
   result,
+  disabled = false,
+  allowBack = true,
 }) {
   const definition = getItemDefinition(result.itemName);
   return [
@@ -343,11 +363,32 @@ export function createGiveItemReceiptComponents({
       )
       .addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-          `Теперь в инвентаре: **${formatNumber(result.totalQuantity)} шт.**\n` +
+          `Было: **${formatNumber(result.previousQuantity)} шт.** → стало: **${formatNumber(result.totalQuantity)} шт.**\n` +
           `Эффект выданной стопки: **${markdownText(formatItemEffect(result.itemName, result.quantity), 160)}**\n` +
           `-# Операция сохранена в журнале администратора.`,
         ),
-      ),
+      )
+      .addActionRowComponents(() => {
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(GIVE_ITEM_REPEAT_ID)
+            .setLabel("Выдать ещё раз")
+            .setEmoji("↻")
+            .setStyle(ButtonStyle.Success)
+            .setDisabled(disabled),
+        );
+        if (allowBack) {
+          row.addComponents(
+            new ButtonBuilder()
+              .setCustomId(GIVE_ITEM_BACK_ID)
+              .setLabel("Выбрать другой")
+              .setEmoji("←")
+              .setStyle(ButtonStyle.Secondary)
+              .setDisabled(disabled),
+          );
+        }
+        return row;
+      }),
   ];
 }
 
@@ -412,6 +453,57 @@ export function createGiveItemCollectibleModal(context) {
             .setMinLength(1)
             .setMaxLength(100)
             .setPlaceholder("Например: Ключ от хранилища")
+            .setRequired(true),
+        ),
+    );
+}
+
+export function createGiveItemCustomModal(context) {
+  return new ModalBuilder()
+    .setCustomId(`${GIVE_ITEM_CUSTOM_MODAL_PREFIX}${context}`)
+    .setTitle("Выдать предмет по названию")
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        "### Точное название предмета\nПодходит для старых, событийных и сюжетных предметов. Если название совпадёт с форматом AP-тома или SP-свитка, предмет автоматически станет расходником.",
+      ),
+    )
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel("Название предмета")
+        .setDescription("От 1 до 100 символов")
+        .setTextInputComponent(
+          new TextInputBuilder()
+            .setCustomId(GIVE_ITEM_NAME_INPUT_ID)
+            .setStyle(TextInputStyle.Short)
+            .setMinLength(1)
+            .setMaxLength(100)
+            .setPlaceholder("Например: Ключ от хранилища")
+            .setRequired(true),
+        ),
+    );
+}
+
+export function createGiveItemQuantityModal(context, quantity) {
+  return new ModalBuilder()
+    .setCustomId(`${GIVE_ITEM_QUANTITY_MODAL_PREFIX}${context}`)
+    .setTitle("Количество предметов")
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        "### Сколько предметов выдать?\nКоличество применится к готовому, новому или сюжетному предмету.",
+      ),
+    )
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel("Количество")
+        .setDescription("Целое число от 1 до 1 000 000")
+        .setTextInputComponent(
+          new TextInputBuilder()
+            .setCustomId(GIVE_ITEM_QUANTITY_INPUT_ID)
+            .setStyle(TextInputStyle.Short)
+            .setMinLength(1)
+            .setMaxLength(7)
+            .setValue(String(quantity || 1))
+            .setPlaceholder("Например: 25")
             .setRequired(true),
         ),
     );

@@ -18,7 +18,9 @@ import {
   createGiveItemAPModal,
   createGiveItemCenterComponents,
   createGiveItemCollectibleModal,
+  createGiveItemCustomModal,
   createGiveItemPreviewComponents,
+  createGiveItemQuantityModal,
   createGiveItemReceiptComponents,
   createGiveItemSPModal,
   createGiveItemStatusComponents,
@@ -35,9 +37,15 @@ import {
   GIVE_ITEM_COLLECTIBLE_ID,
   GIVE_ITEM_COLLECTIBLE_MODAL_PREFIX,
   GIVE_ITEM_CONFIRM_ID,
+  GIVE_ITEM_CUSTOM_ID,
+  GIVE_ITEM_CUSTOM_MODAL_PREFIX,
   GIVE_ITEM_CUSTOM_AP_ID,
   GIVE_ITEM_CUSTOM_SP_ID,
   GIVE_ITEM_NAME_INPUT_ID,
+  GIVE_ITEM_QUANTITY_ID,
+  GIVE_ITEM_QUANTITY_INPUT_ID,
+  GIVE_ITEM_QUANTITY_MODAL_PREFIX,
+  GIVE_ITEM_REPEAT_ID,
   GIVE_ITEM_SP_MODAL_PREFIX,
   GIVE_ITEM_STYLE_NEXT_ID,
   GIVE_ITEM_STYLE_PREV_ID,
@@ -60,6 +68,12 @@ export const data = new SlashCommandBuilder()
     .setName("user")
     .setDescription("Кому выдать предмет")
     .setRequired(true))
+  .addStringOption((option) => option
+    .setName("item")
+    .setDescription("Точное название — сразу открыть подтверждение")
+    .setMinLength(1)
+    .setMaxLength(100)
+    .setRequired(false))
   .addIntegerOption((option) => option
     .setName("quantity")
     .setDescription("Количество предметов — по умолчанию 1")
@@ -135,7 +149,46 @@ async function writeItemLog(interaction, context, characterName, result) {
   });
 }
 
+function itemFailureMessage(reason) {
+  if (reason === "quantity_too_large") {
+    return "Итоговое количество слишком велико. Уменьшите стопку и повторите выдачу.";
+  }
+  if (reason === "inventory_busy") {
+    return "Инвентарь сейчас обновляется другой операцией. Повторите выдачу через пару секунд.";
+  }
+  if (reason === "player_not_found") {
+    return "Персонаж был удалён. Выберите получателя заново.";
+  }
+  return "Не удалось сохранить предмет. Повторите выдачу; если ошибка останется, проверьте подключение к базе.";
+}
+
+async function reportComponentError(
+  interaction,
+  componentInteraction,
+  error,
+  recoveryComponents,
+) {
+  console.error("Error handling give-item component:", error);
+  const errorPayload = {
+    components: createGiveItemStatusComponents(
+      "Предмет не выдан",
+      "Не удалось сохранить предмет. Повторите действие; если ошибка останется, проверьте подключение к базе.",
+    ),
+    flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+  };
+  try {
+    if (!componentInteraction.deferred && !componentInteraction.replied) {
+      await componentInteraction.reply(errorPayload);
+    } else if (typeof componentInteraction.followUp === "function") {
+      await componentInteraction.followUp(errorPayload);
+    }
+    if (recoveryComponents) await interaction.editReply({ components: recoveryComponents });
+  } catch {}
+}
+
 async function openModalConfirmation(interaction, context, itemName) {
+  // Discord only permits EPHEMERAL on a deferred interaction response.
+  // The Components V2 flag is added when the original response is edited below.
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   if (!await authorized(interaction)) {
     return interaction.editReply({
@@ -143,6 +196,7 @@ async function openModalConfirmation(interaction, context, itemName) {
         "Доступ изменился",
         "У вас больше нет права выдавать предметы.",
       ),
+      flags: MessageFlags.IsComponentsV2,
     });
   }
 
@@ -155,6 +209,7 @@ async function openModalConfirmation(interaction, context, itemName) {
         "Персонаж больше недоступен",
         "Закройте форму и запустите `/give-item` заново.",
       ),
+      flags: MessageFlags.IsComponentsV2,
     });
   }
 
@@ -168,6 +223,7 @@ async function openModalConfirmation(interaction, context, itemName) {
     || learnedStyles.some((style) => style.name === definition.styleName);
   let completed = false;
   let busy = false;
+  let lastResult = null;
   const response = await interaction.editReply({
     content: null,
     embeds: [],
@@ -197,55 +253,98 @@ async function openModalConfirmation(interaction, context, itemName) {
       });
       return;
     }
-    if (componentInteraction.customId !== GIVE_ITEM_CONFIRM_ID || busy) return;
+    if (![GIVE_ITEM_CONFIRM_ID, GIVE_ITEM_REPEAT_ID].includes(componentInteraction.customId)
+      || busy) return;
     busy = true;
-    await componentInteraction.deferUpdate();
-    if (!await authorized(componentInteraction)) {
-      completed = true;
-      collector.stop("forbidden");
-      await interaction.editReply({
-        components: createGiveItemStatusComponents(
-          "Доступ изменился",
-          "У вас больше нет права выдавать предметы. Инвентарь не изменён.",
-        ),
-      });
-      return;
-    }
+    try {
+      await componentInteraction.deferUpdate();
+      if (!await authorized(componentInteraction)) {
+        completed = true;
+        collector.stop("forbidden");
+        await interaction.editReply({
+          components: createGiveItemStatusComponents(
+            "Доступ изменился",
+            "У вас больше нет права выдавать предметы. Инвентарь не изменён.",
+          ),
+        });
+        return;
+      }
 
-    const result = await giveItem(
-      playerId,
-      itemName,
-      context.quantity,
-      interaction.user.id,
-    );
-    completed = true;
-    collector.stop(result.success ? "issued" : "failed");
-    if (!result.success) {
-      await interaction.editReply({
-        components: createGiveItemStatusComponents(
-          "Предмет не выдан",
-          result.reason === "quantity_too_large"
-            ? "Итоговое количество слишком велико. Выдайте меньшую стопку."
-            : "Персонаж или его инвентарь изменился. Запустите `/give-item` ещё раз.",
-        ),
-      });
-      return;
-    }
+      const result = await giveItem(
+        playerId,
+        itemName,
+        context.quantity,
+        interaction.user.id,
+      );
+      if (!result.success) {
+        busy = false;
+        await interaction.editReply({
+          components: createGiveItemPreviewComponents({
+            characterName,
+            avatarUrl,
+            slot: context.slot,
+            itemName,
+            quantity: context.quantity,
+            recipientOwnsStyle,
+          }),
+        });
+        await componentInteraction.followUp({
+          components: createGiveItemStatusComponents(
+            "Предмет не выдан",
+            itemFailureMessage(result.reason),
+          ),
+          flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+        }).catch(() => {});
+        return;
+      }
 
-    await interaction.editReply({
-      components: createGiveItemReceiptComponents({
-        characterName,
-        avatarUrl,
-        slot: context.slot,
-        result,
-      }),
-    });
-    await writeItemLog(interaction, context, characterName, result);
+      await interaction.editReply({
+        components: createGiveItemReceiptComponents({
+          characterName,
+          avatarUrl,
+          slot: context.slot,
+          result,
+          allowBack: false,
+        }),
+      });
+      lastResult = result;
+      busy = false;
+      await writeItemLog(interaction, context, characterName, result)
+        .catch((error) => console.error("Error logging give-item:", error));
+    } catch (error) {
+      busy = false;
+      await reportComponentError(
+        interaction,
+        componentInteraction,
+        error,
+        createGiveItemPreviewComponents({
+          characterName,
+          avatarUrl,
+          slot: context.slot,
+          itemName,
+          quantity: context.quantity,
+          recipientOwnsStyle,
+        }),
+      );
+    }
   });
 
   collector.on("end", async () => {
     if (completed) return;
     try {
+      if (lastResult) {
+        await interaction.editReply({
+          components: createGiveItemReceiptComponents({
+            characterName,
+            avatarUrl,
+            slot: context.slot,
+            result: lastResult,
+            disabled: true,
+            allowBack: false,
+          }),
+        });
+        return;
+      }
       await interaction.editReply({
         components: createGiveItemStatusComponents(
           "Время подтверждения истекло",
@@ -258,7 +357,7 @@ async function openModalConfirmation(interaction, context, itemName) {
   return response;
 }
 
-export async function execute(interaction) {
+async function openGiveItemCenter(interaction, initial = null) {
   if (!await authorized(interaction)) {
     return interaction.reply({
       components: createGiveItemStatusComponents(
@@ -269,7 +368,7 @@ export async function execute(interaction) {
     });
   }
 
-  const cooldown = checkGlobalCooldown(interaction.user.id);
+  const cooldown = initial ? { onCooldown: false } : checkGlobalCooldown(interaction.user.id);
   if (cooldown.onCooldown) {
     const retryAt = Math.floor((Date.now() + cooldown.remaining) / 1000);
     return interaction.reply({
@@ -282,10 +381,13 @@ export async function execute(interaction) {
     });
   }
 
-  const targetUser = interaction.options.getUser("user", true);
-  const slot = interaction.options.getInteger("slot")
+  const targetUser = initial?.targetUser || interaction.options.getUser("user", true);
+  const slot = initial?.slot || interaction.options.getInteger("slot")
     || await getActiveSlot(targetUser.id);
-  const quantity = interaction.options.getInteger("quantity") || 1;
+  const quantity = initial?.quantity || interaction.options.getInteger("quantity") || 1;
+  const directItemName = initial?.itemName
+    || interaction.options?.getString?.("item")?.trim()
+    || null;
   const playerId = makePlayerKey(targetUser.id, slot);
   const player = await getPlayer(playerId);
   if (!player) {
@@ -309,8 +411,8 @@ export async function execute(interaction) {
   const context = { userId: targetUser.id, slot, quantity };
   let catalogPage = 0;
   let stylePage = 0;
-  let selectedItemName = null;
-  let currentView = "center";
+  let selectedItemName = directItemName;
+  let currentView = directItemName ? "preview" : "center";
   let completed = false;
   let busy = false;
   let modalStarted = false;
@@ -344,8 +446,16 @@ export async function execute(interaction) {
     disabled,
   });
 
+  let lastResult = null;
+  const receipt = (disabled = false) => createGiveItemReceiptComponents({
+    characterName,
+    avatarUrl,
+    slot,
+    result: lastResult,
+    disabled,
+  });
   const response = await interaction.reply({
-    components: center(),
+    components: selectedItemName ? preview() : center(),
     flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
     fetchReply: true,
   });
@@ -354,6 +464,7 @@ export async function execute(interaction) {
   collector.on("collect", async (componentInteraction) => {
     if (componentInteraction.user.id !== interaction.user.id) return;
     if (busy) return;
+    try {
 
     if (componentInteraction.customId === GIVE_ITEM_CATALOG_PREV_ID) {
       catalogPage = Math.max(0, catalogPage - 1);
@@ -379,6 +490,24 @@ export async function execute(interaction) {
       currentView = "center";
       selectedItemName = null;
       await componentInteraction.update({ components: center() });
+      return;
+    }
+
+    if (componentInteraction.customId === GIVE_ITEM_QUANTITY_ID) {
+      modalStarted = true;
+      collector.stop("modal");
+      await componentInteraction.showModal(
+        createGiveItemQuantityModal(encodeContext(targetUser.id, slot, quantity), quantity),
+      );
+      return;
+    }
+
+    if (componentInteraction.customId === GIVE_ITEM_CUSTOM_ID) {
+      modalStarted = true;
+      collector.stop("modal");
+      await componentInteraction.showModal(
+        createGiveItemCustomModal(encodeContext(targetUser.id, slot, quantity)),
+      );
       return;
     }
 
@@ -450,7 +579,7 @@ export async function execute(interaction) {
       });
       return;
     }
-    if (componentInteraction.customId !== GIVE_ITEM_CONFIRM_ID
+    if (![GIVE_ITEM_CONFIRM_ID, GIVE_ITEM_REPEAT_ID].includes(componentInteraction.customId)
       || !selectedItemName) return;
 
     busy = true;
@@ -472,28 +601,32 @@ export async function execute(interaction) {
       quantity,
       interaction.user.id,
     );
-    completed = true;
-    collector.stop(result.success ? "issued" : "failed");
     if (!result.success) {
+      busy = false;
       await interaction.editReply({
+        components: preview(),
+      });
+      await componentInteraction.followUp({
         components: createGiveItemStatusComponents(
           "Предмет не выдан",
-          result.reason === "quantity_too_large"
-            ? "Итоговое количество слишком велико. Выдайте меньшую стопку."
-            : "Персонаж или инвентарь изменился. Запустите `/give-item` ещё раз.",
+          itemFailureMessage(result.reason),
         ),
-      });
+        flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+      }).catch(() => {});
       return;
     }
+    lastResult = result;
+    currentView = "receipt";
+    busy = false;
     await interaction.editReply({
-      components: createGiveItemReceiptComponents({
-        characterName,
-        avatarUrl,
-        slot,
-        result,
-      }),
+      components: receipt(),
     });
-    await writeItemLog(interaction, context, characterName, result);
+    await writeItemLog(interaction, context, characterName, result)
+      .catch((error) => console.error("Error logging give-item:", error));
+    } catch (error) {
+      busy = false;
+      await reportComponentError(interaction, componentInteraction, error, preview());
+    }
   });
 
   collector.on("end", async () => {
@@ -503,7 +636,9 @@ export async function execute(interaction) {
         await interaction.deleteReply();
         return;
       }
-      const components = currentView === "preview"
+      const components = currentView === "receipt"
+        ? receipt(true)
+        : currentView === "preview"
         ? preview(true)
         : currentView === "styles"
           ? styleSelection(true)
@@ -514,10 +649,16 @@ export async function execute(interaction) {
   return response;
 }
 
+export async function execute(interaction) {
+  return openGiveItemCenter(interaction);
+}
+
 export function handlesModal(interaction) {
   return interaction.customId.startsWith(GIVE_ITEM_AP_MODAL_PREFIX)
     || interaction.customId.startsWith(GIVE_ITEM_SP_MODAL_PREFIX)
-    || interaction.customId.startsWith(GIVE_ITEM_COLLECTIBLE_MODAL_PREFIX);
+    || interaction.customId.startsWith(GIVE_ITEM_COLLECTIBLE_MODAL_PREFIX)
+    || interaction.customId.startsWith(GIVE_ITEM_CUSTOM_MODAL_PREFIX)
+    || interaction.customId.startsWith(GIVE_ITEM_QUANTITY_MODAL_PREFIX);
 }
 
 export async function handleModalSubmit(interaction) {
@@ -526,6 +667,10 @@ export async function handleModalSubmit(interaction) {
     prefix = GIVE_ITEM_AP_MODAL_PREFIX;
   } else if (interaction.customId.startsWith(GIVE_ITEM_SP_MODAL_PREFIX)) {
     prefix = GIVE_ITEM_SP_MODAL_PREFIX;
+  } else if (interaction.customId.startsWith(GIVE_ITEM_CUSTOM_MODAL_PREFIX)) {
+    prefix = GIVE_ITEM_CUSTOM_MODAL_PREFIX;
+  } else if (interaction.customId.startsWith(GIVE_ITEM_QUANTITY_MODAL_PREFIX)) {
+    prefix = GIVE_ITEM_QUANTITY_MODAL_PREFIX;
   } else {
     prefix = GIVE_ITEM_COLLECTIBLE_MODAL_PREFIX;
   }
@@ -541,6 +686,38 @@ export async function handleModalSubmit(interaction) {
     return;
   }
 
+  if (prefix === GIVE_ITEM_QUANTITY_MODAL_PREFIX) {
+    const raw = interaction.fields
+      .getTextInputValue(GIVE_ITEM_QUANTITY_INPUT_ID)
+      .trim();
+    const quantity = /^\d+$/.test(raw) ? Number(raw) : 0;
+    if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 1_000_000) {
+      await interaction.reply({
+        components: createGiveItemStatusComponents(
+          "Количество не изменено",
+          "Укажите целое число от 1 до 1 000 000.",
+        ),
+        flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    const targetUser = await interaction.client.users.fetch(context.userId).catch(() => null);
+    if (!targetUser) {
+      await interaction.reply({
+        components: createGiveItemStatusComponents(
+          "Получатель не найден",
+          "Запустите `/give-item` заново и выберите получателя.",
+        ),
+        flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    return openGiveItemCenter(interaction, {
+      targetUser,
+      slot: context.slot,
+      quantity,
+    });
+  }
   let itemName;
   if (prefix === GIVE_ITEM_AP_MODAL_PREFIX) {
     const amount = parseItemValue(interaction);
@@ -557,7 +734,8 @@ export async function handleModalSubmit(interaction) {
       .replace(/\s+/g, " ")
       .trim();
     if (!itemName || itemName.length > 100
-      || getItemDefinition(itemName).kind !== "collectible") {
+      || (prefix === GIVE_ITEM_COLLECTIBLE_MODAL_PREFIX
+        && getItemDefinition(itemName).kind !== "collectible")) {
       itemName = null;
     }
   }
@@ -568,6 +746,8 @@ export async function handleModalSubmit(interaction) {
         "Предмет не создан",
         prefix === GIVE_ITEM_COLLECTIBLE_MODAL_PREFIX
           ? "Используйте уникальное название, которое не совпадает с форматом AP-тома или SP-свитка."
+          : prefix === GIVE_ITEM_CUSTOM_MODAL_PREFIX
+            ? "Введите название длиной от 1 до 100 символов."
           : `Укажите целое значение от 1 до ${MAX_ITEM_VALUE.toLocaleString("ru-RU")}.`,
       ),
       flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,

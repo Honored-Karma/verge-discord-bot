@@ -1,6 +1,12 @@
 import { getDB, withTransaction } from "./db.js";
 import { calculateExchange, calculateTransfer } from "./banking.js";
 import { getItemDefinition } from "./itemSystem.js";
+import { incrementInventoryStack } from "./inventoryStore.js";
+import {
+  isTransactionUnsupportedError,
+  transferCurrencyCompensated,
+  transferCurrencyInTransaction,
+} from "./currencyTransferStore.js";
 
 const PLAYER_DEFAULTS = {
   character_avatar: null,
@@ -1043,35 +1049,12 @@ export async function giveItem(playerId, itemName, qty, adminId) {
     );
     if (!playerExists) return { success: false, reason: "player_not_found" };
 
-    const inventory = db.collection("inventory");
-    const filter = {
-      player_id: playerId,
-      item_name: safeName,
-      $or: [
-        { qty: { $lte: Number.MAX_SAFE_INTEGER - safeQuantity } },
-        { qty: { $exists: false } },
-      ],
-    };
-    const update = {
-      $inc: { qty: safeQuantity },
-      $setOnInsert: { player_id: playerId, item_name: safeName },
-    };
-    let result;
-    try {
-      result = await inventory.findOneAndUpdate(
-        filter,
-        update,
-        { upsert: true, returnDocument: "after" },
-      );
-    } catch (updateError) {
-      if (updateError?.code !== 11000) throw updateError;
-      result = await inventory.findOneAndUpdate(
-        filter,
-        { $inc: { qty: safeQuantity } },
-        { returnDocument: "after" },
-      );
-    }
-    if (!result) return { success: false, reason: "quantity_too_large" };
+    const result = await incrementInventoryStack(db.collection("inventory"), {
+      playerId,
+      itemName: safeName,
+      quantity: safeQuantity,
+    });
+    if (!result.success) return result;
 
     if (adminId !== "system") {
       logAdminAction(
@@ -1084,7 +1067,8 @@ export async function giveItem(playerId, itemName, qty, adminId) {
       success: true,
       itemName: safeName,
       quantity: safeQuantity,
-      totalQuantity: Number(result.qty || 0),
+      previousQuantity: result.previousQuantity,
+      totalQuantity: result.totalQuantity,
     };
   } catch (error) {
     console.error("Error giving item:", error);
@@ -1505,53 +1489,22 @@ export async function transferCurrency(fromId, toId, currency, amount) {
       return { success: false, reason: calculation.reason };
     }
 
-    return await withTransaction(async (session) => {
-      const players = db.collection("players");
-      const from = await players.findOne({ id: fromId }, { session });
-      const to = await players.findOne({ id: toId }, { session });
-      if (!from) return { success: false, reason: "sender_not_found" };
-      if (!to) return { success: false, reason: "recipient_not_found" };
-
-      const fromBalance = Number(from[currency] || 0);
-      const toBalance = Number(to[currency] || 0);
-      if (!Number.isSafeInteger(fromBalance) || !Number.isSafeInteger(toBalance)) {
-        return { success: false, reason: "unsafe_balance" };
-      }
-      if (fromBalance < calculation.sent) {
-        return {
-          success: false,
-          reason: "insufficient_funds",
-          available: fromBalance,
-        };
-      }
-      if (!Number.isSafeInteger(toBalance + calculation.received)) {
-        return { success: false, reason: "unsafe_balance" };
-      }
-
-      const debit = await players.updateOne(
-        { id: fromId, [currency]: { $gte: calculation.sent } },
-        { $inc: { [currency]: -calculation.sent } },
-        { session },
-      );
-      if (debit.modifiedCount !== 1) {
-        return { success: false, reason: "insufficient_funds" };
-      }
-      const credit = await players.updateOne(
-        { id: toId },
-        { $inc: { [currency]: calculation.received } },
-        { session },
-      );
-      if (credit.modifiedCount !== 1) {
-        throw new Error("Recipient disappeared during transfer");
-      }
-
-      return {
-        success: true,
-        ...calculation,
-        senderBalance: fromBalance - calculation.sent,
-        recipientBalance: toBalance + calculation.received,
-      };
-    });
+    const players = db.collection("players");
+    try {
+      return await withTransaction((session) => transferCurrencyInTransaction(
+        players,
+        { fromId, toId, currency, calculation, session },
+      ));
+    } catch (transactionError) {
+      if (!isTransactionUnsupportedError(transactionError)) throw transactionError;
+      console.warn("MongoDB transactions are unavailable; using compensated transfer.");
+      return await transferCurrencyCompensated(players, {
+        fromId,
+        toId,
+        currency,
+        calculation,
+      });
+    }
   } catch (error) {
     console.error("Error transferring currency:", error);
     return { success: false, reason: "error" };

@@ -10,9 +10,11 @@ import {
   createGiveItemAPModal,
   createGiveItemCenterComponents,
   createGiveItemCollectibleModal,
+  createGiveItemCustomModal,
   createGiveItemPreviewComponents,
   createGiveItemReceiptComponents,
   createGiveItemSPModal,
+  createGiveItemQuantityModal,
   createGiveItemStatusComponents,
   createGiveItemStyleComponents,
 } from "../utils/giveItemComponents.js";
@@ -53,6 +55,7 @@ test("builds every give-item interface state", () => {
         success: true,
         itemName: "SP Scroll: Muay Thai",
         quantity: 25,
+        previousQuantity: 25,
         totalQuantity: 50,
       },
     }),
@@ -67,6 +70,8 @@ test("builds valid custom item modals", () => {
     createGiveItemAPModal(context),
     createGiveItemSPModal(`${context}:15`, "Very long martial art name"),
     createGiveItemCollectibleModal(context),
+    createGiveItemCustomModal(context),
+    createGiveItemQuantityModal(context, 25),
   ];
   for (const modal of modals) assert.doesNotThrow(() => modal.toJSON());
 });
