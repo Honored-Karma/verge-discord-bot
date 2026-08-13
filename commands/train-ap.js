@@ -1,43 +1,37 @@
-import { SlashCommandBuilder } from "discord.js";
+import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import {
+  completeAPTraining,
+  getActiveSlot,
   getPlayer,
-  addAP,
-  getEffectiveAPMultiplier,
 } from "../utils/dataManager.js";
 import {
   checkCooldown,
-  validateTrainingText,
   checkGlobalCooldown,
+  validateTrainingText,
   autoDeleteMessageShort,
   autoDeleteMessageLong,
 } from "../utils/cooldowns.js";
-import {
-  createTrainEmbed,
-  createErrorEmbed,
-  createCooldownEmbed,
-} from "../utils/embeds.js";
-import { progressBar, getAPProgress } from "../utils/progressBar.js";
+import { createCooldownEmbed, createErrorEmbed } from "../utils/embeds.js";
 import { logCommand } from "../utils/logs.js";
 import { makePlayerKey } from "../utils/playerKey.js";
+import {
+  createAPActivityErrorComponents,
+  createTrainingModal,
+  createTrainingSuccessComponents,
+  TRAINING_MODAL_PREFIX,
+  TRAINING_TEXT_INPUT_ID,
+} from "../utils/trainingComponents.js";
 
-const TRAIN_COOLDOWN = 5 * 60 * 60 * 1000; // 5 часов
+const TRAIN_COOLDOWN = 5 * 60 * 60 * 1000;
 const TRAIN_AP_REWARD = 10;
+
+export const modalCustomIdPrefix = TRAINING_MODAL_PREFIX;
 
 export const data = new SlashCommandBuilder()
   .setName("train-ap")
-  .setDescription(
-    "Физическая тренировка — получить AP (мин. 800 символов, кулдаун 5 часов)",
-  )
-  .addStringOption((option) =>
-    option
-      .setName("text")
-      .setDescription("Текст тренировки (минимум 800 символов)")
-      .setRequired(true)
-      .setMaxLength(4000),
-  );
+  .setDescription("Провести физическую тренировку персонажа и получить AP");
 
 export async function execute(interaction) {
-  // Глобальный кулдаун (анти-спам 3с)
   const globalCooldown = checkGlobalCooldown(interaction.user.id);
   if (globalCooldown.onCooldown) {
     const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
@@ -49,32 +43,16 @@ export async function execute(interaction) {
     return;
   }
 
-  const userId = interaction.user.id;
-  const { getActiveSlot } = await import("../utils/dataManager.js");
-  const activeSlot = await getActiveSlot(userId);
-  const playerId = makePlayerKey(userId, activeSlot);
-  const username = interaction.user.username;
-  const trainingText = interaction.options.getString("text");
-
-  // Логируем команду
-  await logCommand({
-    client: interaction.client,
-    guildId: interaction.guildId,
-    channelId: interaction.channelId,
-    userId: playerId,
-    userTag: username,
-    command: "train-ap",
-    extra: { text: trainingText },
-  });
-
-  // Проверяем наличие персонажа
+  const slot = await getActiveSlot(interaction.user.id);
+  const playerId = makePlayerKey(interaction.user.id, slot);
   const player = await getPlayer(playerId);
+
   if (!player) {
     const msg = await interaction.reply({
       embeds: [
         createErrorEmbed(
           "Пустой слот",
-          "В этом слоте нет персонажа. Используйте `/register`, чтобы создать нового персонажа.",
+          "Сначала создайте персонажа в активном слоте через `/register`.",
         ),
       ],
       fetchReply: true,
@@ -83,25 +61,10 @@ export async function execute(interaction) {
     return;
   }
 
-  // Валидация текста тренировки (мин. 800 символов, не спам)
-  const validation = validateTrainingText(trainingText);
-  if (!validation.valid) {
-    const msg = await interaction.reply({
-      embeds: [createErrorEmbed("Текст не прошёл проверку", validation.reason)],
-      fetchReply: true,
-    });
-    autoDeleteMessageShort(msg);
-    return;
-  }
-
-  // Проверяем кулдаун тренировки AP
-  const cooldownCheck = checkCooldown(
-    player.last_train_timestamp,
-    TRAIN_COOLDOWN,
-  );
-  if (cooldownCheck.onCooldown) {
+  const cooldown = checkCooldown(player.last_train_timestamp, TRAIN_COOLDOWN);
+  if (cooldown.onCooldown) {
     const retryAt =
-      Math.floor(Date.now() / 1000) + Math.ceil(cooldownCheck.remaining / 1000);
+      Math.floor(Date.now() / 1000) + Math.ceil(cooldown.remaining / 1000);
     const msg = await interaction.reply({
       embeds: [createCooldownEmbed("Тренировка AP", retryAt)],
       fetchReply: true,
@@ -110,53 +73,121 @@ export async function execute(interaction) {
     return;
   }
 
-  // Вычисляем эффективный множитель ДО начисления (те же данные, что использует addAP)
-  // Важно: не обратное вычисление — оно даёт неверный результат из-за Math.round в addAP
-  const multiplier = getEffectiveAPMultiplier(player);
+  await interaction.showModal(createTrainingModal(slot));
+}
 
-  // Начисляем AP
-  const newAP = await addAP(playerId, TRAIN_AP_REWARD, "train");
-  if (newAP === false) {
-    const msg = await interaction.reply({
-      embeds: [
-        createErrorEmbed("Ошибка", "Не удалось добавить AP. Попробуйте снова."),
-      ],
-      fetchReply: true,
-    });
+export function handlesModal(interaction) {
+  return interaction.customId.startsWith(TRAINING_MODAL_PREFIX);
+}
+
+async function editComponentsReply(interaction, components) {
+  return interaction.editReply({
+    content: null,
+    embeds: [],
+    components,
+    flags: MessageFlags.IsComponentsV2,
+    allowedMentions: { parse: [] },
+  });
+}
+
+export async function handleModalSubmit(interaction) {
+  const slot = Number(interaction.customId.slice(TRAINING_MODAL_PREFIX.length));
+  await interaction.deferReply();
+
+  if (slot !== 1 && slot !== 2) {
+    const msg = await editComponentsReply(
+      interaction,
+      createAPActivityErrorComponents(
+        "Не удалось определить персонажа",
+        "Закройте это окно и снова запустите `/train-ap`.",
+      ),
+    );
     autoDeleteMessageShort(msg);
     return;
   }
 
-  const actualAPGained = Math.max(0, newAP - (player.ap || 0));
-
-  const apProgress = getAPProgress(newAP);
-  const progressText = progressBar(apProgress.current, apProgress.max, 20);
-
-  // Обрезаем текст тренировки для embed (макс. 1000 символов)
-  const truncatedText =
-    trainingText.length > 1000
-      ? trainingText.slice(0, 1000) + "..."
-      : trainingText;
-
-  const embed = createTrainEmbed(
-    "Тренировка AP завершена!",
-    `**<:AP28112025:1443994380670337245> Получено AP:**\n` +
-      `Базовое значение: **${TRAIN_AP_REWARD} AP**\n` +
-      `Множитель: **${multiplier}%**\n` +
-      `Итого получено: **+${actualAPGained} AP**\n\n` +
-      `**Всего AP:** ${newAP}\n` +
-      `**Следующая тренировка AP:** <t:${Math.floor((Date.now() + TRAIN_COOLDOWN) / 1000)}:R>\n\n` +
-      `**Прогресс AP:**\n${progressText}`,
-  );
-
-  embed.addFields({ name: "📝 Текст тренировки", value: truncatedText });
-
-  if (newAP >= 1000) {
-    embed.setDescription(
-      embed.data.description + "\n\n🌟 **Олицетворение достигнуто!**",
+  const trainingText = interaction.fields
+    .getTextInputValue(TRAINING_TEXT_INPUT_ID)
+    .trim();
+  const validation = validateTrainingText(trainingText);
+  if (!validation.valid) {
+    const msg = await editComponentsReply(
+      interaction,
+      createAPActivityErrorComponents(
+        "Тренировка не принята",
+        `${validation.reason}\n\nЗапустите \`/train-ap\` ещё раз и исправьте текст.`,
+      ),
     );
+    autoDeleteMessageShort(msg);
+    return;
   }
 
-  const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
+  const playerId = makePlayerKey(interaction.user.id, slot);
+  const player = await getPlayer(playerId);
+  if (!player) {
+    const msg = await editComponentsReply(
+      interaction,
+      createAPActivityErrorComponents(
+        "Персонаж не найден",
+        `В слоте ${slot} больше нет персонажа. Выберите нужный слот и снова запустите \`/train-ap\`.`,
+      ),
+    );
+    autoDeleteMessageShort(msg);
+    return;
+  }
+
+  const result = await completeAPTraining(
+    playerId,
+    TRAIN_AP_REWARD,
+    TRAIN_COOLDOWN,
+  );
+
+  if (!result.success) {
+    const components = result.reason === "cooldown"
+      ? createAPActivityErrorComponents(
+          "Тренировка пока недоступна",
+          `Следующую тренировку можно провести <t:${result.retryAt}:R>.`,
+        )
+      : createAPActivityErrorComponents(
+          "Не удалось завершить тренировку",
+          "Проверьте соединение и попробуйте снова. Награда не начислена.",
+        );
+    const msg = await editComponentsReply(interaction, components);
+    autoDeleteMessageShort(msg);
+    return;
+  }
+
+  const characterName = player.character_name || player.username;
+  const avatarUrl = player.character_avatar
+    || interaction.user.displayAvatarURL({ extension: "png", size: 256 });
+  const msg = await editComponentsReply(
+    interaction,
+    createTrainingSuccessComponents({
+      characterName,
+      avatarUrl,
+      baseReward: TRAIN_AP_REWARD,
+      gained: result.gained,
+      multiplier: result.multiplier,
+      dynamicBonus: result.dynamicBonus,
+      newAP: result.newAP,
+      retryAt: result.retryAt,
+      activityText: trainingText,
+    }),
+  );
   autoDeleteMessageLong(msg);
+
+  await logCommand({
+    client: interaction.client,
+    guildId: interaction.guildId,
+    channelId: interaction.channelId,
+    userId: playerId,
+    userTag: interaction.user.username,
+    command: "train-ap",
+    extra: {
+      text: trainingText,
+      slot,
+      ap_gained: result.gained,
+      multiplier: result.multiplier,
+    },
+  });
 }

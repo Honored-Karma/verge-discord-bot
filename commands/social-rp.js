@@ -1,38 +1,35 @@
-import { SlashCommandBuilder } from "discord.js";
+import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import {
+  completeSocialRP,
+  getActiveSlot,
   getPlayer,
-  addAP,
-  getEffectiveAPMultiplier,
 } from "../utils/dataManager.js";
 import {
+  autoDeleteMessageLong,
+  autoDeleteMessageShort,
   checkCooldown,
   checkGlobalCooldown,
-  autoDeleteMessageShort,
-  autoDeleteMessageLong,
+  validateSocialRPText,
 } from "../utils/cooldowns.js";
-import {
-  createSocialRPEmbed,
-  createErrorEmbed,
-  createCooldownEmbed,
-} from "../utils/embeds.js";
-import { progressBar, getAPProgress } from "../utils/progressBar.js";
+import { createCooldownEmbed, createErrorEmbed } from "../utils/embeds.js";
 import { logCommand } from "../utils/logs.js";
 import { makePlayerKey } from "../utils/playerKey.js";
+import {
+  createSocialRPModal,
+  createSocialRPSuccessComponents,
+  createAPActivityErrorComponents,
+  SOCIAL_RP_MODAL_PREFIX,
+  SOCIAL_RP_TEXT_INPUT_ID,
+} from "../utils/trainingComponents.js";
 
-const SOCIALRP_COOLDOWN = 12 * 60 * 60 * 1000;
-const SOCIALRP_AP_REWARD = 10;
+const SOCIAL_RP_COOLDOWN = 12 * 60 * 60 * 1000;
+const SOCIAL_RP_AP_REWARD = 10;
+
+export const modalCustomIdPrefix = SOCIAL_RP_MODAL_PREFIX;
 
 export const data = new SlashCommandBuilder()
   .setName("social-rp")
-  .setDescription(
-    "Социальное взаимодействие для получения AP (10 AP, кулдаун 12 часов)",
-  )
-  .addStringOption((option) =>
-    option
-      .setName("text")
-      .setDescription("Текст взаимодействия")
-      .setRequired(true),
-  );
+  .setDescription("Отыграть социальную сцену персонажа и получить AP");
 
 export async function execute(interaction) {
   const globalCooldown = checkGlobalCooldown(interaction.user.id);
@@ -46,28 +43,16 @@ export async function execute(interaction) {
     return;
   }
 
-  const userId = interaction.user.id;
-  const { getActiveSlot } = await import("../utils/dataManager.js");
-  const activeSlot = await getActiveSlot(userId);
-  const playerId = makePlayerKey(userId, activeSlot);
-  const rpText = interaction.options.getString("text");
-  // Логирование текста социалки
-  await logCommand({
-    client: interaction.client,
-    guildId: interaction.guildId,
-    channelId: interaction.channelId,
-    userId: playerId,
-    userTag: interaction.user.username,
-    command: "social-rp",
-    extra: { text: rpText },
-  });
-  let player = await getPlayer(playerId);
+  const slot = await getActiveSlot(interaction.user.id);
+  const playerId = makePlayerKey(interaction.user.id, slot);
+  const player = await getPlayer(playerId);
+
   if (!player) {
     const msg = await interaction.reply({
       embeds: [
         createErrorEmbed(
           "Пустой слот",
-          "В этом слоте нет персонажа. Используйте /register, чтобы создать нового персонажа в этом слоте.",
+          "Сначала создайте персонажа в активном слоте через `/register`.",
         ),
       ],
       fetchReply: true,
@@ -76,27 +61,13 @@ export async function execute(interaction) {
     return;
   }
 
-  if (rpText.length < 50) {
-    const msg = await interaction.reply({
-      embeds: [
-        createErrorEmbed(
-          "Текст слишком короткий",
-          "Текст должен содержать минимум 50 символов.",
-        ),
-      ],
-      fetchReply: true,
-    });
-    autoDeleteMessageShort(msg);
-    return;
-  }
-
-  const cooldownCheck = checkCooldown(
+  const cooldown = checkCooldown(
     player.last_socialrp_timestamp,
-    SOCIALRP_COOLDOWN,
+    SOCIAL_RP_COOLDOWN,
   );
-  if (cooldownCheck.onCooldown) {
+  if (cooldown.onCooldown) {
     const retryAt =
-      Math.floor(Date.now() / 1000) + Math.ceil(cooldownCheck.remaining / 1000);
+      Math.floor(Date.now() / 1000) + Math.ceil(cooldown.remaining / 1000);
     const msg = await interaction.reply({
       embeds: [createCooldownEmbed("Социальное RP", retryAt)],
       fetchReply: true,
@@ -105,48 +76,121 @@ export async function execute(interaction) {
     return;
   }
 
-  // Вычисляем множитель ДО начисления — точный, без погрешности Math.round
-  const multiplier = getEffectiveAPMultiplier(player);
+  await interaction.showModal(createSocialRPModal(slot));
+}
 
-  const newAP = await addAP(playerId, SOCIALRP_AP_REWARD, "socialrp");
+export function handlesModal(interaction) {
+  return interaction.customId.startsWith(SOCIAL_RP_MODAL_PREFIX);
+}
 
-  if (newAP === false) {
-    const msg = await interaction.reply({
-      embeds: [
-        createErrorEmbed("Ошибка", "Не удалось добавить AP. Попробуйте снова."),
-      ],
-      fetchReply: true,
-    });
+async function editComponentsReply(interaction, components) {
+  return interaction.editReply({
+    content: null,
+    embeds: [],
+    components,
+    flags: MessageFlags.IsComponentsV2,
+    allowedMentions: { parse: [] },
+  });
+}
+
+export async function handleModalSubmit(interaction) {
+  const slot = Number(interaction.customId.slice(SOCIAL_RP_MODAL_PREFIX.length));
+  await interaction.deferReply();
+
+  if (slot !== 1 && slot !== 2) {
+    const msg = await editComponentsReply(
+      interaction,
+      createAPActivityErrorComponents(
+        "Не удалось определить персонажа",
+        "Закройте это окно и снова запустите `/social-rp`.",
+      ),
+    );
     autoDeleteMessageShort(msg);
     return;
   }
 
-  const actualAPGained = Math.max(0, newAP - (player.ap || 0));
-
-  const apProgress = getAPProgress(newAP);
-  const progressText = progressBar(apProgress.current, apProgress.max, 20);
-
-  const truncatedText =
-    rpText.length > 900 ? rpText.slice(0, 900) + "..." : rpText;
-
-  const embed = createSocialRPEmbed(
-    "Взаимодействие завершено!",
-    `**📊 Получено AP:**\n` +
-      `Базовое значение: **${SOCIALRP_AP_REWARD} AP**\n` +
-      `Множитель: **${multiplier}%**\n` +
-      `Итого получено: **+${actualAPGained} AP**\n\n` +
-      `**Всего AP:** ${newAP}\n` +
-      `**Следующее взаимодействие:** <t:${Math.floor((Date.now() + SOCIALRP_COOLDOWN) / 1000)}:R>\n\n` +
-      `**Прогресс AP:**\n${progressText}`,
-  );
-  embed.addFields({ name: "📝 Текст взаимодействия", value: truncatedText });
-
-  if (newAP >= 1000) {
-    embed.setDescription(
-      embed.data.description + "\n\n🌟 **Олицетворение достигнуто!**",
+  const socialText = interaction.fields
+    .getTextInputValue(SOCIAL_RP_TEXT_INPUT_ID)
+    .trim();
+  const validation = validateSocialRPText(socialText);
+  if (!validation.valid) {
+    const msg = await editComponentsReply(
+      interaction,
+      createAPActivityErrorComponents(
+        "Социальная сцена не принята",
+        `${validation.reason}\n\nЗапустите \`/social-rp\` ещё раз и исправьте текст.`,
+      ),
     );
+    autoDeleteMessageShort(msg);
+    return;
   }
 
-  const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
+  const playerId = makePlayerKey(interaction.user.id, slot);
+  const player = await getPlayer(playerId);
+  if (!player) {
+    const msg = await editComponentsReply(
+      interaction,
+      createAPActivityErrorComponents(
+        "Персонаж не найден",
+        `В слоте ${slot} больше нет персонажа. Выберите нужный слот и снова запустите \`/social-rp\`.`,
+      ),
+    );
+    autoDeleteMessageShort(msg);
+    return;
+  }
+
+  const result = await completeSocialRP(
+    playerId,
+    SOCIAL_RP_AP_REWARD,
+    SOCIAL_RP_COOLDOWN,
+  );
+
+  if (!result.success) {
+    const components = result.reason === "cooldown"
+      ? createAPActivityErrorComponents(
+          "Социальное RP пока недоступно",
+          `Следующую сцену можно провести <t:${result.retryAt}:R>.`,
+        )
+      : createAPActivityErrorComponents(
+          "Не удалось завершить социальную сцену",
+          "Проверьте соединение и попробуйте снова. Награда не начислена.",
+        );
+    const msg = await editComponentsReply(interaction, components);
+    autoDeleteMessageShort(msg);
+    return;
+  }
+
+  const characterName = player.character_name || player.username;
+  const avatarUrl = player.character_avatar
+    || interaction.user.displayAvatarURL({ extension: "png", size: 256 });
+  const msg = await editComponentsReply(
+    interaction,
+    createSocialRPSuccessComponents({
+      characterName,
+      avatarUrl,
+      baseReward: SOCIAL_RP_AP_REWARD,
+      gained: result.gained,
+      multiplier: result.multiplier,
+      dynamicBonus: result.dynamicBonus,
+      newAP: result.newAP,
+      retryAt: result.retryAt,
+      activityText: socialText,
+    }),
+  );
   autoDeleteMessageLong(msg);
+
+  await logCommand({
+    client: interaction.client,
+    guildId: interaction.guildId,
+    channelId: interaction.channelId,
+    userId: playerId,
+    userTag: interaction.user.username,
+    command: "social-rp",
+    extra: {
+      text: socialText,
+      slot,
+      ap_gained: result.gained,
+      multiplier: result.multiplier,
+    },
+  });
 }

@@ -90,6 +90,36 @@ client.once(Events.ClientReady, async readyClient => {
 });
 
 client.on(Events.InteractionCreate, async interaction => {
+    if (interaction.isModalSubmit()) {
+        const command = [...client.commands.values()].find(candidate =>
+            typeof candidate.handlesModal === 'function' && candidate.handlesModal(interaction)
+        );
+
+        if (!command || typeof command.handleModalSubmit !== 'function') {
+            await interaction.reply({
+                content: 'Эта форма больше не поддерживается. Запустите команду ещё раз.',
+                flags: 64
+            }).catch(() => {});
+            return;
+        }
+
+        try {
+            await command.handleModalSubmit(interaction);
+        } catch (error) {
+            console.error(`❌ Error handling modal ${interaction.customId}:`, error);
+            const errorMessage = {
+                content: 'Не удалось обработать форму. Попробуйте снова.',
+                flags: 64
+            };
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp(errorMessage).catch(() => {});
+            } else {
+                await interaction.reply(errorMessage).catch(() => {});
+            }
+        }
+        return;
+    }
+
     if (!interaction.isChatInputCommand()) return;
     // Wrap reply/followUp to convert deprecated `ephemeral: true` into flags: 64
     try {

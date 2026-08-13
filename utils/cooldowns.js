@@ -83,8 +83,16 @@ export function formatTime(ms) {
 }
 
 export function validateTrainingText(text) {
+    if (typeof text !== 'string') {
+        return { valid: false, reason: 'Введите текст тренировки.' };
+    }
+
     if (text.length < 800) {
         return { valid: false, reason: `Текст тренировки должен содержать минимум 800 символов. Сейчас: ${text.length}` };
+    }
+
+    if (text.length > 4000) {
+        return { valid: false, reason: `Сократите текст тренировки до 4 000 символов. Сейчас: ${text.length}` };
     }
     
     const letterDigitSpaceCount = (text.match(/[a-zA-Zа-яА-ЯёЁ0-9\s]/g) || []).length;
@@ -94,5 +102,30 @@ export function validateTrainingText(text) {
         return { valid: false, reason: 'Текст должен содержать минимум 50% букв, цифр или пробелов. Запрещен спам ссылками или символами.' };
     }
     
+    return { valid: true };
+}
+
+export function validateSocialRPText(text) {
+    if (typeof text !== 'string') {
+        return { valid: false, reason: 'Введите текст социальной сцены.' };
+    }
+
+    if (text.length < 50) {
+        return { valid: false, reason: `Текст социальной сцены должен содержать минимум 50 символов. Сейчас: ${text.length}` };
+    }
+
+    if (text.length > 4000) {
+        return { valid: false, reason: `Сократите текст социальной сцены до 4 000 символов. Сейчас: ${text.length}` };
+    }
+
+    const meaningfulCount = (text.match(/[a-zA-Zа-яА-ЯёЁ0-9\s]/g) || []).length;
+    const meaningfulPercentage = (meaningfulCount / text.length) * 100;
+    if (meaningfulPercentage < 50) {
+        return {
+            valid: false,
+            reason: 'Используйте связный текст: не менее половины содержимого должны составлять буквы, цифры и пробелы.',
+        };
+    }
+
     return { valid: true };
 }

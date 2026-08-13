@@ -448,6 +448,131 @@ export async function addAP(playerId, amount, actionType = "train") {
   }
 }
 
+/**
+ * Atomically completes an AP activity and applies its dedicated cooldown.
+ * The conditional update prevents two simultaneously opened forms from
+ * granting the same activity reward more than once.
+ */
+async function completeAPActivity(
+  playerId,
+  baseAmount,
+  cooldownMs,
+  timestampField,
+  actionType,
+) {
+  try {
+    const db = getDB();
+    const player = await getPlayer(playerId);
+    if (!player) return { success: false, reason: "not_found" };
+
+    const now = Math.floor(Date.now() / 1000);
+    const cooldownSeconds = Math.ceil(Number(cooldownMs) / 1000);
+    const availableBefore = now - cooldownSeconds;
+    const lastAction = Number(player[timestampField] || 0);
+
+    if (lastAction > availableBefore) {
+      return {
+        success: false,
+        reason: "cooldown",
+        retryAt: lastAction + cooldownSeconds,
+      };
+    }
+
+    const multiplierExpired =
+      Number(player.ap_multiplier_expires_at || 0) > 0 &&
+      now >= Number(player.ap_multiplier_expires_at);
+    const baseMultiplier = multiplierExpired
+      ? 100
+      : Number(player.ap_multiplier || 100);
+    const dynamicBonus =
+      getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
+    const multiplier = baseMultiplier + dynamicBonus;
+    const gained = Math.max(
+      0,
+      Math.round(Number(baseAmount) * (multiplier / 100)),
+    );
+    const oldAP = Number(player.ap || 0);
+
+    const setOperations = {
+      [timestampField]: now,
+      last_ap_change_at: now,
+    };
+    if (multiplierExpired) {
+      setOperations.ap_multiplier = 100;
+      setOperations.ap_multiplier_expires_at = 0;
+    }
+    if (oldAP + gained >= 1000) setOperations.unlocked_avatar = 1;
+
+    const updatedPlayer = await db.collection("players").findOneAndUpdate(
+      {
+        id: playerId,
+        $or: [
+          { [timestampField]: { $lte: availableBefore } },
+          { [timestampField]: { $exists: false } },
+        ],
+      },
+      {
+        $inc: { ap: gained },
+        $set: setOperations,
+      },
+      { returnDocument: "after" },
+    );
+
+    if (!updatedPlayer) {
+      const latest = await getPlayer(playerId);
+      const latestAction = Number(latest?.[timestampField] || now);
+      return {
+        success: false,
+        reason: "cooldown",
+        retryAt: latestAction + cooldownSeconds,
+      };
+    }
+
+    const newAP = Number(updatedPlayer.ap || oldAP + gained);
+    const previousAP = newAP - gained;
+    if (newAP >= 1000 && !updatedPlayer.unlocked_avatar) {
+      await db
+        .collection("players")
+        .updateOne({ id: playerId }, { $set: { unlocked_avatar: 1 } });
+    }
+    await addProgressionHistory(playerId, "ap", previousAP, newAP, actionType);
+
+    return {
+      success: true,
+      oldAP: previousAP,
+      newAP,
+      gained,
+      multiplier,
+      baseMultiplier,
+      dynamicBonus,
+      retryAt: now + cooldownSeconds,
+    };
+  } catch (error) {
+    console.error(`Error completing AP activity (${actionType}):`, error);
+    return { success: false, reason: "error" };
+  }
+}
+
+export function completeAPTraining(playerId, baseAmount, cooldownMs) {
+  return completeAPActivity(
+    playerId,
+    baseAmount,
+    cooldownMs,
+    "last_train_timestamp",
+    "train",
+  );
+}
+
+export function completeSocialRP(playerId, baseAmount, cooldownMs) {
+  return completeAPActivity(
+    playerId,
+    baseAmount,
+    cooldownMs,
+    "last_socialrp_timestamp",
+    "socialrp",
+  );
+}
+
 export async function setAP(playerId, amount, adminId) {
   try {
     const db = getDB();
