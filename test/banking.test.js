@@ -79,3 +79,23 @@ test("builds valid bank previews, receipts and status states", () => {
 
   for (const state of states) assert.doesNotThrow(() => state.toJSON());
 });
+
+test("bank buttons use Discord-compatible emoji", () => {
+  const components = createPayPreviewComponents({
+    senderName: "Sender",
+    senderAvatarUrl: avatarUrl,
+    recipientName: "Recipient",
+    recipientSlot: 1,
+    currency: "krw",
+    calculation: calculateTransfer(100),
+    senderBalance: 1_000,
+  }).map((component) => component.toJSON());
+  const emojis = components
+    .flatMap((container) => container.components || [])
+    .flatMap((component) => component.components || [])
+    .map((component) => component.emoji?.name)
+    .filter(Boolean);
+
+  assert.deepEqual(emojis, ["✅", "❌"]);
+  for (const emoji of emojis) assert.match(emoji, /\p{Extended_Pictographic}/u);
+});

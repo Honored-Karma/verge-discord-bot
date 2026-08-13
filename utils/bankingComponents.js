@@ -57,13 +57,13 @@ function confirmationButtons(confirmId, cancelId, confirmLabel, disabled) {
     new ButtonBuilder()
       .setCustomId(confirmId)
       .setLabel(confirmLabel)
-      .setEmoji("✓")
+      .setEmoji("✅")
       .setStyle(ButtonStyle.Success)
       .setDisabled(disabled),
     new ButtonBuilder()
       .setCustomId(cancelId)
       .setLabel("Отменить")
-      .setEmoji("✕")
+      .setEmoji("❌")
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(disabled),
   );

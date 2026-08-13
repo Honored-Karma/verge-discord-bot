@@ -75,3 +75,29 @@ test("builds valid custom item modals", () => {
   ];
   for (const modal of modals) assert.doesNotThrow(() => modal.toJSON());
 });
+
+test("give-item buttons use Discord-compatible emoji", () => {
+  const states = [
+    ...createGiveItemPreviewComponents({
+      ...base,
+      itemName: "AP Tome (50)",
+    }),
+    ...createGiveItemReceiptComponents({
+      ...base,
+      result: {
+        itemName: "AP Tome (50)",
+        quantity: 1,
+        previousQuantity: 0,
+        totalQuantity: 1,
+      },
+    }),
+  ].map((component) => component.toJSON());
+  const emojis = states
+    .flatMap((container) => container.components || [])
+    .flatMap((component) => component.components || [])
+    .map((component) => component.emoji?.name)
+    .filter(Boolean);
+
+  assert.deepEqual(emojis, ["✅", "❌", "🔁", "⬅️"]);
+  for (const emoji of emojis) assert.match(emoji, /\p{Extended_Pictographic}/u);
+});

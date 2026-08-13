@@ -454,11 +454,11 @@ async function openGiveItemCenter(interaction, initial = null) {
     result: lastResult,
     disabled,
   });
-  const response = await interaction.reply({
+  await interaction.reply({
     components: selectedItemName ? preview() : center(),
     flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
-    fetchReply: true,
   });
+  const response = await interaction.fetchReply();
   const collector = response.createMessageComponentCollector({ time: SESSION_DURATION });
 
   collector.on("collect", async (componentInteraction) => {

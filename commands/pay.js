@@ -154,7 +154,7 @@ export async function execute(interaction) {
   const senderAvatarUrl = avatarUrl(sender, interaction.user);
   let completed = false;
   let busy = false;
-  const response = await interaction.reply({
+  await interaction.reply({
     components: createPayPreviewComponents({
       senderName,
       senderAvatarUrl,
@@ -165,8 +165,8 @@ export async function execute(interaction) {
       senderBalance,
     }),
     flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
-    fetchReply: true,
   });
+  const response = await interaction.fetchReply();
   const collector = response.createMessageComponentCollector({
     time: CONFIRMATION_DURATION,
   });

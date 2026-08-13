@@ -323,13 +323,13 @@ export function createGiveItemPreviewComponents({
           new ButtonBuilder()
             .setCustomId(GIVE_ITEM_CONFIRM_ID)
             .setLabel("Выдать предмет")
-            .setEmoji("✓")
+            .setEmoji("✅")
             .setStyle(ButtonStyle.Success)
             .setDisabled(disabled),
           new ButtonBuilder()
             .setCustomId(GIVE_ITEM_CANCEL_ID)
             .setLabel("Отменить")
-            .setEmoji("✕")
+            .setEmoji("❌")
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(disabled),
         ),
@@ -373,7 +373,7 @@ export function createGiveItemReceiptComponents({
           new ButtonBuilder()
             .setCustomId(GIVE_ITEM_REPEAT_ID)
             .setLabel("Выдать ещё раз")
-            .setEmoji("↻")
+            .setEmoji("🔁")
             .setStyle(ButtonStyle.Success)
             .setDisabled(disabled),
         );
@@ -382,7 +382,7 @@ export function createGiveItemReceiptComponents({
             new ButtonBuilder()
               .setCustomId(GIVE_ITEM_BACK_ID)
               .setLabel("Выбрать другой")
-              .setEmoji("←")
+              .setEmoji("⬅️")
               .setStyle(ButtonStyle.Secondary)
               .setDisabled(disabled),
           );
