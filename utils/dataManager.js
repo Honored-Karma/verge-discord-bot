@@ -7,6 +7,10 @@ import {
   transferCurrencyCompensated,
   transferCurrencyInTransaction,
 } from "./currencyTransferStore.js";
+import {
+  transferItemCompensated,
+  transferItemInTransaction,
+} from "./itemTransferStore.js";
 
 const PLAYER_DEFAULTS = {
   character_avatar: null,
@@ -1076,6 +1080,42 @@ export async function giveItem(playerId, itemName, qty, adminId) {
       success: false,
       reason: "error",
     };
+  }
+}
+
+export async function transferItem(fromId, toId, itemName, qty) {
+  try {
+    const safeName = String(itemName || "").trim();
+    const quantity = Number(qty);
+    if (!safeName || safeName.length > 100
+      || !Number.isSafeInteger(quantity) || quantity < 1) {
+      return { success: false, reason: "invalid_item" };
+    }
+    if (fromId === toId) return { success: false, reason: "same_player" };
+
+    const db = getDB();
+    const collections = {
+      players: db.collection("players"),
+      inventory: db.collection("inventory"),
+    };
+    try {
+      return await withTransaction((session) => transferItemInTransaction(
+        collections,
+        { fromId, toId, itemName: safeName, quantity, session },
+      ));
+    } catch (transactionError) {
+      if (!isTransactionUnsupportedError(transactionError)) throw transactionError;
+      console.warn("MongoDB transactions are unavailable; using compensated item transfer.");
+      return await transferItemCompensated(collections, {
+        fromId,
+        toId,
+        itemName: safeName,
+        quantity,
+      });
+    }
+  } catch (error) {
+    console.error("Error transferring item:", error);
+    return { success: false, reason: "error" };
   }
 }
 

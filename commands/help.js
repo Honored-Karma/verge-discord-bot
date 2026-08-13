@@ -96,7 +96,7 @@ function createMainHelp() {
       {
         name: "💰 Экономика",
         value:
-          "`/pay <user> <currency> <amount>` - Перевод валюты\n`/exchange <currency> <amount>` - Обмен валюты\n`/inventory` - Инвентарь",
+          "`/pay <user> <currency> <amount>` - Перевод валюты\n`/transfer-item <user> [quantity] [slot]` - Передача предмета\n`/exchange <currency> <amount>` - Обмен валюты\n`/inventory` - Инвентарь",
         inline: false,
       },
       {
@@ -217,6 +217,12 @@ function createEconomyHelp() {
         name: "/pay <user> <krw/yen> <amount>",
         value:
           "✅ **Перевести валюту другому персонажу**\n• `user` — получатель\n• `currency` — KRW или YEN\n• `amount` — сумма до вычета налога\n• `slot` — слот получателя\n\n💸 Перед списанием появится точный расчёт. Налог составляет **2%** и вычитается из отправленной суммы.",
+        inline: false,
+      },
+      {
+        name: "/transfer-item <user> [quantity] [slot]",
+        value:
+          "📦 **Передать предмет персонажу**\nВыберите предмет из активного инвентаря, проверьте количество и подтвердите передачу. Можно передавать расходники, коллекционные предметы и вещи между своими слотами.",
         inline: false,
       },
       {
@@ -354,8 +360,8 @@ function createAllCommandsHelp() {
         inline: true,
       },
       {
-        name: "💰 Экономика (4)",
-        value: "/pay\n/exchange\n/leaderboard\n/use",
+        name: "💰 Экономика (5)",
+        value: "/pay\n/transfer-item\n/exchange\n/leaderboard\n/use",
         inline: true,
       },
       {
