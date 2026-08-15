@@ -28,6 +28,7 @@ logs/*.log
 # Шрифт карточек: кладётся на сборке через npm run font (postinstall),
 # в репозитории бинарник не держим.
 assets/fonts/CardFont.ttf
+assets/fonts/CardFont-Regular.ttf
 assets/fonts/InterCyr.ttf
 
 # OS

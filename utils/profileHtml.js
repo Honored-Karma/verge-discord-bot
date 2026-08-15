@@ -13,9 +13,28 @@ const FONT_CANDIDATES = [
     join(FONT_DIR, 'InterCyr.ttf'),
 ];
 const FONT_PATH = FONT_CANDIDATES[0];
+const FONT_REGULAR_PATH = join(FONT_DIR, 'CardFont-Regular.ttf');
 const FONT_FAMILY = 'CardFont';
+const FONT_FAMILY_REGULAR = 'CardFontRegular';
 const MIN_FONT_BYTES = 200_000;
 let fontReady = false;
+let regularReady = false;
+
+// Имена семейств для рендера. У обычного начертания указан запасной вариант:
+// если Regular не приехал, канвас возьмёт жирный, а не системный шрифт без
+// кириллицы.
+export const FONT_BOLD = FONT_FAMILY;
+export const FONT_REGULAR = `${FONT_FAMILY_REGULAR}, ${FONT_FAMILY}`;
+
+function registerRegularFace() {
+    if (regularReady) return;
+    try {
+        if (existsSync(FONT_REGULAR_PATH) && statSync(FONT_REGULAR_PATH).size >= MIN_FONT_BYTES) {
+            GlobalFonts.registerFromPath(FONT_REGULAR_PATH, FONT_FAMILY_REGULAR);
+            regularReady = true;
+        }
+    } catch {}
+}
 
 function bundledFontPath() {
     for (const candidate of FONT_CANDIDATES) {
@@ -35,17 +54,22 @@ function bundledFontPath() {
  * первый рендер после каждого рестарта.
  */
 export async function ensureCardFont() {
-    if (fontReady) return { ok: true, source: 'cached' };
+    registerRegularFace();
+    if (fontReady) return { ok: true, source: 'cached', regular: regularReady };
 
     const bundled = bundledFontPath();
     if (bundled) {
         GlobalFonts.registerFromPath(bundled, FONT_FAMILY);
         fontReady = true;
-        return { ok: true, source: 'bundled' };
+        return { ok: true, source: 'bundled', regular: regularReady };
     }
 
     await ensureFont();
-    return { ok: fontReady, source: fontReady ? 'fallback' : 'none' };
+    return {
+        ok: fontReady,
+        source: fontReady ? 'fallback' : 'none',
+        regular: regularReady,
+    };
 }
 
 async function ensureFont() {
