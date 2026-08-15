@@ -3,14 +3,32 @@ import ms from 'ms';
 // Global command cooldown tracker (3 seconds between commands per user)
 const globalCooldowns = new Map();
 const GLOBAL_COOLDOWN_MS = 3000;
+
+// Три имени автоудаления существуют исторически, но все три всегда означали одно
+// и то же время. Держим один источник, чтобы «короткое» и «длинное» нельзя было
+// развести случайно: если понадобится разная длительность, менять надо здесь.
 const AUTO_DELETE_MS = 3 * 60 * 1000;
-const AUTO_DELETE_SHORT_MS = 3 * 60 * 1000;
-const AUTO_DELETE_LONG_MS = 3 * 60 * 1000;
+const AUTO_DELETE_SHORT_MS = AUTO_DELETE_MS;
+const AUTO_DELETE_LONG_MS = AUTO_DELETE_MS;
+
+// Карта антиспама росла на каждого нового пользователя и никогда не чистилась.
+// Раз запись живёт всего 3 секунды, достаточно подметать протухшие ключи.
+const COOLDOWN_SWEEP_THRESHOLD = 500;
+
+export function globalCooldownSize() {
+    return globalCooldowns.size;
+}
+
+export function sweepGlobalCooldowns(now = Date.now()) {
+    for (const [userId, timestamp] of globalCooldowns) {
+        if (now - timestamp >= GLOBAL_COOLDOWN_MS) globalCooldowns.delete(userId);
+    }
+}
 
 export function checkGlobalCooldown(userId) {
     const now = Date.now();
     const userCooldown = globalCooldowns.get(userId);
-    
+
     if (userCooldown && now - userCooldown < GLOBAL_COOLDOWN_MS) {
         const remaining = GLOBAL_COOLDOWN_MS - (now - userCooldown);
         return {
@@ -19,7 +37,8 @@ export function checkGlobalCooldown(userId) {
             remainingFormatted: `${Math.ceil(remaining / 1000)}с`
         };
     }
-    
+
+    if (globalCooldowns.size >= COOLDOWN_SWEEP_THRESHOLD) sweepGlobalCooldowns(now);
     globalCooldowns.set(userId, now);
     return { onCooldown: false };
 }
