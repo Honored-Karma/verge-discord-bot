@@ -13,7 +13,7 @@ import {
     routeModalInteraction
 } from './utils/interactionRouter.js';
 import { registerInteractionHandlers } from './interactions/index.js';
-import { ensureCardFont } from './utils/profileHtml.js';
+import { ensureCardFont } from './utils/cardFont.js';
 
 config();
 

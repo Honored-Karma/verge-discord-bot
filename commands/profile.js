@@ -1,23 +1,16 @@
-import {
-    AttachmentBuilder,
-    MessageFlags,
-    SlashCommandBuilder,
-} from 'discord.js';
-import {
-    getAllPlayerSP,
-    getPlayer,
-    getRecentProgressionHistory,
-    getReputationTier,
-    getTotalSP,
-} from '../utils/dataManager.js';
-import {
-    createCooldownEmbed,
-    createErrorEmbed,
-    getProfileMultipliers,
-} from '../utils/embeds.js';
+import { MessageFlags, SlashCommandBuilder } from 'discord.js';
+import { getActiveSlot, getPlayer, getTotalSP } from '../utils/dataManager.js';
+import { createCooldownEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
-import { renderPhysicalCard, renderProfileCard } from '../utils/profileCard.js';
 import { createProfileV2Components } from '../utils/profileComponents.js';
+import {
+    createProfileSessionState,
+    PROFILE_NAMESPACE,
+    PROFILE_SESSION_TTL_MS,
+    renderProfilePage,
+} from '../interactions/profileSession.js';
+import { createInteractionSession } from '../utils/interactionSessions.js';
+import { makePlayerKey } from '../utils/playerKey.js';
 
 export const data = new SlashCommandBuilder()
     .setName('profile')
@@ -48,16 +41,12 @@ export async function execute(interaction) {
     }
 
     const targetUser = interaction.options.getUser('user') || interaction.user;
-    const userId = targetUser.id;
     let slot = interaction.options.getInteger('slot');
-    if (!slot) {
-        const { getActiveSlot } = await import('../utils/dataManager.js');
-        slot = await getActiveSlot(userId);
-    }
+    if (!slot) slot = await getActiveSlot(targetUser.id);
     if (slot !== 1 && slot !== 2) slot = 1;
 
-    const slotPlayerId = slot === 1 ? userId : `${userId}_${slot}`;
-    const player = await getPlayer(slotPlayerId);
+    const playerId = makePlayerKey(targetUser.id, slot);
+    const player = await getPlayer(playerId);
     if (!player) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed(
@@ -70,143 +59,53 @@ export async function execute(interaction) {
         return;
     }
 
-    const [history, styles, totalSP] = await Promise.all([
-        getRecentProgressionHistory(slotPlayerId, 8),
-        getAllPlayerSP(slotPlayerId),
-        getTotalSP(slotPlayerId),
-    ]);
+    const state = createProfileSessionState({
+        playerId,
+        targetUserId: targetUser.id,
+        slot,
+    });
 
-    const characterName = player.character_name || player.username;
-    const avatarUrl = player.character_avatar
-        || targetUser.displayAvatarURL({ extension: 'png', size: 512 });
-    const fallbackAvatarUrl = targetUser.displayAvatarURL({ extension: 'png', size: 512 });
-    const multipliers = getProfileMultipliers(player);
-    const reputationTier = getReputationTier(player.reputation);
-
-    const buildView = (page, buffers, disabled = false) => {
-        const isMain = page === 'main';
-        const isPhysical = page === 'physical';
-        const buffer = isMain ? buffers.main : isPhysical ? buffers.physical : null;
-        const imageName = buffer
-            ? (isMain ? 'profile-main.png' : 'physical-stats.png')
-            : null;
-
-        return {
-            components: createProfileV2Components({
-                page,
-                player,
-                user: targetUser,
-                slot,
-                totalSP,
-                history,
-                imageName,
-                disabled,
-            }),
-            files: buffer ? [new AttachmentBuilder(buffer, { name: imageName })] : [],
-            imageName,
-        };
-    };
-
-    // Двухфазный ответ. Отрисовка карточки — это канвас плюс возможная загрузка
-    // аватара по сети, и раньше всё это выполнялось ДО первого ответа Discord,
-    // у которого на подтверждение только три секунды. Теперь сначала уходит
-    // текстовый вид (мгновенно), а картинка досылается правкой. Флаг
-    // Components V2 выставлен с первого ответа, поэтому правка законна.
-    let buffers = { main: null, physical: null };
-    let currentPage = 'main';
+    // Двухфазный ответ: текстовый вид уходит мгновенно, карточка досылается
+    // правкой. Раньше канвас и загрузка аватара выполнялись ДО первого ответа,
+    // у которого есть только три секунды.
     const response = await interaction.reply({
         flags: MessageFlags.IsComponentsV2,
-        components: buildView(currentPage, buffers).components,
+        components: createProfileV2Components({
+            page: 'main',
+            player,
+            user: targetUser,
+            slot,
+            totalSP: await getTotalSP(playerId),
+            history: [],
+            imageName: null,
+        }),
         fetchReply: true,
     });
 
-    const mainCardPromise = renderProfileCard({
-        characterName,
-        avatarUrl,
-        fallbackAvatarUrl,
-        styles,
-        attributeName: player.attribute_name || null,
-        ap: player.ap,
-        totalSP,
-        apMultiplier: multipliers.ap,
-        spMultiplier: multipliers.sp,
-        salaryMultiplier: Number(player.salary_multiplier ?? 100),
-        krw: player.krw,
-        yen: player.yen,
-        reputation: player.reputation,
-        reputationTier: reputationTier.name,
-        orgName: player.organization || player.custom_org || null,
-        orgRank: player.rank || null,
-        playerId: player.id,
-        slot,
-    }).catch((error) => {
-        console.error('Unified profile card render error:', error);
-        return null;
+    const messageId = response?.id || (await interaction.fetchReply()).id;
+
+    const created = await createInteractionSession({
+        messageId,
+        namespace: PROFILE_NAMESPACE,
+        ownerId: interaction.user.id,
+        guildId: interaction.guildId,
+        channelId: interaction.channelId,
+        state,
+        ttlMs: PROFILE_SESSION_TTL_MS,
     });
 
-    const physicalCardPromise = player.physical_stats
-        ? renderPhysicalCard({
-            characterName,
-            avatarUrl,
-            fallbackAvatarUrl,
-            stats: player.physical_stats,
-            playerId: player.id,
-            slot,
-        }).catch((error) => {
-            console.error('Physical stats card render error:', error);
-            return null;
-        })
-        : Promise.resolve(null);
-
-    const [mainCardBuffer, physicalCardBuffer] = await Promise.all([
-        mainCardPromise,
-        physicalCardPromise,
-    ]);
-    buffers = { main: mainCardBuffer, physical: physicalCardBuffer };
-
-    // Если канвас не отдал картинку, текстовый вид уже показан и остаётся —
-    // лишняя правка сообщения не нужна.
-    if (buffers.main) {
-        const cardView = buildView(currentPage, buffers);
+    const view = await renderProfilePage(state, targetUser);
+    if (view?.files.length) {
         await interaction.editReply({
-            components: cardView.components,
-            files: cardView.files,
+            components: view.components,
+            files: view.files,
             attachments: [],
         }).catch((error) => console.error('Profile card attach error:', error));
     }
 
-    const collector = response.createMessageComponentCollector({ time: 3 * 60 * 1000 });
-    const pageByButton = {
-        profile_main: 'main',
-        profile_physical: 'physical',
-        profile_history: 'history',
-    };
+    if (!created.success) {
+        console.error('Profile session was not stored:', created.reason);
+    }
 
-    collector.on('collect', async (componentInteraction) => {
-        if (componentInteraction.user.id !== interaction.user.id) {
-            await componentInteraction.reply({
-                content: 'Это не ваш интерфейс профиля.',
-                flags: MessageFlags.Ephemeral,
-            });
-            return;
-        }
-
-        const nextPage = pageByButton[componentInteraction.customId];
-        if (!nextPage) return;
-
-        currentPage = nextPage;
-        const nextView = buildView(currentPage, buffers);
-        await componentInteraction.update({
-            components: nextView.components,
-            files: nextView.files,
-            attachments: [],
-        });
-    });
-
-    collector.on('end', async () => {
-        try {
-            const expiredView = buildView(currentPage, buffers, true);
-            await interaction.editReply({ components: expiredView.components });
-        } catch {}
-    });
+    return response;
 }

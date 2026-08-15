@@ -12,6 +12,7 @@ import {
   ThumbnailBuilder,
 } from "discord.js";
 import { isValidCharacterUrl, physicalStatsSummary } from "./physicalStats.js";
+import { safeAvatarUrl } from "./avatarUrl.js";
 
 const PROFILE_COLOR = 0xb209d4;
 
@@ -126,19 +127,19 @@ export function createProfileV2Components({
       );
     }
   } else {
-    const avatarUrl = user.displayAvatarURL({ extension: "png", size: 256 });
-    const section = new SectionBuilder()
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          `## История • ${name}\n${formatHistory(history)}\n\n-# ID: ${player.id} • Слот ${slot}`,
+    const historyText = new TextDisplayBuilder().setContent(
+      `## История • ${name}\n${formatHistory(history)}\n\n-# ID: ${player.id} • Слот ${slot}`,
+    );
+
+    container.addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(historyText)
+        .setThumbnailAccessory(
+          new ThumbnailBuilder()
+            .setURL(safeAvatarUrl(user?.displayAvatarURL?.({ extension: "png", size: 256 })))
+            .setDescription(`Аватар ${name}`),
         ),
-      )
-      .setThumbnailAccessory(
-        new ThumbnailBuilder()
-          .setURL(avatarUrl)
-          .setDescription(`Аватар ${name}`),
-      );
-    container.addSectionComponents(section);
+    );
   }
 
   container

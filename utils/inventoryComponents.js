@@ -10,6 +10,7 @@ import {
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from "discord.js";
+import { safeAvatarUrl } from "./avatarUrl.js";
 import { formatItemEffect, getItemDefinition } from "./itemSystem.js";
 
 export const INVENTORY_SELECT_ID = "inventory_select";
@@ -86,7 +87,7 @@ export function createInventoryComponents({
     )
     .setThumbnailAccessory(
       new ThumbnailBuilder()
-        .setURL(avatarUrl)
+        .setURL(safeAvatarUrl(avatarUrl))
         .setDescription(`Аватар персонажа ${cleanText(characterName, 80)}`),
     );
 
@@ -170,7 +171,7 @@ export function createInventoryItemComponents({
     )
     .setThumbnailAccessory(
       new ThumbnailBuilder()
-        .setURL(avatarUrl)
+        .setURL(safeAvatarUrl(avatarUrl))
         .setDescription(`Аватар персонажа ${cleanText(characterName, 80)}`),
     );
 
@@ -256,7 +257,7 @@ export function createItemUsedComponents({
           )
           .setThumbnailAccessory(
             new ThumbnailBuilder()
-              .setURL(avatarUrl)
+              .setURL(safeAvatarUrl(avatarUrl))
               .setDescription(`Аватар персонажа ${cleanText(characterName, 80)}`),
           ),
       )
@@ -285,7 +286,7 @@ export function createInventoryEmptyComponents(characterName, avatarUrl) {
           )
           .setThumbnailAccessory(
             new ThumbnailBuilder()
-              .setURL(avatarUrl)
+              .setURL(safeAvatarUrl(avatarUrl))
               .setDescription(`Аватар персонажа ${cleanText(characterName, 80)}`),
           ),
       ),

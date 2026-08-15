@@ -1,5 +1,5 @@
 import { createCanvas, loadImage } from "@napi-rs/canvas";
-import { ensureCardFont, FONT_BOLD, FONT_REGULAR } from "./profileHtml.js";
+import { ensureCardFont, FONT_BOLD, FONT_REGULAR } from "./cardFont.js";
 import { getAdaptiveProgressScale } from "./progressScale.js";
 import { getSPMastery } from "./spMastery.js";
 
@@ -207,6 +207,25 @@ function chip(ctx, x, y, { title, value }) {
   return width;
 }
 
+/**
+ * URL аватара задаёт сам игрок через `/set-avatar`, а у loadImage нет
+ * собственного таймаута: медленный или подвисший хост задержал бы рендер
+ * карточки на десятки секунд. Ждём ограниченное время и рисуем инициал.
+ */
+export const AVATAR_TIMEOUT_MS = 2500;
+
+function loadAvatarImage(url, timeoutMs = AVATAR_TIMEOUT_MS) {
+  let timer;
+  return Promise.race([
+    loadImage(url).finally(() => clearTimeout(timer)),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error("avatar_timeout")), timeoutMs);
+      // Таймер не должен держать процесс живым сам по себе.
+      timer.unref?.();
+    }),
+  ]);
+}
+
 async function drawAvatar(ctx, x, y, size, { avatarUrl, fallbackAvatarUrl, name }) {
   ctx.save();
   roundRect(ctx, x, y, size, size, T.radius.md);
@@ -219,7 +238,7 @@ async function drawAvatar(ctx, x, y, size, { avatarUrl, fallbackAvatarUrl, name 
   for (const url of [avatarUrl, fallbackAvatarUrl]) {
     if (!url || drawn) continue;
     try {
-      const image = await loadImage(url);
+      const image = await loadAvatarImage(url);
       ctx.drawImage(image, x, y, size, size);
       drawn = true;
     } catch {}
