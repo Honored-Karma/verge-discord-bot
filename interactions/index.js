@@ -3,6 +3,7 @@ import {
   LEADERBOARD_NAMESPACE,
   leaderboardInteractionHandler,
 } from "./leaderboardSession.js";
+import { HELP_NAMESPACE, helpInteractionHandler } from "./helpSession.js";
 import {
   INVENTORY_NAMESPACE,
   inventoryInteractionHandler,
@@ -14,6 +15,10 @@ import {
   shopOrderInteractionHandler,
 } from "./shopOrderSession.js";
 import { SHOP_NAMESPACE, shopInteractionHandler } from "./shopSession.js";
+import {
+  TRAIN_SP_NAMESPACE,
+  trainSpInteractionHandler,
+} from "./trainSpSession.js";
 
 /**
  * Single place where persistent interaction handlers are wired up. Every panel
@@ -27,6 +32,8 @@ export function registerInteractionHandlers() {
   registerInteractionHandler(PROFILE_NAMESPACE, profileInteractionHandler);
   registerInteractionHandler(INVENTORY_NAMESPACE, inventoryInteractionHandler);
   registerInteractionHandler(SHOP_ORDER_NAMESPACE, shopOrderInteractionHandler);
+  registerInteractionHandler(TRAIN_SP_NAMESPACE, trainSpInteractionHandler);
+  registerInteractionHandler(HELP_NAMESPACE, helpInteractionHandler);
   return [
     SHOP_NAMESPACE,
     PAY_NAMESPACE,
@@ -34,5 +41,7 @@ export function registerInteractionHandlers() {
     PROFILE_NAMESPACE,
     INVENTORY_NAMESPACE,
     SHOP_ORDER_NAMESPACE,
+    TRAIN_SP_NAMESPACE,
+    HELP_NAMESPACE,
   ];
 }

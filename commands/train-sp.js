@@ -17,17 +17,18 @@ import { createCooldownEmbed, createErrorEmbed } from "../utils/embeds.js";
 import { logCommand } from "../utils/logs.js";
 import { makePlayerKey } from "../utils/playerKey.js";
 import {
-  createSPStyleSelectionComponents,
   createSPTrainingErrorComponents,
-  createSPTrainingModal,
   createSPTrainingSuccessComponents,
-  getSPStylePageCount,
-  SP_STYLE_NEXT_ID,
-  SP_STYLE_PREV_ID,
-  SP_STYLE_SELECT_ID,
   SP_TRAINING_MODAL_PREFIX,
   SP_TRAINING_TEXT_INPUT_ID,
 } from "../utils/spTrainingComponents.js";
+import {
+  createTrainSpSessionState,
+  renderStylePicker,
+  TRAIN_SP_NAMESPACE,
+  TRAIN_SP_SESSION_TTL_MS,
+} from "../interactions/trainSpSession.js";
+import { createInteractionSession } from "../utils/interactionSessions.js";
 
 const SP_TRAINING_COOLDOWN = 5 * 60 * 60 * 1000;
 const SP_TRAINING_REWARD = 10;
@@ -102,89 +103,35 @@ export async function execute(interaction) {
     return;
   }
 
-  const characterName = player.character_name || player.username;
-  let currentPage = 0;
-  let selectionCompleted = false;
+  const state = createTrainSpSessionState({
+    playerId,
+    slot,
+    characterName: player.character_name || player.username,
+  });
 
+  const view = await renderStylePicker(state);
   const response = await interaction.reply({
-    components: createSPStyleSelectionComponents({
-      characterName,
-      styles,
-      page: currentPage,
-    }),
+    components: view.components,
     flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
     fetchReply: true,
   });
 
-  const collector = response.createMessageComponentCollector({ time: 3 * 60 * 1000 });
-  collector.on("collect", async (componentInteraction) => {
-    if (componentInteraction.user.id !== interaction.user.id) {
-      await componentInteraction.reply({
-        content: "Это меню выбора стиля открыто для другого игрока.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    if (componentInteraction.customId === SP_STYLE_PREV_ID) {
-      currentPage = Math.max(0, currentPage - 1);
-      await componentInteraction.update({
-        components: createSPStyleSelectionComponents({
-          characterName,
-          styles,
-          page: currentPage,
-        }),
-      });
-      return;
-    }
-
-    if (componentInteraction.customId === SP_STYLE_NEXT_ID) {
-      currentPage = Math.min(
-        getSPStylePageCount(styles) - 1,
-        currentPage + 1,
-      );
-      await componentInteraction.update({
-        components: createSPStyleSelectionComponents({
-          characterName,
-          styles,
-          page: currentPage,
-        }),
-      });
-      return;
-    }
-
-    if (!componentInteraction.isStringSelectMenu()
-      || componentInteraction.customId !== SP_STYLE_SELECT_ID) return;
-
-    const styleId = Number(componentInteraction.values[0]);
-    const style = styles.find((candidate) => Number(candidate.id) === styleId);
-    if (!style) {
-      await componentInteraction.reply({
-        content: "Стиль больше недоступен. Запустите `/train-sp` ещё раз.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    selectionCompleted = true;
-    collector.stop("selected");
-    await componentInteraction.showModal(createSPTrainingModal(slot, style));
+  const messageId = response?.id || (await interaction.fetchReply()).id;
+  const created = await createInteractionSession({
+    messageId,
+    namespace: TRAIN_SP_NAMESPACE,
+    ownerId: interaction.user.id,
+    guildId: interaction.guildId,
+    channelId: interaction.channelId,
+    state,
+    ttlMs: TRAIN_SP_SESSION_TTL_MS,
   });
 
-  collector.on("end", async () => {
-    try {
-      await interaction.editReply({
-        components: createSPStyleSelectionComponents({
-          characterName,
-          styles,
-          page: currentPage,
-          disabled: true,
-        }),
-      });
-    } catch {}
+  if (!created.success) {
+    console.error("Train-SP session was not stored:", created.reason);
+  }
 
-    if (!selectionCompleted) autoDeleteMessageShort(response);
-  });
+  return response;
 }
 
 export function handlesModal(interaction) {
