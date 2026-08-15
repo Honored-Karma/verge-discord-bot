@@ -16,10 +16,7 @@ import {
     getProfileMultipliers,
 } from '../utils/embeds.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
-import {
-    generatePhysicalStatsCard,
-    generateUnifiedProfileCard,
-} from '../utils/profileHtml.js';
+import { renderPhysicalCard, renderProfileCard } from '../utils/profileCard.js';
 import { createProfileV2Components } from '../utils/profileComponents.js';
 
 export const data = new SlashCommandBuilder()
@@ -123,7 +120,7 @@ export async function execute(interaction) {
         fetchReply: true,
     });
 
-    const mainCardPromise = generateUnifiedProfileCard({
+    const mainCardPromise = renderProfileCard({
         characterName,
         avatarUrl,
         fallbackAvatarUrl,
@@ -148,7 +145,7 @@ export async function execute(interaction) {
     });
 
     const physicalCardPromise = player.physical_stats
-        ? generatePhysicalStatsCard({
+        ? renderPhysicalCard({
             characterName,
             avatarUrl,
             fallbackAvatarUrl,

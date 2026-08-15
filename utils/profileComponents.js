@@ -59,13 +59,27 @@ function formatHistory(history) {
     .join("\n");
 }
 
+/**
+ * Текстовый вид основной страницы. Показывается дважды: как первая фаза ответа,
+ * пока рисуется карточка, и как постоянный вид, если канвас не справился.
+ * Поэтому он должен читаться законченным, а не заготовкой под картинку.
+ */
 function mainFallback(player, totalSP) {
+  const number = (value) => Number(value || 0).toLocaleString("ru-RU");
   const name = player.character_name || player.username || "Неизвестно";
-  return [
+  const org = player.organization || player.custom_org;
+  const affiliation = org
+    ? `${org}${player.rank ? ` · ${player.rank}` : ""}`
+    : "Без организации";
+
+  const lines = [
     `## ${name}`,
-    `⚡ **${Number(player.ap || 0).toLocaleString("ru-RU")} AP**  •  🥋 **${Number(totalSP || 0).toLocaleString("ru-RU")} SP**`,
-    `💳 **${Number(player.krw || 0).toLocaleString("ru-RU")} KRW**  •  **${Number(player.yen || 0).toLocaleString("ru-RU")} ¥**`,
-  ].join("\n");
+    `-# ${affiliation}${player.attribute_name ? ` · ${player.attribute_name}` : ""}`,
+    "",
+    `**${number(player.ap)}** AP · **${number(totalSP)}** SP`,
+    `**${number(player.krw)}** ₩ · **${number(player.yen)}** ¥ · репутация **${number(player.reputation)}**`,
+  ];
+  return lines.join("\n");
 }
 
 export function createProfileV2Components({

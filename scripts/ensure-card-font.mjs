@@ -23,33 +23,48 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const FONT_DIR = join(__dirname, "..", "assets", "fonts");
 export const CARD_FONT_PATH = join(FONT_DIR, "CardFont.ttf");
+export const CARD_FONT_REGULAR_PATH = join(FONT_DIR, "CardFont-Regular.ttf");
 
 // Минимальный размер: усечённый или ошибочный ответ CDN не должен выглядеть
 // как валидный шрифт.
 const MIN_FONT_BYTES = 200_000;
 
-const SOURCES = [
-  "https://cdn.jsdelivr.net/gh/notofonts/notofonts.github.io/fonts/NotoSans/hinted/ttf/NotoSans-Bold.ttf",
-  "https://raw.githubusercontent.com/notofonts/notofonts.github.io/main/fonts/NotoSans/hinted/ttf/NotoSans-Bold.ttf",
+const NOTO = (weight) => [
+  `https://cdn.jsdelivr.net/gh/notofonts/notofonts.github.io/fonts/NotoSans/hinted/ttf/NotoSans-${weight}.ttf`,
+  `https://raw.githubusercontent.com/notofonts/notofonts.github.io/main/fonts/NotoSans/hinted/ttf/NotoSans-${weight}.ttf`,
 ];
 
-export function cardFontReady() {
+// Двух насыщенностей достаточно для нормальной иерархии: до этого в сборке был
+// только Bold, поэтому весь текст карточки был жирным и различался лишь
+// размером.
+const FACES = [
+  { path: CARD_FONT_PATH, sources: NOTO("Bold"), label: "Bold", required: true },
+  { path: CARD_FONT_REGULAR_PATH, sources: NOTO("Regular"), label: "Regular", required: false },
+];
+
+function fileReady(path) {
   try {
-    return existsSync(CARD_FONT_PATH) && statSync(CARD_FONT_PATH).size >= MIN_FONT_BYTES;
+    return existsSync(path) && statSync(path).size >= MIN_FONT_BYTES;
   } catch {
     return false;
   }
 }
 
-export async function ensureCardFontFile({ log = console } = {}) {
-  if (cardFontReady()) {
-    log.log(`✅ Шрифт карточек на месте: ${CARD_FONT_PATH}`);
-    return { ok: true, cached: true };
+export function cardFontReady() {
+  return fileReady(CARD_FONT_PATH);
+}
+
+export function cardFontRegularReady() {
+  return fileReady(CARD_FONT_REGULAR_PATH);
+}
+
+async function downloadFace(face, log) {
+  if (fileReady(face.path)) {
+    log.log(`✅ Шрифт карточек (${face.label}) на месте`);
+    return true;
   }
 
-  if (!existsSync(FONT_DIR)) mkdirSync(FONT_DIR, { recursive: true });
-
-  for (const url of SOURCES) {
+  for (const url of face.sources) {
     try {
       const response = await fetch(url, { redirect: "follow" });
       if (!response.ok) {
@@ -61,19 +76,40 @@ export async function ensureCardFontFile({ log = console } = {}) {
         log.warn(`⚠️  Ответ слишком мал (${bytes.length} Б), пропускаю: ${url}`);
         continue;
       }
-      writeFileSync(CARD_FONT_PATH, bytes);
-      log.log(`✅ Шрифт карточек загружен (${Math.round(bytes.length / 1024)} КБ): ${url}`);
-      return { ok: true, cached: false };
+      writeFileSync(face.path, bytes);
+      log.log(`✅ Шрифт карточек (${face.label}) загружен: ${Math.round(bytes.length / 1024)} КБ`);
+      return true;
     } catch (error) {
       log.warn(`⚠️  Не удалось скачать шрифт: ${url} — ${error.message}`);
     }
   }
+  return false;
+}
 
-  log.warn(
-    "⚠️  Шрифт карточек не подготовлен на сборке. Рантайм попробует системные "
-    + "шрифты и повторную загрузку — карточки могут отрисоваться без кириллицы.",
-  );
-  return { ok: false, cached: false };
+export async function ensureCardFontFile({ log = console } = {}) {
+  if (!existsSync(FONT_DIR)) mkdirSync(FONT_DIR, { recursive: true });
+
+  const results = [];
+  for (const face of FACES) {
+    results.push({ face, ok: await downloadFace(face, log) });
+  }
+
+  const bold = results.find((entry) => entry.face.required);
+  if (!bold?.ok) {
+    log.warn(
+      "⚠️  Основной шрифт карточек не подготовлен на сборке. Рантайм попробует "
+      + "системные шрифты и повторную загрузку — карточки могут отрисоваться "
+      + "без кириллицы.",
+    );
+    return { ok: false, cached: false };
+  }
+
+  const regular = results.find((entry) => !entry.face.required);
+  if (!regular?.ok) {
+    log.warn("⚠️  Обычная насыщенность недоступна — карточки отрисуются одним жирным начертанием.");
+  }
+
+  return { ok: true, cached: false, regular: Boolean(regular?.ok) };
 }
 
 // Запуск напрямую (postinstall) — не валим установку из-за сети.
