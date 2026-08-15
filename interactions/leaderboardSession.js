@@ -4,6 +4,7 @@ import {
   createLeaderboardComponents,
   createLeaderboardEmptyComponents,
   createLeaderboardErrorComponents,
+  LEADERBOARD_JUMP_ID,
   LEADERBOARD_METRIC_PREFIX,
   LEADERBOARD_METRICS,
   LEADERBOARD_NEXT_ID,
@@ -80,6 +81,17 @@ function applyAction(customId, state, snapshot) {
     const next = Math.min(lastPage, Number(state.page || 0) + 1);
     if (next === state.page) return false;
     state.page = next;
+    return true;
+  }
+  if (customId === LEADERBOARD_JUMP_ID) {
+    // Прыжок на страницу со своим персонажем: считается от номера строки, а не
+    // от места, потому что делённые места дают несколько строк на одно место.
+    const row = Number(snapshot?.currentPlayer?.leaderboard_row || 0);
+    if (row < 1) return false;
+    const pageSize = Math.max(1, Number(state.page_size || 10));
+    const target = Math.floor((row - 1) / pageSize);
+    if (target === state.page) return false;
+    state.page = target;
     return true;
   }
   // Обновление не меняет состояние, но перечитывает данные.

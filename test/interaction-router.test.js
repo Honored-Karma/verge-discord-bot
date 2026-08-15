@@ -352,3 +352,19 @@ test("leaderboard actions change only what the click implies", async () => {
   assert.equal(applyAction("leaderboard_refresh", state, snapshot), true);
   assert.equal(applyAction("something_else", state, snapshot), false);
 });
+
+test("кнопка «Ко мне» листает на страницу с персонажем", async () => {
+  const { __testables } = await import("../interactions/leaderboardSession.js");
+  const { applyAction } = __testables;
+
+  const state = { metric: "ap", page: 0, page_size: 5 };
+  // Строка 12 при странице по 5 — третья страница (индекс 2).
+  const snapshot = { totalPages: 4, currentPlayer: { leaderboard_row: 12 } };
+  assert.equal(applyAction("leaderboard_jump", state, snapshot), true);
+  assert.equal(state.page, 2);
+  assert.equal(applyAction("leaderboard_jump", state, snapshot), false, "уже на своей странице");
+
+  // Персонажа нет в рейтинге — прыгать некуда.
+  const absent = { totalPages: 4, currentPlayer: null };
+  assert.equal(applyAction("leaderboard_jump", { metric: "ap", page: 0, page_size: 5 }, absent), false);
+});
