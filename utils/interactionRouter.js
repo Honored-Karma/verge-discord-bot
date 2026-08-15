@@ -91,7 +91,7 @@ export async function routeComponentInteraction(interaction, {
     return true;
   }
 
-  if (session.owner_id !== interaction.user.id) {
+  if (!await allowed(interaction, handler, session)) {
     await refuse(interaction, handler, session, "renderForeign");
     return true;
   }
@@ -103,6 +103,26 @@ export async function routeComponentInteraction(interaction, {
 
   await handler.handleComponent({ interaction, session });
   return true;
+}
+
+/**
+ * Кто имеет право нажимать.
+ *
+ * По умолчанию панель принадлежит одному игроку — тому, кто её открыл. Но
+ * админские панели общие: заявку из магазина разбирает любой администратор,
+ * а не только тот, кому сообщение адресовано. Для таких панелей обработчик
+ * объявляет свою проверку `authorize`, и владелец становится справочным полем.
+ */
+async function allowed(interaction, handler, session) {
+  if (typeof handler.authorize === "function") {
+    try {
+      return Boolean(await handler.authorize({ interaction, session }));
+    } catch (error) {
+      console.error(`❌ Ошибка проверки прав в "${session.namespace}":`, error);
+      return false;
+    }
+  }
+  return session.owner_id === interaction.user.id;
 }
 
 export async function routeModalInteraction(interaction, {
@@ -120,7 +140,7 @@ export async function routeModalInteraction(interaction, {
     return true;
   }
 
-  if (session.owner_id !== interaction.user.id) {
+  if (!await allowed(interaction, handler, session)) {
     await refuse(interaction, handler, session, "renderForeign");
     return true;
   }

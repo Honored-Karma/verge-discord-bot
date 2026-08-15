@@ -188,7 +188,95 @@ export async function initializeShopCatalog(db) {
       },
     })));
   }
+  await applyCatalogRevision(db);
   return refreshShopCatalog(db);
+}
+
+/**
+ * Разовая синхронизация каталога с файлом при росте номера ревизии.
+ *
+ * Сидирование выше идёт через `$setOnInsert`, поэтому у уже существующих
+ * товаров цена в базе не менялась никогда: правка `data/shop_items.json`
+ * просто не доезжала до продакшена. Ревизия закрывает этот разрыв, но не
+ * превращает файл в постоянный источник истины — иначе миграция затирала бы
+ * всё, что администраторы поменяли через `/shop-admin`.
+ *
+ * Синхронизируются ровно две вещи:
+ *   1) цена товаров, которые файл всё ещё описывает;
+ *   2) архивация позиций, которых в файле больше нет.
+ * Названия, описания, лимиты и остатки остаются за администраторами.
+ */
+export async function applyCatalogRevision(db) {
+  const meta = db.collection("shop_catalog_meta");
+  const items = db.collection("shop_catalog_items");
+  const audit = db.collection("shop_catalog_audit");
+
+  const target = Number(CATALOG.version || 1);
+  const stored = await meta.findOne({ _id: "catalog" });
+  const applied = Number(stored?.revision || 1);
+  if (!Number.isFinite(target) || applied >= target) {
+    return { applied: false, revision: applied, changes: 0 };
+  }
+
+  const now = new Date();
+  const known = DEFAULT_ITEMS.map((item) => item.id);
+  const changes = [];
+
+  for (const item of DEFAULT_ITEMS) {
+    const before = await items.findOne({ id: item.id });
+    if (!before || Number(before.price_yen) === Number(item.price_yen)) continue;
+    await items.updateOne(
+      { id: item.id },
+      { $set: { price_yen: item.price_yen, updated_at: now }, $inc: { version: 1 } },
+    );
+    changes.push({
+      item_id: item.id,
+      action: "revision_price",
+      details: { from: Number(before.price_yen), to: Number(item.price_yen) },
+    });
+  }
+
+  // Позиции, удалённые из файла, не стираем: на них могут ссылаться уже
+  // оформленные заявки и история покупок. Архивация убирает их с витрины и
+  // оставляет данные целыми, а `/shop-admin state restore` вернёт карточку.
+  const removed = await items.find({
+    id: { $nin: known },
+    archived: { $ne: true },
+  }).toArray();
+
+  if (removed.length > 0) {
+    await items.updateMany(
+      { id: { $in: removed.map((item) => item.id) } },
+      { $set: { enabled: false, archived: true, updated_at: now }, $inc: { version: 1 } },
+    );
+    for (const item of removed) {
+      changes.push({
+        item_id: item.id,
+        action: "revision_archive",
+        details: { name: item.name },
+      });
+    }
+  }
+
+  // Пишем в тот же журнал, что и ручные правки, чтобы `/shop-admin history`
+  // показывал автоматические изменения наравне с админскими.
+  if (changes.length > 0) {
+    await audit.insertMany(changes.map((change) => ({
+      ...change,
+      admin_id: "system",
+      revision: target,
+      created_at: now,
+    })));
+  }
+
+  await meta.updateOne(
+    { _id: "catalog" },
+    { $set: { revision: target, applied_at: now, changed: changes.length } },
+    { upsert: true },
+  );
+
+  console.log(`🛒 Каталог магазина обновлён до ревизии ${target}: изменений — ${changes.length}`);
+  return { applied: true, revision: target, changes: changes.length };
 }
 
 export function shopPrice(item, currency) {

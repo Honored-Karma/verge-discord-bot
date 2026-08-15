@@ -41,15 +41,24 @@ test("shop catalog contains the intended economy tiers", () => {
   assert.ok(items.some((item) => item.delivery.kind === "inventory"));
   assert.ok(items.some((item) => item.delivery.kind === "active_effect"));
   assert.ok(items.some((item) => item.delivery.kind === "order"));
-  assert.equal(getShopItem("weak_artifact_order").price_yen, 5_000_000);
-  assert.equal(getShopItem("medium_artifact_order").price_yen, 15_000_000);
-  assert.equal(getShopItem("strong_artifact_order").price_yen, 50_000_000);
+  // Артефакты сняты с продажи: раздела нет, карточки не отдаются витриной.
+  assert.equal(categories.some((category) => category.id === "artifacts"), false);
+  for (const id of ["weak_artifact_order", "medium_artifact_order", "strong_artifact_order"]) {
+    assert.equal(getShopItem(id), null, `${id} не должен продаваться`);
+  }
+
+  // Ценовые ориентиры после пересмотра экономики.
+  assert.equal(getShopItem("ap_tome_25").price_yen, 20_000_000);
+  assert.equal(getShopItem("ap_tome_50").price_yen, 38_000_000);
+  assert.equal(getShopItem("focus_elixir_12h").price_yen, 5_000_000);
+  assert.equal(getShopItem("majinin_serum_24h").price_yen, 10_000_000);
+  assert.equal(getShopItem("controlled_mutation").price_yen, 150_000_000);
 });
 
 test("shop prices, style delivery and weekly periods are deterministic", () => {
   const item = getShopItem("sp_scroll_20");
-  assert.equal(shopPrice(item, "yen"), 400_000);
-  assert.equal(shopPrice(item, "krw"), 3_760_000);
+  assert.equal(shopPrice(item, "yen"), 22_000_000);
+  assert.equal(shopPrice(item, "krw"), Math.ceil(22_000_000 * 9.4));
   assert.deepEqual(resolveShopDelivery(item, { styleName: "Muay Thai" }), {
     kind: "inventory",
     item_name: "SP Scroll: Muay Thai (20)",
@@ -64,7 +73,8 @@ test("builds every shop and order-review interface state", () => {
   const scrollCategory = getShopCategory("scrolls");
   const scrollItems = listShopItems("scrolls");
   const item = getShopItem("sp_scroll_20");
-  const artifact = getShopItem("strong_artifact_order");
+  // Заявка на мутацию — единственный оставшийся товар с ручной выдачей.
+  const artifact = getShopItem("controlled_mutation");
   const details = {
     publicId: "ABC123DEF4",
     itemName: artifact.name,

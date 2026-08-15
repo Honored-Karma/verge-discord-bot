@@ -46,6 +46,7 @@ import {
   SESSION_STATUS,
 } from "../utils/interactionSessions.js";
 import { logCommand } from "../utils/logs.js";
+import { notifyShopPurchase } from "../utils/shopNotifier.js";
 
 export const SHOP_NAMESPACE = "shop";
 
@@ -379,6 +380,18 @@ async function handleConfirm({ interaction, session }) {
     await interaction.editReply({
       components: createShopReceiptComponents({ item, result }),
     });
+
+    // Уведомление админам — после квитанции и без await в общем потоке ошибок:
+    // покупка уже оплачена, недоступный канал не должен ломать её для игрока.
+    await notifyShopPurchase({
+      client: interaction.client,
+      item,
+      result,
+      playerId: state.player_id,
+      characterName: state.character_name,
+      userId: interaction.user.id,
+      guildId: interaction.guildId,
+    }).catch((error) => console.error("Shop notification error:", error));
 
     await logCommand({
       client: interaction.client,
