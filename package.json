@@ -24,5 +24,8 @@
     "mongodb": "^6.21.0",
     "ms": "^2.1.3",
     "node-cron": "^4.2.1"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^11.2.0"
   }
 }

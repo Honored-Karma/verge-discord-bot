@@ -1,20 +1,20 @@
 import { MessageFlags, SlashCommandBuilder } from "discord.js";
-import { getActiveSlot, getLeaderboardPage } from "../utils/dataManager.js";
+import { getActiveSlot } from "../utils/dataManager.js";
 import { checkGlobalCooldown } from "../utils/cooldowns.js";
 import {
-  createLeaderboardComponents,
   createLeaderboardCooldownComponents,
   createLeaderboardEmptyComponents,
   createLeaderboardErrorComponents,
-  LEADERBOARD_METRIC_PREFIX,
-  LEADERBOARD_METRICS,
-  LEADERBOARD_NEXT_ID,
-  LEADERBOARD_PREV_ID,
-  LEADERBOARD_REFRESH_ID,
 } from "../utils/leaderboardComponents.js";
 import { makePlayerKey } from "../utils/playerKey.js";
-
-const SESSION_DURATION = 3 * 60 * 1000;
+import {
+  createLeaderboardSessionState,
+  LEADERBOARD_NAMESPACE,
+  LEADERBOARD_SESSION_TTL_MS,
+  loadLeaderboardSnapshot,
+  renderLeaderboardComponents,
+} from "../interactions/leaderboardSession.js";
+import { createInteractionSession } from "../utils/interactionSessions.js";
 
 export const data = new SlashCommandBuilder()
   .setName("leaderboard")
@@ -46,25 +46,16 @@ export async function execute(interaction) {
     });
   }
 
-  let metric = interaction.options.getString("sort_by") || "ap";
-  const pageSize = interaction.options.getInteger("limit") || 10;
   const activeSlot = await getActiveSlot(interaction.user.id);
-  const playerId = makePlayerKey(interaction.user.id, activeSlot);
-  let page = 0;
-  let snapshot;
-  let finished = false;
-  let busy = false;
+  const state = createLeaderboardSessionState({
+    metric: interaction.options.getString("sort_by") || "ap",
+    pageSize: interaction.options.getInteger("limit") || 10,
+    playerId: makePlayerKey(interaction.user.id, activeSlot),
+  });
 
-  const loadSnapshot = async () => {
-    let next = await getLeaderboardPage(metric, playerId, page, pageSize);
-    if (!next.error && next.total > 0 && page >= next.totalPages) {
-      page = next.totalPages - 1;
-      next = await getLeaderboardPage(metric, playerId, page, pageSize);
-    }
-    return next;
-  };
+  const { snapshot, page } = await loadLeaderboardSnapshot(state);
+  state.page = page;
 
-  snapshot = await loadSnapshot();
   if (snapshot.error) {
     return interaction.reply({
       components: createLeaderboardErrorComponents(),
@@ -79,88 +70,29 @@ export async function execute(interaction) {
   }
 
   const response = await interaction.reply({
-    components: createLeaderboardComponents({ snapshot, playerId }),
+    components: renderLeaderboardComponents(snapshot, state),
     flags: MessageFlags.IsComponentsV2,
     fetchReply: true,
   });
-  const collector = response.createMessageComponentCollector({
-    time: SESSION_DURATION,
+
+  const messageId = response?.id || (await interaction.fetchReply()).id;
+
+  const created = await createInteractionSession({
+    messageId,
+    namespace: LEADERBOARD_NAMESPACE,
+    ownerId: interaction.user.id,
+    guildId: interaction.guildId,
+    channelId: interaction.channelId,
+    state,
+    ttlMs: LEADERBOARD_SESSION_TTL_MS,
   });
 
-  collector.on("collect", async (componentInteraction) => {
-    if (componentInteraction.user.id !== interaction.user.id) {
-      await componentInteraction.reply({
-        content: "Это меню рейтинга открыто для другого игрока.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    if (busy) {
-      await componentInteraction.reply({
-        content: "Рейтинг уже обновляется.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    const requestedMetric = componentInteraction.customId.startsWith(
-      LEADERBOARD_METRIC_PREFIX,
-    )
-      ? componentInteraction.customId.slice(LEADERBOARD_METRIC_PREFIX.length)
-      : null;
-    if (requestedMetric && !LEADERBOARD_METRICS[requestedMetric]) return;
-
-    if (requestedMetric) {
-      metric = requestedMetric;
-      page = 0;
-    } else if (componentInteraction.customId === LEADERBOARD_PREV_ID) {
-      page = Math.max(0, page - 1);
-    } else if (componentInteraction.customId === LEADERBOARD_NEXT_ID) {
-      page = Math.min(snapshot.totalPages - 1, page + 1);
-    } else if (componentInteraction.customId !== LEADERBOARD_REFRESH_ID) {
-      return;
-    }
-
-    busy = true;
-    await componentInteraction.deferUpdate();
-    snapshot = await loadSnapshot();
-    busy = false;
-
-    if (snapshot.error) {
-      finished = true;
-      collector.stop("error");
-      await interaction.editReply({
-        components: createLeaderboardErrorComponents(),
-      });
-      return;
-    }
-    if (snapshot.total === 0) {
-      finished = true;
-      collector.stop("empty");
-      await interaction.editReply({
-        components: createLeaderboardEmptyComponents(),
-      });
-      return;
-    }
-
+  // Панель без сессии осталась бы нерабочей — честнее сказать об этом сразу.
+  if (!created.success) {
     await interaction.editReply({
-      components: createLeaderboardComponents({ snapshot, playerId }),
-    });
-  });
-
-  collector.on("end", async () => {
-    if (finished) return;
-    try {
-      await interaction.editReply({
-        components: createLeaderboardComponents({
-          snapshot,
-          playerId,
-          disabled: true,
-        }),
-      });
-    } catch {}
-  });
+      components: createLeaderboardErrorComponents(),
+    }).catch(() => {});
+  }
 
   return response;
 }
