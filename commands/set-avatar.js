@@ -72,7 +72,7 @@ export async function execute(interaction) {
     }
 
     // Обновляем аватар
-    const success = await setCharacterAvatar(userId, avatarUrl);
+    const success = await setCharacterAvatar(playerId, avatarUrl);
 
     if (success) {
         const msg = await interaction.reply({

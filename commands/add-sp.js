@@ -5,6 +5,7 @@ import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
 import { resolveMember } from '../utils/memberHelper.js';
 import { logCommand } from '../utils/logs.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
+import { getSPMastery } from '../utils/spMastery.js';
 
 export const data = new SlashCommandBuilder()
     .setName('add-sp')
@@ -118,7 +119,7 @@ export async function execute(interaction) {
     if (newSP !== false) {
         const actualGained = newSP - oldSP;
         const sign = actualGained >= 0 ? '+' : '';
-        const rank = newSP >= 2500 ? 'Мастер' : newSP >= 1000 ? 'Эксперт' : newSP >= 350 ? 'Владелец' : 'Новичок';
+        const rank = getSPMastery(newSP).rank;
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('SP обновлено', 
                 `Запрошено: **+${amount} SP** к стилю **${style.name}** игроку **${player.character_name || player.username}**\nФактически начислено: **${sign}${actualGained} SP** (с учётом множителя)\n\nНовый баланс: **${newSP} SP** (${rank})`, 'addSp')],

@@ -437,7 +437,9 @@ export async function addAP(playerId, amount, actionType = "train") {
       getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
     const effectiveMultiplier = apMultiplier + dynamicBonus;
     const adjustedAmount = Math.round(amount * (effectiveMultiplier / 100));
-    const newAP = player.ap + adjustedAmount;
+    // Отрицательный amount — это админская коррекция, но результат ниже нуля
+    // ломает прогресс-бары и пороги, поэтому AP не уходит в минус.
+    const newAP = Math.max(0, player.ap + adjustedAmount);
     const timestamp = now;
 
     const updateObj = { ap: newAP, last_ap_change_at: timestamp };
@@ -750,7 +752,8 @@ export async function addSP(
     const adjustedAmount = Math.round(amount * (effectiveMultiplier / 100));
 
     const currentSP = await getSP(playerId, styleId);
-    const newSP = currentSP + adjustedAmount;
+    // Как и с AP: коррекция вниз разрешена, отрицательный итог — нет.
+    const newSP = Math.max(0, currentSP + adjustedAmount);
 
     await db
       .collection("player_sp")
@@ -1472,27 +1475,49 @@ export async function getLeaderboardPage(
   }
 }
 
+/**
+ * Applies a signed delta to a balance in a single atomic update.
+ *
+ * The previous read-modify-write lost concurrent changes (two admins, or an
+ * admin and the salary job, could overwrite each other) and allowed a deduction
+ * to push the balance below zero. The guard in the filter makes both impossible:
+ * a debit only applies when the money is actually there, and a credit only when
+ * the result stays a safe integer.
+ */
 export async function addCurrency(playerId, currency, amount, adminId) {
   try {
     const db = getDB();
     if (currency !== "krw" && currency !== "yen") return false;
 
-    const player = await getPlayer(playerId);
-    if (!player) return false;
+    const delta = Number(amount);
+    if (!Number.isSafeInteger(delta)) return false;
 
-    const updateObj = {};
-    updateObj[currency] = (Number(player[currency]) || 0) + Number(amount);
+    const filter = { id: playerId };
+    if (delta < 0) {
+      filter[currency] = { $gte: -delta };
+    } else if (delta > 0) {
+      filter.$or = [
+        { [currency]: { $lte: Number.MAX_SAFE_INTEGER - delta } },
+        { [currency]: { $exists: false } },
+      ];
+    }
 
-    await db
+    const updated = await db
       .collection("players")
-      .updateOne({ id: playerId }, { $set: updateObj });
+      .findOneAndUpdate(
+        filter,
+        { $inc: { [currency]: delta } },
+        { returnDocument: "after" },
+      );
+
+    if (!updated) return false;
 
     logAdminAction(
       adminId,
       "ADD_CURRENCY",
       `Добавил ${amount} ${currency.toUpperCase()} игроку ${playerId}`,
     );
-    return updateObj[currency];
+    return Number(updated[currency]);
   } catch (error) {
     console.error("Error adding currency:", error);
     return false;

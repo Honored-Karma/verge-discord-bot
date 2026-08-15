@@ -97,17 +97,31 @@ export async function execute(interaction) {
             await logCommand({
                 client: interaction.client,
                 guildId: interaction.guildId,
-                commandName: 'deduct-currency',
-                executor: interaction.user.tag,
-                targetUser: targetUser.tag,
-                details: `Списано ${amount} ${currency}`
+                channelId: interaction.channelId,
+                userId: interaction.user.id,
+                userTag: interaction.user.tag,
+                command: 'deduct-currency',
+                targetId: playerId,
+                targetTag: player.character_name || player.username,
+                extra: {
+                    currency,
+                    amount,
+                    balance: newAmount
+                }
             });
         } catch (error) {
             console.error('Failed to log command:', error);
         }
     } else {
+        // Списание больше не уводит баланс в минус, поэтому самая частая причина
+        // отказа — на балансе просто нет такой суммы. Показываем её админу.
+        const currencySymbol = currency === 'krw' ? 'KRW' : 'YEN';
+        const available = Number(player[currency] || 0);
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Ошибка', 'Не удалось списать валюту.')],
+            embeds: [createErrorEmbed('Не удалось списать валюту',
+                available < amount
+                    ? `На балансе **${player.character_name || player.username}** только **${available}** ${currencySymbol}. Укажите сумму не больше этой.`
+                    : 'Не удалось списать валюту. Попробуйте позже.')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
