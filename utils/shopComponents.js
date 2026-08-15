@@ -251,6 +251,19 @@ export function createShopCategoryComponents({
   return [container];
 }
 
+/** Человеческая запись длительности: «3 суток» читается лучше «72 часов». */
+export function cooldownLabel(hours) {
+  const total = Math.max(0, Number(hours) || 0);
+  if (total === 0) return "нет";
+  if (total % 24 === 0) {
+    const days = total / 24;
+    return `${days} ${days === 1 ? "сутки" : "суток"}`;
+  }
+  if (total === 1) return "1 час";
+  if (total < 5) return `${total} часа`;
+  return `${total} часов`;
+}
+
 export function createShopItemComponents({
   characterName,
   avatarUrl,
@@ -288,6 +301,9 @@ export function createShopItemComponents({
           `Баланс после покупки: **${canAfford ? money(balance - price, currency) : "недостаточно средств"}**\n` +
           `Остаток магазина: **${item.stock === null ? "без ограничений" : `${formatNumber(item.stock)} шт.`}**\n` +
           `Недельный лимит: **${formatNumber(item.weekly_limit)} шт.**\n` +
+          (Number(item.cooldown_hours) > 0
+            ? `Кулдаун: **${cooldownLabel(item.cooldown_hours)}** между покупками\n`
+            : "") +
           `Выдача: **${shopDeliveryLabel(item)}**\n\n` +
           "-# Особые товары не дают способность автоматически: стафф проверяет их отдельно.",
         ),

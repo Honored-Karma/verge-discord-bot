@@ -32,7 +32,6 @@ const CATEGORY_CHOICES = [
   { name: "Эликсиры", value: "elixirs" },
   { name: "Киберклиника", value: "cybernetics" },
   { name: "Лаборатория мутаций", value: "mutations" },
-  { name: "Брокер артефактов", value: "artifacts" },
 ];
 const RARITY_CHOICES = [
   { name: "Обычный", value: "common" },
@@ -58,6 +57,7 @@ function addCommonEditOptions(subcommand, required) {
     .addStringOption((option) => option.setName("emoji").setDescription("Один эмодзи для карточки").setMinLength(1).setMaxLength(32).setRequired(required))
     .addStringOption((option) => option.setName("rarity").setDescription("Редкость").addChoices(...RARITY_CHOICES).setRequired(required))
     .addIntegerOption((option) => option.setName("weekly-limit").setDescription("Лимит покупок на персонажа за неделю").setMinValue(1).setMaxValue(100).setRequired(false))
+    .addIntegerOption((option) => option.setName("cooldown-hours").setDescription("Кулдаун между покупками в часах; 0 — без кулдауна").setMinValue(0).setMaxValue(8760).setRequired(false))
     .addIntegerOption((option) => option.setName("sort-order").setDescription("Позиция товара внутри раздела; меньше — выше").setMinValue(0).setMaxValue(1_000_000).setRequired(false))
     .addStringOption((option) => option.setName("item-name").setDescription("Для инвентаря: точное название выдаваемого предмета").setMaxLength(100).setRequired(false))
     .addIntegerOption((option) => option.setName("amount").setDescription("Для SP-свитка: количество SP").setMinValue(1).setMaxValue(1_000_000).setRequired(false))
@@ -176,6 +176,7 @@ function validationMessage(reason) {
     invalid_emoji: "Укажите эмодзи карточки.",
     invalid_price: "Укажите целую положительную цену в YEN.",
     invalid_weekly_limit: "Недельный лимит должен быть от 1 до 100.",
+    invalid_cooldown: "Кулдаун должен быть целым числом часов от 0 до 8760.",
     invalid_stock: "Укажите нулевой или положительный остаток.",
     invalid_delivery: "Заполните параметры выбранной выдачи: название предмета, SP, эффект либо тип и уровень заявки.",
     duplicate_id: "Товар с таким ID уже существует. Выберите другой ID или отредактируйте существующий.",
@@ -323,6 +324,7 @@ export async function execute(interaction) {
       emoji: option(interaction, "emoji"),
       rarity: option(interaction, "rarity"),
       weekly_limit: Number(option(interaction, "weekly-limit", 1)),
+      cooldown_hours: Number(option(interaction, "cooldown-hours", 0)),
       sort_order: option(interaction, "sort-order", undefined),
       stock: option(interaction, "stock", null),
       enabled: true,
@@ -359,6 +361,7 @@ export async function execute(interaction) {
       emoji: option(interaction, "emoji", current.emoji),
       rarity: option(interaction, "rarity", current.rarity),
       weekly_limit: Number(option(interaction, "weekly-limit", current.weekly_limit)),
+      cooldown_hours: Number(option(interaction, "cooldown-hours", current.cooldown_hours ?? 0)),
       sort_order: Number(option(interaction, "sort-order", current.sort_order || 0)),
       delivery: buildDelivery(interaction, current.id, current.delivery),
     };

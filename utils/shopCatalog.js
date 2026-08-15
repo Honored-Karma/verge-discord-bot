@@ -10,6 +10,25 @@ const RARITIES = {
   legendary: { name: "Легендарный", emoji: "🟠", color: 0xf59e0b },
 };
 
+// Год — заведомо достаточный потолок: всё, что дольше, почти наверняка опечатка
+// в часах вместо суток.
+const MAX_COOLDOWN_HOURS = 8760;
+
+export function isValidCooldown(value) {
+  const hours = Number(value);
+  return Number.isSafeInteger(hours) && hours >= 0 && hours <= MAX_COOLDOWN_HOURS;
+}
+
+export function normalizeCooldownHours(value) {
+  const hours = Number(value);
+  return isValidCooldown(hours) ? hours : 0;
+}
+
+/** Кулдаун товара в миллисекундах; 0 означает «без кулдауна». */
+export function shopCooldownMs(item) {
+  return normalizeCooldownHours(item?.cooldown_hours) * 60 * 60 * 1000;
+}
+
 function loadCatalog() {
   const file = readFileSync(
     new URL("../data/shop_items.json", import.meta.url),
@@ -53,6 +72,9 @@ for (const item of CATALOG.items) {
   }
   if (!Number.isSafeInteger(item.weekly_limit) || item.weekly_limit < 1) {
     throw new Error(`Invalid weekly limit for shop item ${item.id}`);
+  }
+  if (item.cooldown_hours !== undefined && !isValidCooldown(item.cooldown_hours)) {
+    throw new Error(`Invalid cooldown for shop item ${item.id}`);
   }
   if (!item.delivery?.kind) throw new Error(`Missing delivery for shop item ${item.id}`);
   if (!RARITIES[item.rarity]) throw new Error(`Invalid rarity for shop item ${item.id}`);
@@ -124,6 +146,10 @@ export function validateShopCatalogItem(item) {
   if (item.stock !== null && (!Number.isSafeInteger(Number(item.stock)) || Number(item.stock) < 0)) {
     return { valid: false, reason: "invalid_stock" };
   }
+  if (item.cooldown_hours !== undefined && item.cooldown_hours !== null
+    && !isValidCooldown(item.cooldown_hours)) {
+    return { valid: false, reason: "invalid_cooldown" };
+  }
   const delivery = item.delivery;
   if (!delivery?.kind) return { valid: false, reason: "invalid_delivery" };
   if (delivery.kind === "inventory") {
@@ -158,6 +184,7 @@ function catalogDocument(item) {
     enabled: item.enabled !== false,
     archived: item.archived === true,
     stock: item.stock === null || item.stock === undefined ? null : Number(item.stock),
+    cooldown_hours: normalizeCooldownHours(item.cooldown_hours),
     sold_count: Math.max(0, Number(item.sold_count || 0)),
     version: Math.max(1, Number(item.version || 1)),
   };
@@ -201,11 +228,15 @@ export async function initializeShopCatalog(db) {
  * превращает файл в постоянный источник истины — иначе миграция затирала бы
  * всё, что администраторы поменяли через `/shop-admin`.
  *
- * Синхронизируются ровно две вещи:
- *   1) цена товаров, которые файл всё ещё описывает;
+ * Синхронизируется ровно два вида изменений:
+ *   1) поля из REVISION_SYNCED_FIELDS у товаров, которые файл всё ещё описывает;
  *   2) архивация позиций, которых в файле больше нет.
  * Названия, описания, лимиты и остатки остаются за администраторами.
  */
+// Поля, которые ревизия имеет право перетереть значением из файла. Всё
+// остальное принадлежит администраторам и правится только через /shop-admin.
+const REVISION_SYNCED_FIELDS = ["price_yen", "cooldown_hours"];
+
 export async function applyCatalogRevision(db) {
   const meta = db.collection("shop_catalog_meta");
   const items = db.collection("shop_catalog_items");
@@ -224,16 +255,23 @@ export async function applyCatalogRevision(db) {
 
   for (const item of DEFAULT_ITEMS) {
     const before = await items.findOne({ id: item.id });
-    if (!before || Number(before.price_yen) === Number(item.price_yen)) continue;
+    if (!before) continue;
+
+    const updates = {};
+    const details = {};
+    for (const field of REVISION_SYNCED_FIELDS) {
+      const target = Number(item[field] ?? 0);
+      if (Number(before[field] ?? 0) === target) continue;
+      updates[field] = target;
+      details[field] = { from: Number(before[field] ?? 0), to: target };
+    }
+    if (Object.keys(updates).length === 0) continue;
+
     await items.updateOne(
       { id: item.id },
-      { $set: { price_yen: item.price_yen, updated_at: now }, $inc: { version: 1 } },
+      { $set: { ...updates, updated_at: now }, $inc: { version: 1 } },
     );
-    changes.push({
-      item_id: item.id,
-      action: "revision_price",
-      details: { from: Number(before.price_yen), to: Number(item.price_yen) },
-    });
+    changes.push({ item_id: item.id, action: "revision_fields", details });
   }
 
   // Позиции, удалённые из файла, не стираем: на них могут ссылаться уже
