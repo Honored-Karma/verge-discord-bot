@@ -25,7 +25,9 @@ logs/*.log
 *.swo
 *~
 
-# Auto-downloaded font cache
+# Шрифт карточек: кладётся на сборке через npm run font (postinstall),
+# в репозитории бинарник не держим.
+assets/fonts/CardFont.ttf
 assets/fonts/InterCyr.ttf
 
 # OS

@@ -86,6 +86,43 @@ export async function execute(interaction) {
     const multipliers = getProfileMultipliers(player);
     const reputationTier = getReputationTier(player.reputation);
 
+    const buildView = (page, buffers, disabled = false) => {
+        const isMain = page === 'main';
+        const isPhysical = page === 'physical';
+        const buffer = isMain ? buffers.main : isPhysical ? buffers.physical : null;
+        const imageName = buffer
+            ? (isMain ? 'profile-main.png' : 'physical-stats.png')
+            : null;
+
+        return {
+            components: createProfileV2Components({
+                page,
+                player,
+                user: targetUser,
+                slot,
+                totalSP,
+                history,
+                imageName,
+                disabled,
+            }),
+            files: buffer ? [new AttachmentBuilder(buffer, { name: imageName })] : [],
+            imageName,
+        };
+    };
+
+    // Двухфазный ответ. Отрисовка карточки — это канвас плюс возможная загрузка
+    // аватара по сети, и раньше всё это выполнялось ДО первого ответа Discord,
+    // у которого на подтверждение только три секунды. Теперь сначала уходит
+    // текстовый вид (мгновенно), а картинка досылается правкой. Флаг
+    // Components V2 выставлен с первого ответа, поэтому правка законна.
+    let buffers = { main: null, physical: null };
+    let currentPage = 'main';
+    const response = await interaction.reply({
+        flags: MessageFlags.IsComponentsV2,
+        components: buildView(currentPage, buffers).components,
+        fetchReply: true,
+    });
+
     const mainCardPromise = generateUnifiedProfileCard({
         characterName,
         avatarUrl,
@@ -128,39 +165,18 @@ export async function execute(interaction) {
         mainCardPromise,
         physicalCardPromise,
     ]);
+    buffers = { main: mainCardBuffer, physical: physicalCardBuffer };
 
-    const buildView = (page, disabled = false) => {
-        const isMain = page === 'main';
-        const isPhysical = page === 'physical';
-        const buffer = isMain ? mainCardBuffer : isPhysical ? physicalCardBuffer : null;
-        const imageName = buffer
-            ? (isMain ? 'profile-main.png' : 'physical-stats.png')
-            : null;
-
-        return {
-            components: createProfileV2Components({
-                page,
-                player,
-                user: targetUser,
-                slot,
-                totalSP,
-                history,
-                imageName,
-                disabled,
-            }),
-            files: buffer ? [new AttachmentBuilder(buffer, { name: imageName })] : [],
-            imageName,
-        };
-    };
-
-    let currentPage = 'main';
-    const initialView = buildView(currentPage);
-    const response = await interaction.reply({
-        flags: MessageFlags.IsComponentsV2,
-        components: initialView.components,
-        files: initialView.files,
-        fetchReply: true,
-    });
+    // Если канвас не отдал картинку, текстовый вид уже показан и остаётся —
+    // лишняя правка сообщения не нужна.
+    if (buffers.main) {
+        const cardView = buildView(currentPage, buffers);
+        await interaction.editReply({
+            components: cardView.components,
+            files: cardView.files,
+            attachments: [],
+        }).catch((error) => console.error('Profile card attach error:', error));
+    }
 
     const collector = response.createMessageComponentCollector({ time: 3 * 60 * 1000 });
     const pageByButton = {
@@ -182,7 +198,7 @@ export async function execute(interaction) {
         if (!nextPage) return;
 
         currentPage = nextPage;
-        const nextView = buildView(currentPage);
+        const nextView = buildView(currentPage, buffers);
         await componentInteraction.update({
             components: nextView.components,
             files: nextView.files,
@@ -192,7 +208,7 @@ export async function execute(interaction) {
 
     collector.on('end', async () => {
         try {
-            const expiredView = buildView(currentPage, true);
+            const expiredView = buildView(currentPage, buffers, true);
             await interaction.editReply({ components: expiredView.components });
         } catch {}
     });

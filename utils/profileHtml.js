@@ -1,20 +1,59 @@
 import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
-import { existsSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, statSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { getAdaptiveProgressScale } from './progressScale.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FONT_DIR = join(__dirname, '..', 'assets', 'fonts');
-const FONT_PATH = join(FONT_DIR, 'InterCyr.ttf');
+// CardFont.ttf кладёт на сборке scripts/ensure-card-font.mjs. InterCyr.ttf —
+// прежнее имя того же файла, оставлено для совместимости со старыми образами.
+const FONT_CANDIDATES = [
+    join(FONT_DIR, 'CardFont.ttf'),
+    join(FONT_DIR, 'InterCyr.ttf'),
+];
+const FONT_PATH = FONT_CANDIDATES[0];
 const FONT_FAMILY = 'CardFont';
+const MIN_FONT_BYTES = 200_000;
 let fontReady = false;
+
+function bundledFontPath() {
+    for (const candidate of FONT_CANDIDATES) {
+        try {
+            if (existsSync(candidate) && statSync(candidate).size >= MIN_FONT_BYTES) {
+                return candidate;
+            }
+        } catch {}
+    }
+    return null;
+}
+
+/**
+ * Готовит шрифт для карточек. Основной путь — файл, положенный на сборке;
+ * системные шрифты и загрузка по сети остались аварийными вариантами, потому
+ * что в образе Railway кириллических шрифтов нет, а сетевой путь тормозит
+ * первый рендер после каждого рестарта.
+ */
+export async function ensureCardFont() {
+    if (fontReady) return { ok: true, source: 'cached' };
+
+    const bundled = bundledFontPath();
+    if (bundled) {
+        GlobalFonts.registerFromPath(bundled, FONT_FAMILY);
+        fontReady = true;
+        return { ok: true, source: 'bundled' };
+    }
+
+    await ensureFont();
+    return { ok: fontReady, source: fontReady ? 'fallback' : 'none' };
+}
 
 async function ensureFont() {
     if (fontReady) return;
 
-    if (existsSync(FONT_PATH) && (await import('fs')).statSync(FONT_PATH).size > 100_000) {
-        GlobalFonts.registerFromPath(FONT_PATH, FONT_FAMILY);
+    const bundled = bundledFontPath();
+    if (bundled) {
+        GlobalFonts.registerFromPath(bundled, FONT_FAMILY);
         fontReady = true;
         return;
     }
