@@ -5,6 +5,7 @@ import {
   getShopItem,
   refreshShopCatalog,
   resolveShopDelivery,
+  shopCooldownMs,
   shopPeriodKey,
   shopPrice,
 } from "./shopCatalog.js";
@@ -44,6 +45,38 @@ function normalizePurchase(document, idempotent = false) {
     orderId: document.order_id || null,
     effectExpiresAt: document.effect_expires_at || null,
   };
+}
+
+/**
+ * Сколько миллисекунд осталось до следующей покупки этого товара.
+ *
+ * Недельный лимит считает покупки внутри календарной недели и обнуляется в
+ * понедельник — этим можно было брать несколько усилений подряд на стыке недель.
+ * Кулдаун — скользящее окно от момента последней покупки, поэтому «богачи по кд»
+ * больше не качаются: между покупками всегда проходит заданное время.
+ *
+ * Возвращает 0, если покупать можно.
+ */
+async function purchaseCooldownRemaining(purchases, context, session) {
+  if (!context.cooldownMs) return 0;
+
+  const last = await purchases.find({
+    player_id: context.playerId,
+    item_id: context.item.id,
+    status: { $in: ["processing", "completed", "pending_review"] },
+  }, options(session))
+    .sort({ created_at: -1 })
+    .limit(1)
+    .toArray();
+
+  const boughtAt = last[0]?.created_at ? new Date(last[0].created_at).getTime() : 0;
+  if (!boughtAt) return 0;
+
+  const elapsed = context.createdAt.getTime() - boughtAt;
+  // Часы на сервере могли сдвинуться назад — отрицательное «прошло» не должно
+  // превращаться в бесконечный запрет.
+  if (!Number.isFinite(elapsed) || elapsed < 0) return 0;
+  return Math.max(0, context.cooldownMs - elapsed);
 }
 
 async function completedPurchaseCount(purchases, playerId, itemId, periodKey, session) {
@@ -198,6 +231,20 @@ async function purchaseInTransaction(collections, context, session) {
   );
   if (count >= context.weeklyLimit) {
     return { success: false, reason: "weekly_limit", limit: context.weeklyLimit };
+  }
+
+  const cooldownLeft = await purchaseCooldownRemaining(
+    collections.purchases,
+    context,
+    session,
+  );
+  if (cooldownLeft > 0) {
+    return {
+      success: false,
+      reason: "cooldown",
+      cooldownHours: context.cooldownHours,
+      retryAt: Math.floor((context.createdAt.getTime() + cooldownLeft) / 1000),
+    };
   }
 
   const playerBefore = await collections.players.findOne(
@@ -364,6 +411,16 @@ async function purchaseCompensated(collections, context) {
   );
   if (count >= context.weeklyLimit) {
     return { success: false, reason: "weekly_limit", limit: context.weeklyLimit };
+  }
+
+  const cooldownLeft = await purchaseCooldownRemaining(collections.purchases, context, null);
+  if (cooldownLeft > 0) {
+    return {
+      success: false,
+      reason: "cooldown",
+      cooldownHours: context.cooldownHours,
+      retryAt: Math.floor((context.createdAt.getTime() + cooldownLeft) / 1000),
+    };
   }
 
   const playerBefore = await collections.players.findOne({ id: context.playerId });
@@ -545,6 +602,8 @@ export async function purchaseShopItem({
     price,
     currency,
     weeklyLimit: Math.max(1, Number(item.weekly_limit || 1)),
+    cooldownMs: shopCooldownMs(item),
+    cooldownHours: Number(item.cooldown_hours || 0),
     periodKey: shopPeriodKey(),
     createdAt: new Date(),
   };

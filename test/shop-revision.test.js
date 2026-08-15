@@ -78,7 +78,9 @@ test("ревизия каталога догоняет цены и архиви�
     const audit = await db.collection("shop_catalog_audit")
       .find({ admin_id: "system" }).toArray();
     assert.ok(audit.length >= 2);
-    assert.ok(audit.some((entry) => entry.action === "revision_price"));
+    // Ревизия синхронизирует объявленный набор полей (цена, кулдаун), поэтому
+    // запись в журнале одна на товар, а не по одной на поле.
+    assert.ok(audit.some((entry) => entry.action === "revision_fields"));
     assert.ok(audit.some((entry) => entry.action === "revision_archive"));
   } finally {
     await closeDatabase().catch(() => {});

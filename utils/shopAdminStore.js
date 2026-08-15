@@ -47,6 +47,7 @@ function normalizeItem(item) {
     rarity: String(item.rarity || "").trim(),
     price_yen: Number(item.price_yen),
     weekly_limit: Number(item.weekly_limit),
+    cooldown_hours: Number(item.cooldown_hours || 0),
     stock: item.stock === null ? null : Number(item.stock),
     delivery: { ...item.delivery },
   };
@@ -122,6 +123,7 @@ export async function updateManagedShopItem(itemId, changes, adminId, expectedVe
     rarity: next.rarity,
     price_yen: next.price_yen,
     weekly_limit: next.weekly_limit,
+    cooldown_hours: Number(next.cooldown_hours || 0),
     delivery: next.delivery,
     sort_order: Number.isSafeInteger(Number(next.sort_order))
       ? Number(next.sort_order)

@@ -25,6 +25,7 @@ import {
   createShopReceiptComponents,
   createShopStatusComponents,
   createShopStyleComponents,
+  cooldownLabel,
   SHOP_BACK_ID,
   SHOP_BUY_ID,
   SHOP_CANCEL_ID,
@@ -91,6 +92,9 @@ export function createShopSessionState({
 
 function purchaseError(result, currency) {
   switch (result.reason) {
+    case "cooldown":
+      // Discord сам покажет относительное время, поэтому пересчитывать не нужно.
+      return `Этот товар доступен раз в **${result.cooldownHours ? cooldownLabel(result.cooldownHours) : "период"}**. Следующая покупка — <t:${result.retryAt}:R>.`;
     case "weekly_limit":
       return `Недельный лимит этого товара — **${Number(result.limit || 1).toLocaleString("ru-RU")} шт.** Выберите другой товар или дождитесь следующей недели.`;
     case "insufficient_funds":
