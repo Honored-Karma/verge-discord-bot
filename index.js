@@ -13,6 +13,7 @@ import {
     routeModalInteraction
 } from './utils/interactionRouter.js';
 import { registerInteractionHandlers } from './interactions/index.js';
+import { ensureCardFont } from './utils/profileHtml.js';
 
 config();
 
@@ -90,6 +91,18 @@ client.once(Events.ClientReady, async readyClient => {
         }
     } catch (deployError) {
         console.error('❌ Failed to deploy commands:', deployError);
+    }
+
+    // Шрифт карточек готовим на старте, а не при первом /profile: раньше первый
+    // игрок после каждого рестарта ждал загрузку 617 КБ внутри трёхсекундного
+    // окна ответа Discord.
+    try {
+        const font = await ensureCardFont();
+        console.log(font.ok
+            ? `🔤 Шрифт карточек готов (источник: ${font.source})`
+            : '⚠️  Шрифт карточек не найден — кириллица на карточках может не отрисоваться');
+    } catch (fontError) {
+        console.error('❌ Не удалось подготовить шрифт карточек:', fontError);
     }
 
     startWeeklySalaryScheduler(client);
