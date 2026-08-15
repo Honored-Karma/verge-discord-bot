@@ -1414,12 +1414,25 @@ export async function getLeaderboardPage(
 
     const [snapshot] = await db.collection("players").aggregate([
       ...metricStages,
+      // Порядок задаётся здесь, до окна: равные значения разводятся по id, поэтому
+      // страницы стабильны между запросами.
+      { $sort: { leaderboard_value: -1, id: 1 } },
       {
         $setWindowFields: {
-          sortBy: { leaderboard_value: -1, id: 1 },
-          output: { leaderboard_position: { $documentNumber: {} } },
+          // $rank и $documentNumber принимают ровно один ключ sortBy — два ключа
+          // роняли всю агрегацию с Location5371602, из-за чего рейтинг вообще не
+          // открывался. Тайбрейк по id живёт в $sort выше.
+          sortBy: { leaderboard_value: -1 },
+          output: {
+            // Спортивное ранжирование: одинаковое значение — одно и то же место.
+            leaderboard_position: { $rank: {} },
+            // Номер строки нужен отдельно: по нему нарезаются страницы и пьедестал,
+            // иначе персонаж, делящий третье место, исчезал бы из обоих списков.
+            leaderboard_row: { $documentNumber: {} },
+          },
         },
       },
+      { $sort: { leaderboard_row: 1 } },
       {
         $project: {
           _id: 0,
@@ -1428,6 +1441,7 @@ export async function getLeaderboardPage(
           character_name: 1,
           leaderboard_value: 1,
           leaderboard_position: 1,
+          leaderboard_row: 1,
         },
       },
       {

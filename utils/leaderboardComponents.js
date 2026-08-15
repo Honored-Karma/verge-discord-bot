@@ -96,21 +96,47 @@ function createMetricButtons(metric, disabled) {
   );
 }
 
+function positionMark(position) {
+  const place = Number(position);
+  return PODIUM_MARKS[place - 1] || "•";
+}
+
+/**
+ * Считает, сколько видимых участников делят каждое место. Ранжирование
+ * спортивное, поэтому одинаковое значение метрики даёт одинаковое место, и без
+ * пометки два одинаковых номера подряд выглядят как ошибка.
+ */
+function sharedPlaces(entries) {
+  const counts = new Map();
+  for (const entry of entries) {
+    const place = Number(entry?.leaderboard_position);
+    if (!Number.isFinite(place)) continue;
+    counts.set(place, (counts.get(place) || 0) + 1);
+  }
+  return counts;
+}
+
 export function createLeaderboardComponents({ snapshot, playerId, disabled = false }) {
   const metric = LEADERBOARD_METRICS[snapshot.metric]
     ? snapshot.metric
     : "ap";
   const config = LEADERBOARD_METRICS[metric];
-  const podium = snapshot.podium.map((player, index) =>
-    `${PODIUM_MARKS[index]} **${index + 1} место · ${characterName(player)}**\n-# ${formatValue(player, metric)}`,
+  const shared = sharedPlaces([...snapshot.podium, ...snapshot.rows]);
+  const sharedNote = (player) =>
+    (shared.get(Number(player?.leaderboard_position)) || 0) > 1 ? " · делит место" : "";
+
+  const podium = snapshot.podium.map((player) =>
+    `${positionMark(player.leaderboard_position)} **${formatNumber(player.leaderboard_position)} место · ${characterName(player)}**${sharedNote(player)}\n-# ${formatValue(player, metric)}`,
   ).join("\n\n");
   const rows = snapshot.rows
-    .filter((player) => Number(player.leaderboard_position) > 3)
+    // Нарезка идёт по номеру строки, а не по месту: при делённом третьем месте
+    // фильтр по месту прятал участника и из пьедестала, и из общего списка.
+    .filter((player) => Number(player.leaderboard_row ?? player.leaderboard_position) > 3)
     .map((player) => {
       const isCurrent = player.id === playerId;
       const marker = isCurrent ? "➜" : "•";
       const you = isCurrent ? " · вы" : "";
-      return `${marker} **#${formatNumber(player.leaderboard_position)} · ${characterName(player)}**${you}\n-# ${formatValue(player, metric)}`;
+      return `${marker} **#${formatNumber(player.leaderboard_position)} · ${characterName(player)}**${you}${sharedNote(player)}\n-# ${formatValue(player, metric)}`;
     })
     .join("\n\n");
   const current = snapshot.currentPlayer;

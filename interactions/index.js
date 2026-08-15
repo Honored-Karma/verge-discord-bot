@@ -1,4 +1,8 @@
 import { registerInteractionHandler } from "../utils/interactionRouter.js";
+import {
+  LEADERBOARD_NAMESPACE,
+  leaderboardInteractionHandler,
+} from "./leaderboardSession.js";
 import { PAY_NAMESPACE, payInteractionHandler } from "./paySession.js";
 import { SHOP_NAMESPACE, shopInteractionHandler } from "./shopSession.js";
 
@@ -10,5 +14,6 @@ import { SHOP_NAMESPACE, shopInteractionHandler } from "./shopSession.js";
 export function registerInteractionHandlers() {
   registerInteractionHandler(SHOP_NAMESPACE, shopInteractionHandler);
   registerInteractionHandler(PAY_NAMESPACE, payInteractionHandler);
-  return [SHOP_NAMESPACE, PAY_NAMESPACE];
+  registerInteractionHandler(LEADERBOARD_NAMESPACE, leaderboardInteractionHandler);
+  return [SHOP_NAMESPACE, PAY_NAMESPACE, LEADERBOARD_NAMESPACE];
 }

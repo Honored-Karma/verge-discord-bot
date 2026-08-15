@@ -324,3 +324,31 @@ test("pay session state carries a stored confirmation deadline", () => {
   assert.match(transferError({ reason: "insufficient_funds", available: 10 }, "yen"), /10/);
   assert.match(transferError({ reason: "unknown" }, "krw"), /не изменены/);
 });
+
+test("leaderboard actions change only what the click implies", async () => {
+  const { __testables } = await import("../interactions/leaderboardSession.js");
+  const { applyAction } = __testables;
+  const snapshot = { totalPages: 3 };
+
+  const state = { metric: "ap", page: 0, page_size: 10 };
+  assert.equal(applyAction("leaderboard_metric:ap", state, snapshot), false, "та же вкладка");
+  assert.equal(applyAction("leaderboard_metric:zzz", state, snapshot), false, "неизвестная метрика");
+  assert.equal(applyAction("leaderboard_prev", state, snapshot), false, "уже первая страница");
+
+  assert.equal(applyAction("leaderboard_next", state, snapshot), true);
+  assert.equal(state.page, 1);
+  assert.equal(applyAction("leaderboard_next", state, snapshot), true);
+  assert.equal(state.page, 2);
+  assert.equal(applyAction("leaderboard_next", state, snapshot), false, "последняя страница");
+
+  assert.equal(applyAction("leaderboard_prev", state, snapshot), true);
+  assert.equal(state.page, 1);
+
+  // Переключение метрики всегда возвращает на первую страницу.
+  assert.equal(applyAction("leaderboard_metric:sp", state, snapshot), true);
+  assert.equal(state.metric, "sp");
+  assert.equal(state.page, 0);
+
+  assert.equal(applyAction("leaderboard_refresh", state, snapshot), true);
+  assert.equal(applyAction("something_else", state, snapshot), false);
+});
