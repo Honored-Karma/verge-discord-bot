@@ -8,8 +8,15 @@ import { connectDatabase, closeDatabase } from './utils/db.js';
 import { startWeeklySalaryScheduler } from './services/salaryService.js';
 import { expireMultipliers } from './utils/dataManager.js';
 import { installModernResponseAdapter } from './utils/modernResponses.js';
+import {
+    routeComponentInteraction,
+    routeModalInteraction
+} from './utils/interactionRouter.js';
+import { registerInteractionHandlers } from './interactions/index.js';
 
 config();
+
+const persistentNamespaces = registerInteractionHandlers();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -57,6 +64,7 @@ for (const file of commandFiles) {
 client.once(Events.ClientReady, async readyClient => {
     console.log(`🤖 Bot is ready! Logged in as ${readyClient.user.tag}`);
     console.log(`📊 Serving ${client.guilds.cache.size} server(s)`);
+    console.log(`🔗 Persistent interaction handlers: ${persistentNamespaces.join(', ')}`);
 
     // Auto-deploy slash commands on startup
     try {
@@ -94,7 +102,35 @@ client.on(Events.InteractionCreate, async interaction => {
     // Give every command and component interaction the same Components V2 visual language.
     installModernResponseAdapter(interaction);
 
+    // Persistent panels first: buttons and menus backed by a stored session keep
+    // working after a restart, unlike the per-message collectors below.
+    if (interaction.isButton() || interaction.isAnySelectMenu()) {
+        try {
+            await routeComponentInteraction(interaction);
+        } catch (error) {
+            console.error(`❌ Error routing component ${interaction.customId}:`, error);
+            const errorMessage = {
+                content: 'Не удалось обработать нажатие. Запустите команду ещё раз.',
+                flags: 64
+            };
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp(errorMessage).catch(() => {});
+            } else {
+                await interaction.reply(errorMessage).catch(() => {});
+            }
+        }
+        // Interactions without a session are left untouched on purpose so the
+        // collectors still driving other commands can pick them up.
+        return;
+    }
+
     if (interaction.isModalSubmit()) {
+        try {
+            if (await routeModalInteraction(interaction)) return;
+        } catch (error) {
+            console.error(`❌ Error routing modal ${interaction.customId}:`, error);
+        }
+
         const command = [...client.commands.values()].find(candidate =>
             typeof candidate.handlesModal === 'function' && candidate.handlesModal(interaction)
         );
