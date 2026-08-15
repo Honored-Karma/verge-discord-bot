@@ -9,6 +9,10 @@ import {
 } from "./inventorySession.js";
 import { PAY_NAMESPACE, payInteractionHandler } from "./paySession.js";
 import { PROFILE_NAMESPACE, profileInteractionHandler } from "./profileSession.js";
+import {
+  SHOP_ORDER_NAMESPACE,
+  shopOrderInteractionHandler,
+} from "./shopOrderSession.js";
 import { SHOP_NAMESPACE, shopInteractionHandler } from "./shopSession.js";
 
 /**
@@ -22,11 +26,13 @@ export function registerInteractionHandlers() {
   registerInteractionHandler(LEADERBOARD_NAMESPACE, leaderboardInteractionHandler);
   registerInteractionHandler(PROFILE_NAMESPACE, profileInteractionHandler);
   registerInteractionHandler(INVENTORY_NAMESPACE, inventoryInteractionHandler);
+  registerInteractionHandler(SHOP_ORDER_NAMESPACE, shopOrderInteractionHandler);
   return [
     SHOP_NAMESPACE,
     PAY_NAMESPACE,
     LEADERBOARD_NAMESPACE,
     PROFILE_NAMESPACE,
     INVENTORY_NAMESPACE,
+    SHOP_ORDER_NAMESPACE,
   ];
 }
