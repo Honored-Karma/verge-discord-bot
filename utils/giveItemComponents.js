@@ -14,6 +14,7 @@ import {
   TextInputStyle,
   ThumbnailBuilder,
 } from "discord.js";
+import { safeAvatarUrl } from "./avatarUrl.js";
 import { formatItemEffect, getItemDefinition } from "./itemSystem.js";
 
 export const GIVE_ITEM_CATALOG_SELECT_ID = "give_item_catalog";
@@ -88,7 +89,7 @@ function targetSection(characterName, avatarUrl, slot, heading, subtitle) {
     )
     .setThumbnailAccessory(
       new ThumbnailBuilder()
-        .setURL(avatarUrl)
+        .setURL(safeAvatarUrl(avatarUrl))
         .setDescription(`Аватар персонажа ${cleanText(characterName, 80)}`),
     );
 }
