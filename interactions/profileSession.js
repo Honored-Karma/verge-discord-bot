@@ -8,8 +8,12 @@ import {
 } from "../utils/dataManager.js";
 import { getProfileMultipliers } from "../utils/embeds.js";
 import { renderPhysicalCard, renderProfileCard } from "../utils/profileCard.js";
-import { createProfileV2Components } from "../utils/profileComponents.js";
+import {
+  createProfileV2Components,
+  PROFILE_INVENTORY_ID,
+} from "../utils/profileComponents.js";
 import { saveInteractionSession } from "../utils/interactionSessions.js";
+import { openInventory } from "../utils/inventoryFlow.js";
 
 export const PROFILE_NAMESPACE = "profile";
 export const PROFILE_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -128,7 +132,40 @@ async function resolveTargetUser(interaction, state) {
   }
 }
 
+/**
+ * Инвентарь из профиля открывается отдельным эфемерным сообщением, а не правкой
+ * панели: панель профиля публичная и может висеть в канале сутки, а содержимое
+ * сумки — дело только того, кто её открыл.
+ *
+ * Отвечаем именно `reply`, а не `update`: панель профиля должна остаться на
+ * месте, чтобы игрок мог вернуться к вкладкам, не вызывая команду заново.
+ * У эфемерного окна своя сессия в базе, поэтому его кнопки переживают рестарт
+ * бота ровно так же, как у обычного `/inventory`.
+ */
+async function openInventoryPanel({ interaction, session }) {
+  const state = session.state;
+  const targetUser = await resolveTargetUser(interaction, state);
+
+  return openInventory({
+    interaction,
+    targetUser,
+    playerId: state.player_id,
+    slot: state.slot,
+    ephemeral: true,
+  }).catch(async (error) => {
+    console.error("Profile inventory open error:", error);
+    await interaction.reply({
+      content: "Не удалось открыть инвентарь. Попробуйте команду `/inventory`.",
+      flags: MessageFlags.Ephemeral,
+    }).catch(() => {});
+  });
+}
+
 async function handleComponent({ interaction, session }) {
+  if (interaction.customId === PROFILE_INVENTORY_ID) {
+    return openInventoryPanel({ interaction, session });
+  }
+
   const nextPage = PAGE_BY_BUTTON[interaction.customId];
   if (!nextPage) return interaction.deferUpdate().catch(() => {});
   if (nextPage === session.state.page) return interaction.deferUpdate().catch(() => {});
