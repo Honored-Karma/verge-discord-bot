@@ -16,6 +16,24 @@ import { safeAvatarUrl } from "./avatarUrl.js";
 
 const PROFILE_COLOR = 0xb209d4;
 
+export const PROFILE_INVENTORY_ID = "profile_inventory";
+
+/**
+ * Действия вынесены в отдельный ряд, ниже вкладок. Вкладки переключают вид этой
+ * же панели, а инвентарь открывает новое окно — в одном ряду эти кнопки было бы
+ * не отличить друг от друга.
+ */
+function createActions(disabled = false) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(PROFILE_INVENTORY_ID)
+      .setLabel("Инвентарь")
+      .setEmoji("🎒")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(disabled),
+  );
+}
+
 function createTabs(activePage, disabled = false) {
   const tabs = [
     { id: "profile_main", page: "main", label: "Основная", emoji: "👤" },
@@ -148,7 +166,8 @@ export function createProfileV2Components({
         .setDivider(true)
         .setSpacing(SeparatorSpacingSize.Small),
     )
-    .addActionRowComponents(createTabs(page, disabled));
+    .addActionRowComponents(createTabs(page, disabled))
+    .addActionRowComponents(createActions(disabled));
 
   return [container];
 }
