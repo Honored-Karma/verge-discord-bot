@@ -4,7 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { readdirSync } from 'fs';
 import { createServer } from 'http';
-import { connectDatabase, closeDatabase } from './utils/db.js';
+import { connectDatabase, closeDatabase, getDB } from './utils/db.js';
 import { startWeeklySalaryScheduler } from './services/salaryService.js';
 import { expireMultipliers } from './utils/dataManager.js';
 import { installModernResponseAdapter } from './utils/modernResponses.js';
@@ -14,6 +14,7 @@ import {
 } from './utils/interactionRouter.js';
 import { registerInteractionHandlers } from './interactions/index.js';
 import { ensureCardFont } from './utils/cardFont.js';
+import { initializeOrgRoles } from './utils/orgRoles.js';
 
 config();
 
@@ -103,6 +104,15 @@ client.once(Events.ClientReady, async readyClient => {
             : '⚠️  Шрифт карточек не найден — кириллица на карточках может не отрисоваться');
     } catch (fontError) {
         console.error('❌ Не удалось подготовить шрифт карточек:', fontError);
+    }
+
+    // Реестр «организация — роль» держим в базе, поэтому индекс и начальные
+    // значения проливаем на старте. Инициализация идёт здесь, а не в db.js:
+    // модуль ролей тянет dataManager, и импорт из db.js замкнул бы цикл.
+    try {
+        await initializeOrgRoles(getDB());
+    } catch (orgRoleError) {
+        console.error('❌ Не удалось подготовить реестр ролей организаций:', orgRoleError);
     }
 
     startWeeklySalaryScheduler(client);

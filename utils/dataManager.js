@@ -194,7 +194,7 @@ export async function setActiveSlot(userId, slot) {
   }
 }
 
-function logAdminAction(adminId, action, details) {
+export function logAdminAction(adminId, action, details) {
   const timestamp = Math.floor(Date.now() / 1000);
   try {
     const db = getDB();
