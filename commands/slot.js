@@ -3,6 +3,7 @@ import { getPlayer, setActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 import { makePlayerKey } from '../utils/playerKey.js';
+import { describeOrgSync, syncOrgRoles } from '../utils/orgRoles.js';
 
 export const data = new SlashCommandBuilder()
     .setName('slot')
@@ -39,8 +40,13 @@ export async function execute(interaction) {
         return;
     }
 
+    // Роль организации отражает активного персонажа, поэтому переключение слота
+    // её пересобирает: иначе игрок в Стражах ходил бы с ролью Тенрю.
+    const sync = await syncOrgRoles({ guild: interaction.guild, userId });
+    const note = describeOrgSync(sync);
+
     if (target) {
-        const msg = await interaction.reply({ embeds: [createSuccessEmbed('Слот изменён', `Теперь активен слот **${slot}** — **${target.character_name || target.username}**`, 'slot')], fetchReply: true });
+        const msg = await interaction.reply({ embeds: [createSuccessEmbed('Слот изменён', `Теперь активен слот **${slot}** — **${target.character_name || target.username}**${note ? `\n\n${note}` : ''}`, 'slot')], fetchReply: true });
         autoDeleteMessageShort(msg);
     } else {
         const msg = await interaction.reply({ embeds: [createSuccessEmbed('Слот выбран', `Теперь активен пустой слот **${slot}**. Используйте /register чтобы создать персонажа в этом слоте.`, 'slot')], fetchReply: true });
