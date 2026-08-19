@@ -1,8 +1,9 @@
-import { MessageFlags, SlashCommandBuilder } from 'discord.js';
-import { createErrorEmbed, createInfoEmbed } from '../utils/embeds.js';
+import { MessageFlags, SlashCommandBuilder, TextDisplayBuilder } from 'discord.js';
 import { checkGlobalCooldown } from '../utils/cooldowns.js';
 import { logCommand } from '../utils/logs.js';
 import { PICK_LIMITS, pickOptions, splitOptions } from '../utils/randomPick.js';
+
+const PICK_EMOJI = process.env.PICK_EMOJI || '🎯';
 
 export const data = new SlashCommandBuilder()
     .setName('pick')
@@ -28,6 +29,14 @@ export const data = new SlashCommandBuilder()
             .setDescription('Показать результат только вам (выбор попадёт в журнал для ГМ)')
             .setRequired(false));
 
+/** Тот же скромный вид, что у `/roll`: готовый V2-компонент вместо embed. */
+function plain(text, ephemeral = false) {
+    return {
+        flags: MessageFlags.IsComponentsV2 | (ephemeral ? MessageFlags.Ephemeral : 0),
+        components: [new TextDisplayBuilder().setContent(text)],
+    };
+}
+
 export async function execute(interaction) {
     const raw = interaction.options.getString('options');
     const count = interaction.options.getInteger('count') || 1;
@@ -36,52 +45,38 @@ export async function execute(interaction) {
 
     const cooldown = checkGlobalCooldown(interaction.user.id);
     if (cooldown.onCooldown) {
-        return interaction.reply({
-            content: `⏱️ Подождите **${cooldown.remainingFormatted}** перед следующим выбором.`,
-            flags: MessageFlags.Ephemeral,
-        });
+        return interaction.reply(
+            plain(`⏱️ Подождите **${cooldown.remainingFormatted}** перед следующим выбором.`, true),
+        );
     }
 
     const split = splitOptions(raw);
     if (!split.ok) {
-        return interaction.reply({
-            embeds: [createErrorEmbed('Не понял список', split.error)],
-            flags: MessageFlags.Ephemeral,
-        });
+        return interaction.reply(plain(`❌ ${split.error}`, true));
     }
 
     if (count > split.options.length) {
-        return interaction.reply({
-            embeds: [createErrorEmbed('Слишком много просите',
-                `Просите выбрать ${count}, а вариантов всего ${split.options.length}.`)],
-            flags: MessageFlags.Ephemeral,
-        });
+        return interaction.reply(plain(
+            `❌ Просите выбрать ${count}, а вариантов всего ${split.options.length}.`,
+            true,
+        ));
     }
 
     const result = pickOptions(split.options, count);
-
-    const answer = result.chosen.length === 1
-        ? `## ${result.chosen[0]}`
-        : result.chosen.map((option, index) => `**${index + 1}.** ${option}`).join('\n');
+    const answer = result.chosen.map(option => `**${option}**`).join(', ');
+    const scope = count > 1 ? `выбирает ${count} из ${result.total}` : `выбирает из ${result.total}`;
 
     // Показываем, как бот понял список: разделитель определяется автоматически,
     // и молчаливая эвристика — худшее, что можно сделать с чужим списком.
-    const footer = [
-        `-# Из ${result.total} вариантов, разделитель — ${split.separator}.`,
-        result.hasDuplicates
-            ? `Повторы оставлены как есть: уникальных ${result.uniqueCount}, они влияют на шансы.`
-            : '',
-    ].filter(Boolean).join(' ');
+    const notes = [`разделитель — ${split.separator}`];
+    if (result.hasDuplicates) {
+        notes.push(`повторы оставлены, уникальных ${result.uniqueCount}`);
+    }
 
-    const header = comment ? `**${comment}**\n` : '';
+    const head = `${PICK_EMOJI} **${interaction.user.username}** ${scope}: ${answer}`;
+    const text = `${head}${comment ? ` — ${comment}` : ''}\n-# ${notes.join(' · ')}`;
 
-    await interaction.reply({
-        embeds: [createInfoEmbed(
-            `🎯 ${interaction.user.username} выбирает`,
-            `${header}${answer}\n\n${footer}`,
-        )],
-        ...(hidden ? { flags: MessageFlags.Ephemeral } : {}),
-    });
+    await interaction.reply(plain(text, hidden));
 
     if (hidden) {
         await logCommand({

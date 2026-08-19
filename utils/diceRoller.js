@@ -3,8 +3,7 @@ import { randomInt } from "node:crypto";
 /**
  * Броски кубиков.
  *
- * Нотация писалась с оглядкой на Dice Maiden, но три его известные болячки
- * вылечены осознанно:
+ * Нотация писалась с оглядкой на Dice Maiden, но две его болячки вылечены:
  *
  * 1. У Dice Maiden буква `d` означает и кубик, и «drop lowest» (`4d6 d1`).
  *    Разработчик сам пометил это в коде как «prefix-matching hazard»: порядок
@@ -12,15 +11,13 @@ import { randomInt } from "node:crypto";
  *    отбора двухбуквенные — `kh`, `kl`, `dh`, `dl` — поэтому одинокая `d`
  *    встречается только как обозначение кубика, и грамматика однозначна.
  *
- * 2. Там неочевидно, что отбор применяется после взрывов, и «что же именно
- *    отбрасывает d1» — живой открытый вопрос в их трекере. Здесь принята одна
- *    модель: взрыв наращивает значение ТОГО ЖЕ кубика, поэтому у каждого кубика
- *    ровно одно итоговое значение, и отбор идёт по этим значениям.
- *
- * 3. Там `r` перебрасывал до бесконечности, что ломало правила систем с одним
+ * 2. Там `r` перебрасывал до бесконечности, что ломало правила систем с одним
  *    перебросом. Здесь `r` — строго один переброс, а бесконечный — отдельный `rr`.
  *
- * Порядок применения фиксирован и всегда один: бросок → перебросы → взрывы →
+ * Взрывающихся кубиков здесь сознательно нет: на этом сервере они не нужны, а
+ * значение кубика больше числа его граней игроков только путало.
+ *
+ * Порядок применения фиксирован и всегда один: бросок → перебросы →
  * отбор keep/drop → сумма с арифметикой (или подсчёт успехов).
  */
 
@@ -32,12 +29,11 @@ export const LIMITS = {
   maxDice: 100,
   minSides: 2,
   maxSides: 1000,
-  maxExplosions: 50,
   maxRerolls: 50,
   shownDice: 20,
 };
 
-const MOD_PATTERN = /^(?:(kh|kl|dh|dl|rr|r|t|f)(\d+)|(!)(\d*))/;
+const MOD_PATTERN = /^(kh|kl|dh|dl|rr|r|t|f)(\d+)/;
 
 /**
  * Приводит запись к машинному виду. Пробелы удаляются целиком, поэтому
@@ -68,16 +64,9 @@ function parseModifiers(source, cursor, term) {
     const match = rest.match(MOD_PATTERN);
     if (!match) break;
 
-    const [whole, word, wordValue, bang, bangValue] = match;
+    const [whole, word, wordValue] = match;
 
-    if (bang) {
-      const threshold = bangValue ? Number(bangValue) : term.sides;
-      if (threshold < 2) return fail("Взрыв на 1 никогда не остановится — укажите порог больше 1.");
-      if (threshold > term.sides) {
-        return fail(`Взрыв на ${threshold} невозможен: у d${term.sides} нет такой грани.`);
-      }
-      term.explodeAt = threshold;
-    } else {
+    {
       const value = Number(wordValue);
       switch (word) {
         case "kh": case "kl": case "dh": case "dl":
@@ -126,6 +115,12 @@ function parseModifiers(source, cursor, term) {
 export function parseExpression(input) {
   const source = normalizeExpression(input);
   if (!source) return fail("Пустое выражение. Пример: `2d6+3`.");
+
+  // Взрывы отключены, но `!` успел побывать в шпаргалке и остаться у игроков в
+  // привычке. Общее «не понимаю запись» выглядело бы тут поломкой бота.
+  if (source.includes("!")) {
+    return fail("Взрывающиеся кубики отключены — уберите `!` из записи.");
+  }
 
   let cursor = 0;
   let repeat = 1;
@@ -248,7 +243,7 @@ function rollTerm(term, rng) {
 
   for (let index = 0; index < term.count; index += 1) {
     let value = rollOne(term.sides, rng);
-    const die = { value, rerolled: false, exploded: 0, dropped: false };
+    const die = { value, rerolled: false, dropped: false };
 
     // 1. Перебросы. `r` — строго один раз, `rr` — до успеха, но с потолком:
     //    без него `rr` на неудачном пороге висел бы вечно.
@@ -265,30 +260,11 @@ function rollTerm(term, rng) {
       );
     }
 
-    // 2. Взрывы наращивают значение этого же кубика, поэтому у кубика остаётся
-    //    ровно одно итоговое число и отбор ниже работает предсказуемо.
-    //
-    //    Слагаемые запоминаются: без них игрок видит на 3d6 значение вроде 11 и
-    //    не понимает, откуда оно взялось. Живой вопрос из чата, не гипотеза.
-    if (term.explodeAt) {
-      const parts = [value];
-      let last = value;
-      let bursts = 0;
-      while (last >= term.explodeAt && bursts < LIMITS.maxExplosions) {
-        last = rollOne(term.sides, rng);
-        value += last;
-        parts.push(last);
-        bursts += 1;
-      }
-      die.exploded = bursts;
-      if (bursts > 0) die.parts = parts;
-    }
-
     die.value = value;
     dice.push(die);
   }
 
-  // 3. Отбор по итоговым значениям кубиков.
+  // 2. Отбор по значениям кубиков.
   if (term.select) {
     const order = dice
       .map((die, index) => ({ index, value: die.value }))
@@ -351,19 +327,9 @@ export function rollExpression(spec, rng = null) {
 
 // ── Оформление ───────────────────────────────────────────────────────────────
 
-/**
- * Один кубик в выводе.
- *
- * У взорвавшегося кубика показываются слагаемые: «11💥(6+5)». Одного значка
- * недостаточно — он сообщает, что взрыв был, но не объясняет, почему на d6
- * оказалось 11, и игрок идёт спрашивать.
- */
+/** Один кубик в выводе: отброшенный зачёркнут, переброшенный со стрелкой. */
 function formatDie(die) {
   if (die.dropped) return `~~${die.value}~~`;
-  if (die.exploded > 0) {
-    const parts = die.parts?.length ? `(${die.parts.join("+")})` : "";
-    return `**${die.value}**💥${parts}`;
-  }
   if (die.rerolled) return `${die.value}↻`;
   return String(die.value);
 }
@@ -376,85 +342,70 @@ function formatDiceList(dice) {
 }
 
 /**
- * Легенда под броском — только для тех пометок, что реально встретились.
- * Постоянная простыня пояснений быстро становится шумом, а разовое «что это за
- * значок» стоит объяснить сразу, в том же сообщении.
+ * Раскладка набора без итога: «[3, ~~1~~, 6, 5]» или «[5, 5] + [4] + 3».
+ *
+ * Подпись терма (`4d6dl1`) здесь намеренно не повторяется: сама запись броска
+ * уже показана в начале строки, и дублировать её значило бы удваивать длину
+ * ради нуля новой информации.
  */
-export function legendFor(results) {
-  const dice = results
-    .flatMap((result) => result.sets)
-    .flatMap((set) => set.rolls)
-    .flatMap((roll) => roll.dice || []);
-
-  const notes = [];
-  if (dice.some((die) => die.exploded > 0)) {
-    notes.push("💥 выпал максимум — кубик бросился ещё раз, броски сложены");
-  }
-  if (dice.some((die) => die.rerolled)) notes.push("↻ кубик переброшен");
-  if (dice.some((die) => die.dropped)) notes.push("зачёркнутые кубики отброшены");
-
-  return notes.length > 0 ? `-# ${notes.join(" · ")}` : "";
-}
-
-function termLabel(term) {
-  const parts = [`${term.count}d${term.sides}`];
-  if (term.reroll) parts.push(`${term.reroll.repeat ? "rr" : "r"}${term.reroll.threshold}`);
-  if (term.explodeAt) parts.push(term.explodeAt === term.sides ? "!" : `!${term.explodeAt}`);
-  if (term.select) parts.push(`${term.select.mode}${term.select.count}`);
-  if (term.success) parts.push(`t${term.success}`);
-  if (term.failure) parts.push(`f${term.failure}`);
-  return parts.join("");
-}
-
-/** Текст одного набора: раскладка по кубикам и итог. */
-export function formatSet(set) {
+function formatBody(set) {
   const pieces = [];
 
   for (const roll of set.rolls) {
-    const sign = roll.term.sign < 0 ? "−" : "+";
-    const prefix = pieces.length === 0 ? (roll.term.sign < 0 ? "−" : "") : ` ${sign} `;
+    const negative = roll.term.sign < 0;
+    const prefix = pieces.length === 0
+      ? (negative ? "−" : "")
+      : (negative ? " − " : " + ");
 
-    if (roll.mode === "const") {
-      pieces.push(`${prefix}${roll.total}`);
-      continue;
-    }
-    pieces.push(`${prefix}${termLabel(roll.term)} ${formatDiceList(roll.dice)}`);
+    pieces.push(roll.mode === "const"
+      ? `${prefix}${roll.total}`
+      : `${prefix}${formatDiceList(roll.dice)}`);
   }
 
-  const body = pieces.join("");
-
-  if (set.counting) {
-    const { successes, failures, term } = set.counting;
-    if (term.failure) {
-      return `${body}\n→ итог: **${set.total}** (успехов ${successes}, провалов ${failures})`;
-    }
-    return `${body}\n→ успехов: **${successes}**`;
-  }
-
-  return `${body}\n→ **${set.total}**`;
+  return pieces.join("");
 }
 
-/** Полный текст результата: все выражения и все их наборы. */
+function formatTotal(set) {
+  if (!set.counting) return `= **${set.total}**`;
+
+  const { successes, failures, term } = set.counting;
+  if (term.failure) {
+    return `= **${set.total}** (успехов ${successes}, провалов ${failures})`;
+  }
+  return `= успехов **${successes}**`;
+}
+
+/** Одна строка результата: раскладка и итог, без записи броска. */
+export function formatSet(set) {
+  return `${formatBody(set)} ${formatTotal(set)}`;
+}
+
+/**
+ * Итоговый текст броска — одной строкой на выражение.
+ *
+ * Вид сознательно скромный: `4d6dl1` → [3, ~~1~~, 6, 5] = **14**. Броски в
+ * отыгрыше идут пачками, и каждый в рамке с заголовком забивал бы канал.
+ */
 export function formatRollResult(results) {
-  const blocks = [];
+  const lines = [];
 
   for (const result of results) {
+    const label = `\`${result.source}\``;
+
     if (result.repeat === 1) {
-      blocks.push(formatSet(result.sets[0]));
+      lines.push(`${label} → ${formatSet(result.sets[0])}`);
       continue;
     }
-    const lines = result.sets.map((set, index) => {
-      const label = `**${index + 1}.** `;
-      return label + formatSet(set).replace("\n→ ", " → ");
-    });
+
     const grand = result.sets.reduce((sum, set) => sum + set.total, 0);
-    blocks.push(`\`${result.source}\` ×${result.repeat}\n${lines.join("\n")}\nСумма всех: **${grand}**`);
+    lines.push(`${label} ×${result.repeat}`);
+    result.sets.forEach((set, index) => {
+      lines.push(`**${index + 1}.** ${formatSet(set)}`);
+    });
+    lines.push(`Всего: **${grand}**`);
   }
 
-  const legend = legendFor(results);
-  if (legend) blocks.push(legend);
-
-  return blocks.join("\n\n");
+  return lines.join("\n");
 }
 
 /**
@@ -467,6 +418,6 @@ export function formatRollResult(results) {
 export function looksLikeOptionList(input) {
   const raw = String(input || "").trim();
   if (!raw) return false;
-  if (/^[\d\s+\-*/#;dкдhх!ktfrl%]+$/i.test(raw)) return false;
+  if (/^[\d\s+\-*/#;dдktfrlh%]+$/i.test(raw)) return false;
   return /[,|]/.test(raw) || raw.split(/\s+/).filter(Boolean).length >= 2;
 }
