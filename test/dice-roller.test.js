@@ -227,6 +227,9 @@ test("вывод показывает каждый кубик и помечае�
   const exploded = formatSet(rollSpec(spec("1d6!"), scripted([6, 6, 2])));
   assert.match(exploded, /💥/, "взрыв должен быть заметен");
   assert.match(exploded, /14/);
+  // Живой вопрос из чата: «откуда 11 на 3d6». Одного значка мало — нужны
+  // слагаемые, иначе игрок не понимает результат своего же броска.
+  assert.match(exploded, /\(6\+6\+2\)/, "у взорвавшегося кубика должна быть видна арифметика");
 
   const rerolled = formatSet(rollSpec(spec("1d6r2"), scripted([1, 5])));
   assert.match(rerolled, /5↻/, "переброшенный кубик помечается");
@@ -243,6 +246,28 @@ test("вывод показывает каждый кубик и помечае�
   const sets = formatRollResult([rollExpression(spec("3#1d6"), scripted([1, 2, 3]))]);
   assert.match(sets, /\*\*1\.\*\*/);
   assert.match(sets, /Сумма всех: \*\*6\*\*/);
+});
+
+test("легенда объясняет только те пометки, что реально встретились", () => {
+  const explode = formatRollResult([rollExpression(spec("1d6!"), scripted([6, 2]))]);
+  assert.match(explode, /💥 выпал максимум/, "взрыв нужно объяснить тут же");
+  assert.ok(!explode.includes("переброшен"), "лишних пояснений быть не должно");
+  assert.ok(!explode.includes("отброшены"));
+
+  const drop = formatRollResult([rollExpression(spec("4d6dl1"), scripted([4, 1, 6, 3]))]);
+  assert.match(drop, /зачёркнутые кубики отброшены/);
+  assert.ok(!drop.includes("💥"));
+
+  const reroll = formatRollResult([rollExpression(spec("1d6r2"), scripted([1, 5]))]);
+  assert.match(reroll, /↻ кубик переброшен/);
+
+  // У обычного броска пояснять нечего — постоянная простыня стала бы шумом.
+  const plain = formatRollResult([rollExpression(spec("2d6+3"), scripted([2, 5]))]);
+  assert.ok(!plain.includes("-#"), `лишняя легенда: ${plain}`);
+
+  // Легенда идёт одним блоком, а не повторяется у каждого набора.
+  const sets = formatRollResult([rollExpression(spec("3#1d6!"), scripted([6, 1, 2, 3]))]);
+  assert.equal(sets.match(/💥 выпал максимум/g).length, 1);
 });
 
 test("список вариантов в броске подсказывает нужную команду", () => {

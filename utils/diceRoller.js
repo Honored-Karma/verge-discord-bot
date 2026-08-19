@@ -267,15 +267,21 @@ function rollTerm(term, rng) {
 
     // 2. Взрывы наращивают значение этого же кубика, поэтому у кубика остаётся
     //    ровно одно итоговое число и отбор ниже работает предсказуемо.
+    //
+    //    Слагаемые запоминаются: без них игрок видит на 3d6 значение вроде 11 и
+    //    не понимает, откуда оно взялось. Живой вопрос из чата, не гипотеза.
     if (term.explodeAt) {
+      const parts = [value];
       let last = value;
       let bursts = 0;
       while (last >= term.explodeAt && bursts < LIMITS.maxExplosions) {
         last = rollOne(term.sides, rng);
         value += last;
+        parts.push(last);
         bursts += 1;
       }
       die.exploded = bursts;
+      if (bursts > 0) die.parts = parts;
     }
 
     die.value = value;
@@ -345,9 +351,19 @@ export function rollExpression(spec, rng = null) {
 
 // ── Оформление ───────────────────────────────────────────────────────────────
 
+/**
+ * Один кубик в выводе.
+ *
+ * У взорвавшегося кубика показываются слагаемые: «11💥(6+5)». Одного значка
+ * недостаточно — он сообщает, что взрыв был, но не объясняет, почему на d6
+ * оказалось 11, и игрок идёт спрашивать.
+ */
 function formatDie(die) {
   if (die.dropped) return `~~${die.value}~~`;
-  if (die.exploded > 0) return `**${die.value}**💥`;
+  if (die.exploded > 0) {
+    const parts = die.parts?.length ? `(${die.parts.join("+")})` : "";
+    return `**${die.value}**💥${parts}`;
+  }
   if (die.rerolled) return `${die.value}↻`;
   return String(die.value);
 }
@@ -357,6 +373,27 @@ function formatDiceList(dice) {
   const hidden = dice.length - shown.length;
   const tail = hidden > 0 ? `, …ещё ${hidden}` : "";
   return `[${shown.join(", ")}${tail}]`;
+}
+
+/**
+ * Легенда под броском — только для тех пометок, что реально встретились.
+ * Постоянная простыня пояснений быстро становится шумом, а разовое «что это за
+ * значок» стоит объяснить сразу, в том же сообщении.
+ */
+export function legendFor(results) {
+  const dice = results
+    .flatMap((result) => result.sets)
+    .flatMap((set) => set.rolls)
+    .flatMap((roll) => roll.dice || []);
+
+  const notes = [];
+  if (dice.some((die) => die.exploded > 0)) {
+    notes.push("💥 выпал максимум — кубик бросился ещё раз, броски сложены");
+  }
+  if (dice.some((die) => die.rerolled)) notes.push("↻ кубик переброшен");
+  if (dice.some((die) => die.dropped)) notes.push("зачёркнутые кубики отброшены");
+
+  return notes.length > 0 ? `-# ${notes.join(" · ")}` : "";
 }
 
 function termLabel(term) {
@@ -413,6 +450,9 @@ export function formatRollResult(results) {
     const grand = result.sets.reduce((sum, set) => sum + set.total, 0);
     blocks.push(`\`${result.source}\` ×${result.repeat}\n${lines.join("\n")}\nСумма всех: **${grand}**`);
   }
+
+  const legend = legendFor(results);
+  if (legend) blocks.push(legend);
 
   return blocks.join("\n\n");
 }
