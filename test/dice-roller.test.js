@@ -76,25 +76,34 @@ test("буква d однозначна: кубик отдельно, отбра
 });
 
 test("порядок применения модификаторов зафиксирован", () => {
-  // Взрыв наращивает значение ТОГО ЖЕ кубика, а отбор идёт по итоговым
-  // значениям. В Dice Maiden именно эта связка вызывает открытый вопрос
-  // «что же отбрасывает d1»; здесь модель одна и проверяема.
-  const explode = rollSpec(spec("3d6!kh1"), scripted([6, 6, 3, 2, 5]));
-  //  кубик 1: 6 → взрыв 6 → взрыв 3 (остановка) = 15
-  //  кубик 2: 2
+  // Переброс заменяет значение кубика, и отбор работает уже по новому значению.
+  const reroll = rollSpec(spec("3d6r2kh1"), scripted([1, 6, 3, 5]));
+  //  кубик 1: 1 → ≤2 → переброс 6
+  //  кубик 2: 3 — порог не задет, переброса нет
   //  кубик 3: 5
-  const values = explode.rolls[0].dice.map((die) => die.value);
-  assert.deepEqual(values, [15, 2, 5]);
-  // kh1 оставляет только 15 — отбор увидел итоговое значение, а не первый бросок.
-  assert.deepEqual(explode.rolls[0].dice.map((die) => die.dropped), [false, true, true]);
-  assert.equal(explode.total, 15);
-
-  // Переброс происходит ДО взрыва и заменяет значение, а не добавляет.
-  const reroll = rollSpec(spec("1d6r2!"), scripted([1, 6, 6, 4]));
-  //  бросок 1 → ≤2 → переброс 6 → взрыв 6 → взрыв 4 = 16
-  assert.equal(reroll.rolls[0].dice[0].value, 16);
+  assert.deepEqual(reroll.rolls[0].dice.map((die) => die.value), [6, 3, 5]);
   assert.equal(reroll.rolls[0].dice[0].rerolled, true);
-  assert.equal(reroll.rolls[0].dice[0].exploded, 2);
+  // kh1 оставил переброшенную шестёрку, а не исходную единицу.
+  assert.deepEqual(reroll.rolls[0].dice.map((die) => die.dropped), [false, true, true]);
+  assert.equal(reroll.total, 6);
+});
+
+test("взрывающиеся кубики отключены и объясняют это прямо", () => {
+  // Модификатор успел побывать в шпаргалке, поэтому общее «не понимаю запись»
+  // выглядело бы поломкой бота.
+  for (const input of ["3d6!", "3d6!5", "4d6dl1!", "2d6! + 1"]) {
+    const parsed = parseExpression(input);
+    assert.equal(parsed.ok, false, `должно было отказать: ${input}`);
+    assert.match(parsed.error, /Взрывающиеся кубики отключены/, `неясный текст для ${input}`);
+  }
+
+  // Значение кубика больше не может превысить число граней.
+  for (let attempt = 0; attempt < 500; attempt += 1) {
+    const set = rollSpec(spec("3d6"));
+    for (const die of set.rolls[0].dice) {
+      assert.ok(die.value >= 1 && die.value <= 6, `значение вне d6: ${die.value}`);
+    }
+  }
 });
 
 test("r перебрасывает один раз, rr — пока не перестанет", () => {
@@ -180,8 +189,6 @@ test("границы заданы и объясняются человеческ
     [`${LIMITS.maxRepeat + 1}#2d6`, /Слишком много наборов/],
     ["4d6dl9", /кубиков всего 4/],
     ["4d6kh4", /кубиков всего 4/],
-    ["3d6!1", /Взрыв на 1/],
-    ["3d6!9", /нет такой грани/],
     ["2d6rr6", /без остановки/],
     ["2d6r0", /не меньше 1/],
     ["5d10t11", /вне диапазона/],
@@ -206,68 +213,64 @@ test("границы заданы и объясняются человеческ
   assert.match(parseRollInput("1d6;1d6;1d6;1d6;1d6").error, /Слишком много выражений/);
 });
 
-test("бесконечные перебросы и взрывы упираются в потолок", () => {
-  // Сценарий, где кубик всегда даёт максимум: без потолка это вечный цикл.
-  const alwaysMax = () => 6;
-  const exploded = rollSpec(spec("1d6!"), alwaysMax);
-  assert.equal(exploded.rolls[0].dice[0].exploded, LIMITS.maxExplosions);
-  assert.equal(exploded.rolls[0].dice[0].value, 6 * (LIMITS.maxExplosions + 1));
-
+test("бесконечный переброс упирается в потолок", () => {
   const alwaysOne = () => 1;
   const rerolled = rollSpec(spec("1d6rr1"), alwaysOne);
   assert.equal(rerolled.rolls[0].dice[0].value, 1, "переброс сдаётся и оставляет последнее значение");
 });
 
-test("вывод показывает каждый кубик и помечает судьбу каждого", () => {
-  const dropped = formatSet(rollSpec(spec("4d6dl1"), scripted([4, 1, 6, 3])));
+test("вывод скромный: одна строка, запись броска и судьба каждого кубика", () => {
+  const dropped = formatRollResult([rollExpression(spec("4d6dl1"), scripted([4, 1, 6, 3]))]);
   assert.match(dropped, /~~1~~/, "отброшенный кубик обязан быть зачёркнут");
-  assert.match(dropped, /\*\*13\*\*/, "итог выделяется");
-  assert.match(dropped, /4d6dl1/, "видно, что именно бросали");
+  assert.match(dropped, /= \*\*13\*\*/, "итог выделяется");
+  assert.match(dropped, /`4d6dl1`/, "видно, что именно бросали");
+  // Ровно одна строка: броски в отыгрыше идут пачками, лишние переводы строки
+  // раздувают канал.
+  assert.equal(dropped.split("\n").length, 1, `ожидалась одна строка: ${dropped}`);
 
-  const exploded = formatSet(rollSpec(spec("1d6!"), scripted([6, 6, 2])));
-  assert.match(exploded, /💥/, "взрыв должен быть заметен");
-  assert.match(exploded, /14/);
-  // Живой вопрос из чата: «откуда 11 на 3d6». Одного значка мало — нужны
-  // слагаемые, иначе игрок не понимает результат своего же броска.
-  assert.match(exploded, /\(6\+6\+2\)/, "у взорвавшегося кубика должна быть видна арифметика");
+  // Подпись терма внутри строки не дублируется — запись уже показана в начале.
+  assert.equal((dropped.match(/4d6dl1/g) || []).length, 1);
 
-  const rerolled = formatSet(rollSpec(spec("1d6r2"), scripted([1, 5])));
+  const rerolled = formatRollResult([rollExpression(spec("1d6r2"), scripted([1, 5]))]);
   assert.match(rerolled, /5↻/, "переброшенный кубик помечается");
 
-  // Подпись терма перечисляет все модификаторы, включая подсчёт успехов.
-  assert.match(formatSet(rollSpec(spec("5d10t8f1"), scripted([10, 8, 7, 1, 2]))), /5d10t8f1/);
+  // Слагаемые выражения разделены знаками, а не свалены в один список.
+  const mixed = formatRollResult([rollExpression(spec("2d6+1d4+3"), scripted([5, 5, 4]))]);
+  assert.match(mixed, /\[5, 5\] \+ \[4\] \+ 3 = \*\*17\*\*/);
+
+  const negative = formatRollResult([rollExpression(spec("2d6-1d4"), scripted([5, 5, 3]))]);
+  assert.match(negative, /\[5, 5\] − \[3\] = \*\*7\*\*/);
+
+  // Успехи читаются словами, а не голым числом.
+  assert.match(
+    formatRollResult([rollExpression(spec("5d10t8"), scripted([10, 8, 7, 1, 2]))]),
+    /= успехов \*\*2\*\*/,
+  );
+  assert.match(
+    formatRollResult([rollExpression(spec("5d10t8f1"), scripted([10, 8, 7, 1, 2]))]),
+    /= \*\*1\*\* \(успехов 2, провалов 1\)/,
+  );
 
   // Большой пул не выливается в чат целиком.
   const huge = formatSet(rollSpec(spec("60d6"), () => 3));
   assert.match(huge, /…ещё 40/);
   assert.ok(huge.length < 500, `слишком длинный вывод: ${huge.length}`);
 
-  // Несколько наборов подписаны номерами и имеют общий итог.
+  // Наборы подписаны номерами, запись показана один раз, снизу общий итог.
   const sets = formatRollResult([rollExpression(spec("3#1d6"), scripted([1, 2, 3]))]);
-  assert.match(sets, /\*\*1\.\*\*/);
-  assert.match(sets, /Сумма всех: \*\*6\*\*/);
-});
+  const lines = sets.split("\n");
+  assert.equal(lines[0], "`3#1d6` ×3");
+  assert.match(lines[1], /^\*\*1\.\*\* \[1\] = \*\*1\*\*$/);
+  assert.equal(lines.at(-1), "Всего: **6**");
 
-test("легенда объясняет только те пометки, что реально встретились", () => {
-  const explode = formatRollResult([rollExpression(spec("1d6!"), scripted([6, 2]))]);
-  assert.match(explode, /💥 выпал максимум/, "взрыв нужно объяснить тут же");
-  assert.ok(!explode.includes("переброшен"), "лишних пояснений быть не должно");
-  assert.ok(!explode.includes("отброшены"));
+  // Несколько выражений — по строке на каждое, без пустых разделителей.
+  const multi = parseRollInput("1d20+5; 2d6");
+  const both = formatRollResult(multi.specs.map((item) => rollExpression(item, () => 3)));
+  assert.equal(both.split("\n").length, 2, `ожидались две строки: ${both}`);
 
-  const drop = formatRollResult([rollExpression(spec("4d6dl1"), scripted([4, 1, 6, 3]))]);
-  assert.match(drop, /зачёркнутые кубики отброшены/);
-  assert.ok(!drop.includes("💥"));
-
-  const reroll = formatRollResult([rollExpression(spec("1d6r2"), scripted([1, 5]))]);
-  assert.match(reroll, /↻ кубик переброшен/);
-
-  // У обычного броска пояснять нечего — постоянная простыня стала бы шумом.
-  const plain = formatRollResult([rollExpression(spec("2d6+3"), scripted([2, 5]))]);
-  assert.ok(!plain.includes("-#"), `лишняя легенда: ${plain}`);
-
-  // Легенда идёт одним блоком, а не повторяется у каждого набора.
-  const sets = formatRollResult([rollExpression(spec("3#1d6!"), scripted([6, 1, 2, 3]))]);
-  assert.equal(sets.match(/💥 выпал максимум/g).length, 1);
+  // Никаких сносок-легенд: зачёркивание и стрелка читаются сами.
+  assert.ok(!dropped.includes("-#"), `лишняя сноска: ${dropped}`);
+  assert.ok(!rerolled.includes("-#"));
 });
 
 test("список вариантов в броске подсказывает нужную команду", () => {
