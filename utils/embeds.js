@@ -7,6 +7,7 @@ import {
 import { getReputationTier } from "./dataManager.js";
 import { isValidCharacterUrl, physicalStatsSummary } from "./physicalStats.js";
 import { getAdaptiveProgressScale } from "./progressScale.js";
+import { getSPMastery } from "./spMastery.js";
 
 const BANNERS = {
   default: "https://iili.io/BP3OOut.png",
@@ -604,11 +605,15 @@ function createSPProgressBar(sp) {
   return `${filled}${empty} ${percentage.toFixed(0)}% (${sp}/${nextTarget})`;
 }
 
+// Пороги мастерства живут только в utils/spMastery.js — здесь лишь адаптер
+// под форму, которую ожидает страница профиля.
 function getSPRankInfo(sp) {
-  if (sp >= 2500) return { rank: "Мастер", emoji: "🔴", nextThreshold: 2500 };
-  if (sp >= 1000) return { rank: "Эксперт", emoji: "🟠", nextThreshold: 2500 };
-  if (sp >= 350) return { rank: "Владелец", emoji: "🟡", nextThreshold: 1000 };
-  return { rank: "Новичок", emoji: "⚪", nextThreshold: 350 };
+  const mastery = getSPMastery(sp);
+  return {
+    rank: mastery.rank,
+    emoji: mastery.emoji,
+    nextThreshold: mastery.nextThreshold,
+  };
 }
 
 export function createProfilePhysicalPage(player, user, renderedCard = false) {

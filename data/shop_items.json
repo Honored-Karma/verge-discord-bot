@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 3,
   "categories": [
     {
       "id": "scrolls",
@@ -24,12 +24,6 @@
       "name": "Лаборатория мутаций",
       "emoji": "🧬",
       "description": "Рискованные постоянные изменения с обязательным недостатком и проверкой стаффа."
-    },
-    {
-      "id": "artifacts",
-      "name": "Брокер артефактов",
-      "emoji": "💠",
-      "description": "Редкие заказы. Деньги резервируются, а свойства утверждает Глава анкетологов или администратор."
     }
   ],
   "items": [
@@ -40,9 +34,13 @@
       "emoji": "📘",
       "rarity": "uncommon",
       "description": "Мгновенно добавляет 25 AP активному персонажу при использовании.",
-      "price_yen": 250000,
+      "price_yen": 20000000,
       "weekly_limit": 2,
-      "delivery": { "kind": "inventory", "item_name": "AP Tome (25)" }
+      "delivery": {
+        "kind": "inventory",
+        "item_name": "AP Tome (25)"
+      },
+      "cooldown_hours": 72
     },
     {
       "id": "ap_tome_50",
@@ -51,9 +49,13 @@
       "emoji": "📕",
       "rarity": "rare",
       "description": "Мгновенно добавляет 50 AP. Дорогой способ ускорить развитие, но не заменить отыгрыш.",
-      "price_yen": 700000,
+      "price_yen": 38000000,
       "weekly_limit": 1,
-      "delivery": { "kind": "inventory", "item_name": "AP Tome (50)" }
+      "delivery": {
+        "kind": "inventory",
+        "item_name": "AP Tome (50)"
+      },
+      "cooldown_hours": 72
     },
     {
       "id": "sp_scroll_20",
@@ -62,9 +64,13 @@
       "emoji": "🥋",
       "rarity": "rare",
       "description": "После покупки выберите изученный стиль. Свиток добавит ему 20 SP при использовании.",
-      "price_yen": 400000,
+      "price_yen": 22000000,
       "weekly_limit": 2,
-      "delivery": { "kind": "sp_scroll", "amount": 20 }
+      "delivery": {
+        "kind": "sp_scroll",
+        "amount": 20
+      },
+      "cooldown_hours": 72
     },
     {
       "id": "focus_elixir_12h",
@@ -73,15 +79,19 @@
       "emoji": "🧪",
       "rarity": "rare",
       "description": "На 12 часов добавляет 15% к наградам обычных AP- и SP-тренировок.",
-      "price_yen": 350000,
+      "price_yen": 5000000,
       "weekly_limit": 2,
       "delivery": {
         "kind": "active_effect",
         "effect_key": "focus_elixir_15",
-        "applies_to": ["ap", "sp"],
+        "applies_to": [
+          "ap",
+          "sp"
+        ],
         "bonus_percent": 15,
         "duration_seconds": 43200
-      }
+      },
+      "cooldown_hours": 72
     },
     {
       "id": "majinin_serum_24h",
@@ -90,15 +100,19 @@
       "emoji": "⚗️",
       "rarity": "epic",
       "description": "На 24 часа добавляет 25% к наградам обычных AP- и SP-тренировок. Не складывается с другими эликсирами.",
-      "price_yen": 900000,
+      "price_yen": 10000000,
       "weekly_limit": 1,
       "delivery": {
         "kind": "active_effect",
         "effect_key": "majinin_serum_25",
-        "applies_to": ["ap", "sp"],
+        "applies_to": [
+          "ap",
+          "sp"
+        ],
         "bonus_percent": 25,
         "duration_seconds": 86400
-      }
+      },
+      "cooldown_hours": 72
     },
     {
       "id": "civilian_prosthesis",
@@ -107,9 +121,14 @@
       "emoji": "🦿",
       "rarity": "uncommon",
       "description": "Сюжетный протез без сильной боевой способности. После покупки упомяните Главу анкетологов или администратора для оформления.",
-      "price_yen": 1200000,
+      "price_yen": 30000000,
       "weekly_limit": 1,
-      "delivery": { "kind": "order", "order_type": "cyber_prosthesis", "tier": "civilian" }
+      "delivery": {
+        "kind": "order",
+        "order_type": "cyber_prosthesis",
+        "tier": "civilian"
+      },
+      "cooldown_hours": 0
     },
     {
       "id": "combat_prosthesis",
@@ -118,9 +137,14 @@
       "emoji": "🦾",
       "rarity": "epic",
       "description": "Протез с одной утверждаемой боевой особенностью и ограничением. После покупки упомяните Главу анкетологов или администратора для выдачи.",
-      "price_yen": 5000000,
+      "price_yen": 90000000,
       "weekly_limit": 1,
-      "delivery": { "kind": "order", "order_type": "cyber_prosthesis", "tier": "combat" }
+      "delivery": {
+        "kind": "order",
+        "order_type": "cyber_prosthesis",
+        "tier": "combat"
+      },
+      "cooldown_hours": 0
     },
     {
       "id": "controlled_mutation",
@@ -129,42 +153,14 @@
       "emoji": "🧬",
       "rarity": "epic",
       "description": "Одно преимущество и один обязательный недостаток. После покупки упомяните Главу анкетологов или администратора для согласования.",
-      "price_yen": 8000000,
+      "price_yen": 150000000,
       "weekly_limit": 1,
-      "delivery": { "kind": "order", "order_type": "mutation", "tier": "controlled" }
-    },
-    {
-      "id": "weak_artifact_order",
-      "category": "artifacts",
-      "name": "Заказ слабого артефакта",
-      "emoji": "🔹",
-      "rarity": "rare",
-      "description": "До одной способности. После покупки упомяните Главу анкетологов или администратора: артефакт выдаётся только после утверждения.",
-      "price_yen": 5000000,
-      "weekly_limit": 1,
-      "delivery": { "kind": "order", "order_type": "artifact", "tier": "weak" }
-    },
-    {
-      "id": "medium_artifact_order",
-      "category": "artifacts",
-      "name": "Заказ среднего артефакта",
-      "emoji": "🔷",
-      "rarity": "epic",
-      "description": "До двух способностей, сюжетное основание и ограничения. После покупки упомяните Главу анкетологов или администратора для утверждения и выдачи.",
-      "price_yen": 15000000,
-      "weekly_limit": 1,
-      "delivery": { "kind": "order", "order_type": "artifact", "tier": "medium" }
-    },
-    {
-      "id": "strong_artifact_order",
-      "category": "artifacts",
-      "name": "Заказ сильного артефакта",
-      "emoji": "💠",
-      "rarity": "legendary",
-      "description": "До трёх способностей, серьёзная цена использования и сюжетное условие. Покупка создаёт заявку; упомяните Главу анкетологов или администратора для решения о выдаче.",
-      "price_yen": 50000000,
-      "weekly_limit": 1,
-      "delivery": { "kind": "order", "order_type": "artifact", "tier": "strong" }
+      "delivery": {
+        "kind": "order",
+        "order_type": "mutation",
+        "tier": "controlled"
+      },
+      "cooldown_hours": 0
     }
   ]
 }

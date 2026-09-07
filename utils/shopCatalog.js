@@ -10,6 +10,25 @@ const RARITIES = {
   legendary: { name: "Легендарный", emoji: "🟠", color: 0xf59e0b },
 };
 
+// Год — заведомо достаточный потолок: всё, что дольше, почти наверняка опечатка
+// в часах вместо суток.
+const MAX_COOLDOWN_HOURS = 8760;
+
+export function isValidCooldown(value) {
+  const hours = Number(value);
+  return Number.isSafeInteger(hours) && hours >= 0 && hours <= MAX_COOLDOWN_HOURS;
+}
+
+export function normalizeCooldownHours(value) {
+  const hours = Number(value);
+  return isValidCooldown(hours) ? hours : 0;
+}
+
+/** Кулдаун товара в миллисекундах; 0 означает «без кулдауна». */
+export function shopCooldownMs(item) {
+  return normalizeCooldownHours(item?.cooldown_hours) * 60 * 60 * 1000;
+}
+
 function loadCatalog() {
   const file = readFileSync(
     new URL("../data/shop_items.json", import.meta.url),
@@ -53,6 +72,9 @@ for (const item of CATALOG.items) {
   }
   if (!Number.isSafeInteger(item.weekly_limit) || item.weekly_limit < 1) {
     throw new Error(`Invalid weekly limit for shop item ${item.id}`);
+  }
+  if (item.cooldown_hours !== undefined && !isValidCooldown(item.cooldown_hours)) {
+    throw new Error(`Invalid cooldown for shop item ${item.id}`);
   }
   if (!item.delivery?.kind) throw new Error(`Missing delivery for shop item ${item.id}`);
   if (!RARITIES[item.rarity]) throw new Error(`Invalid rarity for shop item ${item.id}`);
@@ -124,6 +146,10 @@ export function validateShopCatalogItem(item) {
   if (item.stock !== null && (!Number.isSafeInteger(Number(item.stock)) || Number(item.stock) < 0)) {
     return { valid: false, reason: "invalid_stock" };
   }
+  if (item.cooldown_hours !== undefined && item.cooldown_hours !== null
+    && !isValidCooldown(item.cooldown_hours)) {
+    return { valid: false, reason: "invalid_cooldown" };
+  }
   const delivery = item.delivery;
   if (!delivery?.kind) return { valid: false, reason: "invalid_delivery" };
   if (delivery.kind === "inventory") {
@@ -158,6 +184,7 @@ function catalogDocument(item) {
     enabled: item.enabled !== false,
     archived: item.archived === true,
     stock: item.stock === null || item.stock === undefined ? null : Number(item.stock),
+    cooldown_hours: normalizeCooldownHours(item.cooldown_hours),
     sold_count: Math.max(0, Number(item.sold_count || 0)),
     version: Math.max(1, Number(item.version || 1)),
   };
@@ -188,7 +215,106 @@ export async function initializeShopCatalog(db) {
       },
     })));
   }
+  await applyCatalogRevision(db);
   return refreshShopCatalog(db);
+}
+
+/**
+ * Разовая синхронизация каталога с файлом при росте номера ревизии.
+ *
+ * Сидирование выше идёт через `$setOnInsert`, поэтому у уже существующих
+ * товаров цена в базе не менялась никогда: правка `data/shop_items.json`
+ * просто не доезжала до продакшена. Ревизия закрывает этот разрыв, но не
+ * превращает файл в постоянный источник истины — иначе миграция затирала бы
+ * всё, что администраторы поменяли через `/shop-admin`.
+ *
+ * Синхронизируется ровно два вида изменений:
+ *   1) поля из REVISION_SYNCED_FIELDS у товаров, которые файл всё ещё описывает;
+ *   2) архивация позиций, которых в файле больше нет.
+ * Названия, описания, лимиты и остатки остаются за администраторами.
+ */
+// Поля, которые ревизия имеет право перетереть значением из файла. Всё
+// остальное принадлежит администраторам и правится только через /shop-admin.
+const REVISION_SYNCED_FIELDS = ["price_yen", "cooldown_hours"];
+
+export async function applyCatalogRevision(db) {
+  const meta = db.collection("shop_catalog_meta");
+  const items = db.collection("shop_catalog_items");
+  const audit = db.collection("shop_catalog_audit");
+
+  const target = Number(CATALOG.version || 1);
+  const stored = await meta.findOne({ _id: "catalog" });
+  const applied = Number(stored?.revision || 1);
+  if (!Number.isFinite(target) || applied >= target) {
+    return { applied: false, revision: applied, changes: 0 };
+  }
+
+  const now = new Date();
+  const known = DEFAULT_ITEMS.map((item) => item.id);
+  const changes = [];
+
+  for (const item of DEFAULT_ITEMS) {
+    const before = await items.findOne({ id: item.id });
+    if (!before) continue;
+
+    const updates = {};
+    const details = {};
+    for (const field of REVISION_SYNCED_FIELDS) {
+      const target = Number(item[field] ?? 0);
+      if (Number(before[field] ?? 0) === target) continue;
+      updates[field] = target;
+      details[field] = { from: Number(before[field] ?? 0), to: target };
+    }
+    if (Object.keys(updates).length === 0) continue;
+
+    await items.updateOne(
+      { id: item.id },
+      { $set: { ...updates, updated_at: now }, $inc: { version: 1 } },
+    );
+    changes.push({ item_id: item.id, action: "revision_fields", details });
+  }
+
+  // Позиции, удалённые из файла, не стираем: на них могут ссылаться уже
+  // оформленные заявки и история покупок. Архивация убирает их с витрины и
+  // оставляет данные целыми, а `/shop-admin state restore` вернёт карточку.
+  const removed = await items.find({
+    id: { $nin: known },
+    archived: { $ne: true },
+  }).toArray();
+
+  if (removed.length > 0) {
+    await items.updateMany(
+      { id: { $in: removed.map((item) => item.id) } },
+      { $set: { enabled: false, archived: true, updated_at: now }, $inc: { version: 1 } },
+    );
+    for (const item of removed) {
+      changes.push({
+        item_id: item.id,
+        action: "revision_archive",
+        details: { name: item.name },
+      });
+    }
+  }
+
+  // Пишем в тот же журнал, что и ручные правки, чтобы `/shop-admin history`
+  // показывал автоматические изменения наравне с админскими.
+  if (changes.length > 0) {
+    await audit.insertMany(changes.map((change) => ({
+      ...change,
+      admin_id: "system",
+      revision: target,
+      created_at: now,
+    })));
+  }
+
+  await meta.updateOne(
+    { _id: "catalog" },
+    { $set: { revision: target, applied_at: now, changed: changes.length } },
+    { upsert: true },
+  );
+
+  console.log(`🛒 Каталог магазина обновлён до ревизии ${target}: изменений — ${changes.length}`);
+  return { applied: true, revision: target, changes: changes.length };
 }
 
 export function shopPrice(item, currency) {

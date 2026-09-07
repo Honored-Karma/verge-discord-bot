@@ -3,15 +3,25 @@ import { config } from 'dotenv';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { readdirSync } from 'fs';
-import { connectDatabase, closeDatabase } from './utils/db.js';
+import { createServer } from 'http';
+import { connectDatabase, closeDatabase, getDB } from './utils/db.js';
 import { startWeeklySalaryScheduler } from './services/salaryService.js';
 import { expireMultipliers } from './utils/dataManager.js';
 import { installModernResponseAdapter } from './utils/modernResponses.js';
+import {
+    routeComponentInteraction,
+    routeModalInteraction
+} from './utils/interactionRouter.js';
+import { registerInteractionHandlers } from './interactions/index.js';
+import { ensureCardFont } from './utils/cardFont.js';
+import { initializeOrgRoles } from './utils/orgRoles.js';
 import { createExpressApp } from './server/app.js';
 import { validateEnv } from './config/env.js';
 import { logger } from './utils/logger.js';
 
 config();
+
+const persistentNamespaces = registerInteractionHandlers();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -69,6 +79,7 @@ let multiplierExpiryInterval = null;
 
 client.once(Events.ClientReady, async readyClient => {
     logger.info(`Discord Bot ready as ${readyClient.user.tag} (Guilds: ${client.guilds.cache.size})`);
+    logger.info(`Persistent interaction handlers: ${persistentNamespaces.join(', ')}`);
 
     // Auto-deploy slash commands on startup if configured
     try {
@@ -96,6 +107,27 @@ client.once(Events.ClientReady, async readyClient => {
         logger.error('Failed to deploy slash commands:', deployError);
     }
 
+    // Шрифт карточек готовим на старте, а не при первом /profile: раньше первый
+    // игрок после каждого рестарта ждал загрузку 617 КБ внутри трёхсекундного
+    // окна ответа Discord.
+    try {
+        const font = await ensureCardFont();
+        logger.info(font.ok
+            ? `🔤 Шрифт карточек готов (источник: ${font.source})`
+            : '⚠️  Шрифт карточек не найден — кириллица на карточках может не отрисоваться');
+    } catch (fontError) {
+        logger.error('❌ Не удалось подготовить шрифт карточек:', fontError);
+    }
+
+    // Реестр «организация — роль» держим в базе, поэтому индекс и начальные
+    // значения проливаем на старте. Инициализация идёт здесь, а не в db.js:
+    // модуль ролей тянет dataManager, и импорт из db.js замкнул бы цикл.
+    try {
+        await initializeOrgRoles(getDB());
+    } catch (orgRoleError) {
+        logger.error('❌ Не удалось подготовить реестр ролей организаций:', orgRoleError);
+    }
+
     salarySchedulerInterval = startWeeklySalaryScheduler(client);
     multiplierExpiryInterval = setInterval(() => { expireMultipliers(); }, 60_000);
 });
@@ -103,7 +135,35 @@ client.once(Events.ClientReady, async readyClient => {
 client.on(Events.InteractionCreate, async interaction => {
     installModernResponseAdapter(interaction);
 
+    // Persistent panels first: buttons and menus backed by a stored session keep
+    // working after a restart, unlike the per-message collectors below.
+    if (interaction.isButton() || interaction.isAnySelectMenu()) {
+        try {
+            await routeComponentInteraction(interaction);
+        } catch (error) {
+            console.error(`❌ Error routing component ${interaction.customId}:`, error);
+            const errorMessage = {
+                content: 'Не удалось обработать нажатие. Запустите команду ещё раз.',
+                flags: 64
+            };
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp(errorMessage).catch(() => {});
+            } else {
+                await interaction.reply(errorMessage).catch(() => {});
+            }
+        }
+        // Interactions without a session are left untouched on purpose so the
+        // collectors still driving other commands can pick them up.
+        return;
+    }
+
     if (interaction.isModalSubmit()) {
+        try {
+            if (await routeModalInteraction(interaction)) return;
+        } catch (error) {
+            console.error(`❌ Error routing modal ${interaction.customId}:`, error);
+        }
+
         const command = [...client.commands.values()].find(candidate =>
             typeof candidate.handlesModal === 'function' && candidate.handlesModal(interaction)
         );

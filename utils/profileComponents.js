@@ -12,8 +12,27 @@ import {
   ThumbnailBuilder,
 } from "discord.js";
 import { isValidCharacterUrl, physicalStatsSummary } from "./physicalStats.js";
+import { safeAvatarUrl } from "./avatarUrl.js";
 
 const PROFILE_COLOR = 0xb209d4;
+
+export const PROFILE_INVENTORY_ID = "profile_inventory";
+
+/**
+ * Действия вынесены в отдельный ряд, ниже вкладок. Вкладки переключают вид этой
+ * же панели, а инвентарь открывает новое окно — в одном ряду эти кнопки было бы
+ * не отличить друг от друга.
+ */
+function createActions(disabled = false) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(PROFILE_INVENTORY_ID)
+      .setLabel("Инвентарь")
+      .setEmoji("🎒")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(disabled),
+  );
+}
 
 function createTabs(activePage, disabled = false) {
   const tabs = [
@@ -59,13 +78,27 @@ function formatHistory(history) {
     .join("\n");
 }
 
+/**
+ * Текстовый вид основной страницы. Показывается дважды: как первая фаза ответа,
+ * пока рисуется карточка, и как постоянный вид, если канвас не справился.
+ * Поэтому он должен читаться законченным, а не заготовкой под картинку.
+ */
 function mainFallback(player, totalSP) {
+  const number = (value) => Number(value || 0).toLocaleString("ru-RU");
   const name = player.character_name || player.username || "Неизвестно";
-  return [
+  const org = player.organization || player.custom_org;
+  const affiliation = org
+    ? `${org}${player.rank ? ` · ${player.rank}` : ""}`
+    : "Без организации";
+
+  const lines = [
     `## ${name}`,
-    `⚡ **${Number(player.ap || 0).toLocaleString("ru-RU")} AP**  •  🥋 **${Number(totalSP || 0).toLocaleString("ru-RU")} SP**`,
-    `💳 **${Number(player.krw || 0).toLocaleString("ru-RU")} KRW**  •  **${Number(player.yen || 0).toLocaleString("ru-RU")} ¥**`,
-  ].join("\n");
+    `-# ${affiliation}${player.attribute_name ? ` · ${player.attribute_name}` : ""}`,
+    "",
+    `**${number(player.ap)}** AP · **${number(totalSP)}** SP`,
+    `**${number(player.krw)}** ₩ · **${number(player.yen)}** ¥ · репутация **${number(player.reputation)}**`,
+  ];
+  return lines.join("\n");
 }
 
 export function createProfileV2Components({
@@ -112,19 +145,19 @@ export function createProfileV2Components({
       );
     }
   } else {
-    const avatarUrl = user.displayAvatarURL({ extension: "png", size: 256 });
-    const section = new SectionBuilder()
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          `## История • ${name}\n${formatHistory(history)}\n\n-# ID: ${player.id} • Слот ${slot}`,
+    const historyText = new TextDisplayBuilder().setContent(
+      `## История • ${name}\n${formatHistory(history)}\n\n-# ID: ${player.id} • Слот ${slot}`,
+    );
+
+    container.addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(historyText)
+        .setThumbnailAccessory(
+          new ThumbnailBuilder()
+            .setURL(safeAvatarUrl(user?.displayAvatarURL?.({ extension: "png", size: 256 })))
+            .setDescription(`Аватар ${name}`),
         ),
-      )
-      .setThumbnailAccessory(
-        new ThumbnailBuilder()
-          .setURL(avatarUrl)
-          .setDescription(`Аватар ${name}`),
-      );
-    container.addSectionComponents(section);
+    );
   }
 
   container
@@ -133,7 +166,8 @@ export function createProfileV2Components({
         .setDivider(true)
         .setSpacing(SeparatorSpacingSize.Small),
     )
-    .addActionRowComponents(createTabs(page, disabled));
+    .addActionRowComponents(createTabs(page, disabled))
+    .addActionRowComponents(createActions(disabled));
 
   return [container];
 }

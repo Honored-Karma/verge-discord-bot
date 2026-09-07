@@ -1,0 +1,47 @@
+import { registerInteractionHandler } from "../utils/interactionRouter.js";
+import {
+  LEADERBOARD_NAMESPACE,
+  leaderboardInteractionHandler,
+} from "./leaderboardSession.js";
+import { HELP_NAMESPACE, helpInteractionHandler } from "./helpSession.js";
+import {
+  INVENTORY_NAMESPACE,
+  inventoryInteractionHandler,
+} from "./inventorySession.js";
+import { PAY_NAMESPACE, payInteractionHandler } from "./paySession.js";
+import { PROFILE_NAMESPACE, profileInteractionHandler } from "./profileSession.js";
+import {
+  SHOP_ORDER_NAMESPACE,
+  shopOrderInteractionHandler,
+} from "./shopOrderSession.js";
+import { SHOP_NAMESPACE, shopInteractionHandler } from "./shopSession.js";
+import {
+  TRAIN_SP_NAMESPACE,
+  trainSpInteractionHandler,
+} from "./trainSpSession.js";
+
+/**
+ * Single place where persistent interaction handlers are wired up. Every panel
+ * registered here keeps working after a bot restart, because the state lives in
+ * MongoDB and the message id is the session key.
+ */
+export function registerInteractionHandlers() {
+  registerInteractionHandler(SHOP_NAMESPACE, shopInteractionHandler);
+  registerInteractionHandler(PAY_NAMESPACE, payInteractionHandler);
+  registerInteractionHandler(LEADERBOARD_NAMESPACE, leaderboardInteractionHandler);
+  registerInteractionHandler(PROFILE_NAMESPACE, profileInteractionHandler);
+  registerInteractionHandler(INVENTORY_NAMESPACE, inventoryInteractionHandler);
+  registerInteractionHandler(SHOP_ORDER_NAMESPACE, shopOrderInteractionHandler);
+  registerInteractionHandler(TRAIN_SP_NAMESPACE, trainSpInteractionHandler);
+  registerInteractionHandler(HELP_NAMESPACE, helpInteractionHandler);
+  return [
+    SHOP_NAMESPACE,
+    PAY_NAMESPACE,
+    LEADERBOARD_NAMESPACE,
+    PROFILE_NAMESPACE,
+    INVENTORY_NAMESPACE,
+    SHOP_ORDER_NAMESPACE,
+    TRAIN_SP_NAMESPACE,
+    HELP_NAMESPACE,
+  ];
+}

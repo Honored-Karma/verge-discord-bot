@@ -10,6 +10,7 @@ import {
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from "discord.js";
+import { safeAvatarUrl } from "./avatarUrl.js";
 import { formatItemEffect, getItemDefinition } from "./itemSystem.js";
 
 export const ITEM_TRANSFER_SELECT_ID = "item_transfer_select";
@@ -64,7 +65,7 @@ function heading({ senderName, senderAvatarUrl, recipientName, recipientSlot, su
     )
     .setThumbnailAccessory(
       new ThumbnailBuilder()
-        .setURL(senderAvatarUrl)
+        .setURL(safeAvatarUrl(senderAvatarUrl))
         .setDescription(`Аватар персонажа ${cleanText(senderName, 80)}`),
     );
 }

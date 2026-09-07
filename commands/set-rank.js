@@ -3,6 +3,7 @@ import { getPlayer, updatePlayer } from '../utils/dataManager.js';
 import { isAdmin } from '../utils/adminCheck.js';
 import { createErrorEmbed, createSuccessEmbed } from '../utils/embeds.js';
 import { isValidRankForOrganization, normalizeOrganization, normalizeRank } from '../utils/rankSystem.js';
+import { describeOrgSync, syncOrgRoles } from '../utils/orgRoles.js';
 
 export const data = new SlashCommandBuilder()
     .setName('set-rank')
@@ -69,7 +70,20 @@ export async function execute(interaction) {
 
     await updatePlayer(slotPlayerId, { rank, organization });
 
+    // Синхронизация идемпотентна и сама смотрит на активный слот: если админ
+    // выдал организацию неактивному персонажу, роли останутся как были.
+    const sync = await syncOrgRoles({
+        guild: interaction.guild,
+        userId,
+        actorId: interaction.user.id,
+    });
+    const note = describeOrgSync(sync);
+
     interaction.reply({
-        embeds: [createSuccessEmbed('Ранг обновлен', `Для ${targetUser.username} (Слот ${slot}) установлен ранг **${rank}** в организации **${organization}**.`, 'setRank')]
+        embeds: [createSuccessEmbed(
+            'Ранг обновлен',
+            `Для ${targetUser.username} (Слот ${slot}) установлен ранг **${rank}** в организации **${organization}**.${note ? `\n\n${note}` : ''}`,
+            'setRank',
+        )]
     });
 }

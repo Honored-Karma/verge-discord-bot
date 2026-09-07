@@ -273,6 +273,25 @@ async function initializeDatabase() {
             { name: 'training_blocks_expires' }
         );
 
+        // Persistent state for button/select/modal panels. The message id is the
+        // session key, so a panel survives a bot restart; the TTL index sweeps
+        // abandoned panels without a cron job.
+        if (!collectionNames.includes('interaction_sessions')) {
+            await db.createCollection('interaction_sessions');
+        }
+        await db.collection('interaction_sessions').createIndex(
+            { message_id: 1 },
+            { unique: true, name: 'interaction_session_message_unique' }
+        );
+        await db.collection('interaction_sessions').createIndex(
+            { expires_at: 1 },
+            { expireAfterSeconds: 0, name: 'interaction_session_expiry_ttl' }
+        );
+        await db.collection('interaction_sessions').createIndex(
+            { namespace: 1, owner_id: 1, updated_at: -1 },
+            { name: 'interaction_session_owner_history' }
+        );
+
         await initializeShopCatalog(db);
         console.log('✅ Database initialized successfully');
         await backfillPlayerDefaults();

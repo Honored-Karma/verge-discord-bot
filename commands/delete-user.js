@@ -3,6 +3,7 @@ import { getPlayer, deletePlayer } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin } from '../utils/adminCheck.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
+import { describeOrgSync, syncOrgRoles } from '../utils/orgRoles.js';
 
 export const data = new SlashCommandBuilder()
     .setName('delete-user')
@@ -56,9 +57,16 @@ export async function execute(interaction) {
     }
     const success = await deletePlayer(playerId, interaction.user.id);
     if (success) {
+        // Персонажа больше нет — роль его организации висеть не должна.
+        const sync = await syncOrgRoles({
+            guild: interaction.guild,
+            userId: targetUser.id,
+            actorId: interaction.user.id,
+        });
+        const note = describeOrgSync(sync);
         const msg = await interaction.reply({
-            embeds: [createSuccessEmbed('Профиль удален', 
-                `Профиль **${player.character_name}** из слота **${slot}** успешно удален.\nИгрок может переучесться командой \`/register\`.`, 'deleteUser')],
+            embeds: [createSuccessEmbed('Профиль удален',
+                `Профиль **${player.character_name}** из слота **${slot}** успешно удален.\nИгрок может переучесться командой \`/register\`.${note ? `\n\n${note}` : ''}`, 'deleteUser')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
