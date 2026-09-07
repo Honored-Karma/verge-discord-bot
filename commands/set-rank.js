@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { getPlayer, updatePlayer } from '../utils/dataManager.js';
+import { getPlayer, updatePlayer, getActiveSlot } from '../utils/dataManager.js';
 import { isAdmin } from '../utils/adminCheck.js';
 import { createErrorEmbed, createSuccessEmbed } from '../utils/embeds.js';
 import { isValidRankForOrganization, normalizeOrganization, normalizeRank } from '../utils/rankSystem.js';
@@ -56,7 +56,6 @@ export async function execute(interaction) {
     }
 
     if (!slot) {
-        const { getActiveSlot } = await import('../utils/dataManager.js');
         slot = await getActiveSlot(userId);
     }
     if (slot !== 1 && slot !== 2) slot = 1;
@@ -79,7 +78,7 @@ export async function execute(interaction) {
     });
     const note = describeOrgSync(sync);
 
-    interaction.reply({
+    await interaction.reply({
         embeds: [createSuccessEmbed(
             'Ранг обновлен',
             `Для ${targetUser.username} (Слот ${slot}) установлен ранг **${rank}** в организации **${organization}**.${note ? `\n\n${note}` : ''}`,

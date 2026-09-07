@@ -1,8 +1,9 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { getPlayer, setCurrency } from '../utils/dataManager.js';
+import { getPlayer, setCurrency, getActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
 import { resolveMember } from '../utils/memberHelper.js';
+import { logCommand } from '../utils/logs.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 
 export const data = new SlashCommandBuilder()
@@ -23,7 +24,8 @@ export const data = new SlashCommandBuilder()
     .addIntegerOption(option =>
         option.setName('amount')
             .setDescription('Количество')
-            .setRequired(true))
+            .setRequired(true)
+            .setMinValue(0))
     .addIntegerOption(option =>
         option.setName('slot')
             .setDescription('Слот: 1 или 2 (по умолчанию активный)')
@@ -59,7 +61,6 @@ if (!hasCommandPermission(member, 'set-currency')) {
     const userId = targetUser.id;
     let slot = interaction.options.getInteger('slot');
     if (!slot) {
-        const { getActiveSlot } = await import('../utils/dataManager.js');
         slot = await getActiveSlot(userId);
     }
     if (slot !== 1 && slot !== 2) slot = 1;
@@ -96,6 +97,19 @@ if (!hasCommandPermission(member, 'set-currency')) {
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
+        try {
+            await logCommand({
+                client: interaction.client,
+                guildId: interaction.guildId,
+                channelId: interaction.channelId,
+                userId: interaction.user.id,
+                userTag: interaction.user.tag,
+                command: 'set-currency',
+                targetId: playerId,
+                targetTag: `${player.character_name || player.username} <@${playerId}>`,
+                extra: { currency, amount }
+            });
+        } catch (e) { console.error('logCommand error', e); }
     } else {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось установить валюту.')],

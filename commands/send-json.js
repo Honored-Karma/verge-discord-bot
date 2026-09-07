@@ -1,4 +1,5 @@
-import { SlashCommandBuilder, PermissionFlagsBits, REST, Routes } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits, Routes } from 'discord.js';
+import { isAdmin } from '../utils/adminCheck.js';
 
 export const data = new SlashCommandBuilder()
     .setName('send-json')
@@ -18,6 +19,10 @@ export const data = new SlashCommandBuilder()
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
 export async function execute(interaction) {
+    if (!isAdmin(interaction.member)) {
+        return interaction.reply({ content: '❌ Доступ запрещён. Команда только для администраторов.', flags: 64 });
+    }
+
     const jsonString = interaction.options.getString('json');
     const file = interaction.options.getAttachment('file');
     const channel = interaction.options.getChannel('channel') || interaction.channel;
@@ -25,6 +30,8 @@ export async function execute(interaction) {
     if (!jsonString && !file) {
         return interaction.reply({ content: '❌ Укажите параметр `json` или прикрепите `file`.', flags: 64 });
     }
+
+    await interaction.deferReply({ flags: 64 });
 
     let payload;
     try {
@@ -36,16 +43,14 @@ export async function execute(interaction) {
             payload = JSON.parse(jsonString);
         }
     } catch (e) {
-        return interaction.reply({ content: `❌ Невалидный JSON: ${e.message}`, flags: 64 });
+        return interaction.editReply({ content: `❌ Невалидный JSON: ${e.message}` });
     }
 
     try {
-        const token = process.env.DISCORD_TOKEN || process.env.TOKEN;
-        const rest = new REST().setToken(token);
-        await rest.post(Routes.channelMessages(channel.id), { body: payload });
-        await interaction.reply({ content: `✅ Сообщение отправлено в <#${channel.id}>`, flags: 64 });
+        await interaction.client.rest.post(Routes.channelMessages(channel.id), { body: payload });
+        await interaction.editReply({ content: `✅ Сообщение отправлено в <#${channel.id}>` });
     } catch (e) {
         const errMsg = e?.rawError?.message || e.message;
-        await interaction.reply({ content: `❌ Ошибка отправки: ${errMsg}`, flags: 64 });
+        await interaction.editReply({ content: `❌ Ошибка отправки: ${errMsg}` });
     }
 }

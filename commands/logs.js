@@ -22,10 +22,12 @@ export async function execute(interaction) {
 
     // Permission: admin or allowed limited role
     const member = await resolveMember(interaction);
-    if (!isAdmin(member) && !hasCommandPermission(member, 'add-ap')) {
-        const msg = await interaction.reply({ embeds: [createErrorEmbed('Доступ запрещен', 'Недостаточно прав.')], flags: 64, fetchReply: true });
+    if (!isAdmin(member) && !hasCommandPermission(member, 'logs')) {
+        await interaction.reply({ embeds: [createErrorEmbed('Доступ запрещен', 'Недостаточно прав.')], flags: 64 });
         return;
     }
+
+    await interaction.deferReply({ flags: 64 });
 
     const limit = Math.min(interaction.options.getInteger('limit') || 10, 50);
     const commandFilter = interaction.options.getString('command');
@@ -33,7 +35,7 @@ export async function execute(interaction) {
 
     const db = getDB();
     if (!db) {
-        return interaction.reply({ embeds: [createErrorEmbed('Ошибка', 'База данных недоступна.')], flags: 64 });
+        return interaction.editReply({ embeds: [createErrorEmbed('Ошибка', 'База данных недоступна.')] });
     }
 
     const query = {};
@@ -44,7 +46,7 @@ export async function execute(interaction) {
     const rows = await db.collection('command_logs').find(query).sort({ timestamp: -1 }).limit(limit).toArray();
 
     if (!rows || rows.length === 0) {
-        return interaction.reply({ content: 'Нет записей.', flags: 64 });
+        return interaction.editReply({ content: 'Нет записей.' });
     }
 
     const lines = rows.map(r => {
@@ -71,7 +73,7 @@ export async function execute(interaction) {
 
     for (let i = 0; i < outputs.length; i++) {
         if (i === 0) {
-            await interaction.reply({ content: outputs[i], flags: 64 });
+            await interaction.editReply({ content: outputs[i] });
         } else {
             await interaction.followUp({ content: outputs[i], flags: 64 });
         }

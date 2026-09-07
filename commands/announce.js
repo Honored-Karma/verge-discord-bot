@@ -7,6 +7,7 @@ import {
   ButtonStyle,
 } from "discord.js";
 import { modernizeResponsePayload } from "../utils/modernResponses.js";
+import { isAdmin } from "../utils/adminCheck.js";
 
 export const data = new SlashCommandBuilder()
   .setName("announce")
@@ -74,7 +75,7 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
   // Проверка прав администратора
-  if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+  if (!isAdmin(interaction.member) && !interaction.member?.permissions?.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({
       content: "❌ У вас нет прав для использования этой команды!",
       flags: 64,
@@ -101,6 +102,8 @@ export async function execute(interaction) {
     });
   }
 
+  await interaction.deferReply({ flags: 64 });
+
   // Определение списка получателей
   let recipients = [];
 
@@ -111,26 +114,23 @@ export async function execute(interaction) {
       recipients = members.filter(member => !member.user.bot).map(member => member.user);
     } catch (error) {
       console.error("Ошибка при получении списка участников:", error);
-      return interaction.reply({
+      return interaction.editReply({
         content: "❌ Не удалось получить список участников сервера!",
-        flags: 64,
       });
     }
   } else if (target === "single") {
     // Отправка одному пользователю
     if (!singleUser) {
-      return interaction.reply({
+      return interaction.editReply({
         content: "❌ Вы должны указать пользователя для отправки!",
-        flags: 64,
       });
     }
     recipients = [singleUser];
   } else if (target === "multiple") {
     // Отправка нескольким пользователям
     if (!multipleUsers) {
-      return interaction.reply({
+      return interaction.editReply({
         content: "❌ Вы должны указать ID пользователей через запятую!",
-        flags: 64,
       });
     }
 
@@ -147,9 +147,8 @@ export async function execute(interaction) {
     }
 
     if (recipients.length === 0) {
-      return interaction.reply({
+      return interaction.editReply({
         content: "❌ Не удалось найти ни одного пользователя по указанным ID!",
-        flags: 64,
       });
     }
   }
@@ -185,11 +184,10 @@ export async function execute(interaction) {
       ? `участнику ${singleUser.tag}`
       : `выбранным участникам (${recipients.length} чел.)`;
 
-  const confirmMessage = await interaction.reply({
+  const confirmMessage = await interaction.editReply({
     content: `**Превью объявления**\nБудет отправлено: **${targetText}**\n\nПодтвердите отправку:`,
     embeds: [previewEmbed],
     components: [confirmRow],
-    fetchReply: true,
   });
 
   // Ожидание подтверждения

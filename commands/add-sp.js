@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { getPlayer, getStyleByName, addSP, listStyles, getAllPlayerSP } from '../utils/dataManager.js';
+import { getPlayer, getStyleByName, addSP, listStyles, getAllPlayerSP, getActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
 import { resolveMember } from '../utils/memberHelper.js';
@@ -21,7 +21,8 @@ export const data = new SlashCommandBuilder()
     .addIntegerOption(option =>
         option.setName('amount')
             .setDescription('Количество SP для добавления')
-            .setRequired(true))
+            .setRequired(true)
+            .setMinValue(1))
     .addStringOption(option =>
         option.setName('multiplier')
             .setDescription('Учитывать множитель игрока (по умолчанию: С множителем)')
@@ -69,7 +70,6 @@ export async function execute(interaction) {
     const userId = targetUser.id;
     let slot = interaction.options.getInteger('slot');
     if (!slot) {
-        const { getActiveSlot } = await import('../utils/dataManager.js');
         slot = await getActiveSlot(userId);
     }
     if (slot !== 1 && slot !== 2) slot = 1;

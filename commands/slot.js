@@ -12,21 +12,27 @@ export const data = new SlashCommandBuilder()
         option.setName('number')
             .setDescription('Номер слота (1 или 2)')
             .setRequired(true)
+            .addChoices(
+                { name: 'Слот 1', value: 1 },
+                { name: 'Слот 2', value: 2 }
+            )
     );
 
 export async function execute(interaction) {
     const globalCooldown = checkGlobalCooldown(interaction.user.id);
     if (globalCooldown.onCooldown) {
-        const msg = await interaction.reply({ content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`, fetchReply: true });
-        autoDeleteMessageShort(msg);
-        return;
+        return interaction.reply({
+            content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой!`,
+            flags: 64
+        });
     }
 
     const slot = interaction.options.getInteger('number');
     if (slot !== 1 && slot !== 2) {
-        const msg = await interaction.reply({ embeds: [createErrorEmbed('Ошибка', 'Неверный номер слота. Доступно: 1 или 2.')], fetchReply: true });
-        autoDeleteMessageShort(msg);
-        return;
+        return interaction.reply({
+            embeds: [createErrorEmbed('Ошибка', 'Неверный номер слота. Доступно: 1 или 2.')],
+            flags: 64
+        });
     }
 
     const userId = interaction.user.id;
@@ -35,9 +41,10 @@ export async function execute(interaction) {
 
     const ok = await setActiveSlot(userId, slot);
     if (!ok) {
-        const msg = await interaction.reply({ embeds: [createErrorEmbed('Ошибка', 'Не удалось переключить слот, попробуйте позже.')], fetchReply: true });
-        autoDeleteMessageShort(msg);
-        return;
+        return interaction.reply({
+            embeds: [createErrorEmbed('Ошибка', 'Не удалось переключить слот, попробуйте позже.')],
+            flags: 64
+        });
     }
 
     // Роль организации отражает активного персонажа, поэтому переключение слота
@@ -46,10 +53,14 @@ export async function execute(interaction) {
     const note = describeOrgSync(sync);
 
     if (target) {
-        const msg = await interaction.reply({ embeds: [createSuccessEmbed('Слот изменён', `Теперь активен слот **${slot}** — **${target.character_name || target.username}**${note ? `\n\n${note}` : ''}`, 'slot')], fetchReply: true });
-        autoDeleteMessageShort(msg);
+        await interaction.reply({
+            embeds: [createSuccessEmbed('Слот изменён', `Теперь активен слот **${slot}** — **${target.character_name || target.username}**${note ? `\n\n${note}` : ''}`, 'slot')],
+            flags: 64
+        });
     } else {
-        const msg = await interaction.reply({ embeds: [createSuccessEmbed('Слот выбран', `Теперь активен пустой слот **${slot}**. Используйте /register чтобы создать персонажа в этом слоте.`, 'slot')], fetchReply: true });
-        autoDeleteMessageShort(msg);
+        await interaction.reply({
+            embeds: [createSuccessEmbed('Слот выбран', `Теперь активен пустой слот **${slot}**. Используйте /register чтобы создать персонажа в этом слоте.`, 'slot')],
+            flags: 64
+        });
     }
 }

@@ -99,6 +99,9 @@ export async function execute(interaction) {
         }
     }
 
+    // Откладываем ответ, так как скачивание и сохранение файла может занять несколько секунд
+    await interaction.deferReply({ flags: 64 });
+
     // Сохраняем аватар в постоянное хранилище
     const success = await setCharacterAvatar(playerId, source);
 
@@ -117,17 +120,13 @@ export async function execute(interaction) {
             embed.setThumbnail(avatarUrl);
         }
 
-        const msg = await interaction.reply({
-            embeds: [embed],
-            fetchReply: true
+        await interaction.editReply({
+            embeds: [embed]
         });
-        autoDeleteMessageShort(msg);
     } else {
-        const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Ошибка', 'Не удалось загрузить или сохранить изображение. Проверьте формат и размер файла (до 8 МБ).')],
-            fetchReply: true
+        await interaction.editReply({
+            embeds: [createErrorEmbed('Ошибка', 'Не удалось загрузить или сохранить изображение. Проверьте формат и размер файла (до 8 МБ).')]
         });
-        autoDeleteMessageShort(msg);
     }
 }
 

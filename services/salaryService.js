@@ -119,7 +119,7 @@ export function startWeeklySalaryScheduler(client) {
     const cronExpression = process.env.SALARY_CRON || '0 12 * * 1';
     const timezone = process.env.SALARY_TIMEZONE || 'UTC';
 
-    cron.schedule(cronExpression, async () => {
+    const task = cron.schedule(cronExpression, async () => {
         try {
             await runWeeklySalary(client);
         } catch (error) {
@@ -128,4 +128,5 @@ export function startWeeklySalaryScheduler(client) {
     }, { timezone });
 
     console.log(`[salary] Scheduler started: "${cronExpression}" (${timezone})`);
+    return task;
 }

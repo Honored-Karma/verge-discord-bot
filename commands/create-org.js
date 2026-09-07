@@ -9,7 +9,7 @@ import {
     getActiveSlot,
 } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed, createInfoEmbed } from '../utils/embeds.js';
-import { hasCommandPermission } from '../utils/adminCheck.js';
+import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
 import { resolveMember } from '../utils/memberHelper.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 import { makePlayerKey } from '../utils/playerKey.js';
@@ -133,7 +133,7 @@ export async function execute(interaction) {
 
     // Остальные подкоманды — только для админов
     const member = await resolveMember(interaction);
-    if (!hasCommandPermission(member, 'set-ap')) {
+    if (!isAdmin(member)) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Доступ запрещён', 'Эта команда доступна только администраторам.')],
             fetchReply: true

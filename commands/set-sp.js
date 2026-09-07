@@ -4,10 +4,12 @@ import {
   getStyleByName,
   setSP,
   listStyles,
+  getActiveSlot,
 } from "../utils/dataManager.js";
 import { createSuccessEmbed, createErrorEmbed } from "../utils/embeds.js";
 import { isAdmin, hasCommandPermission } from "../utils/adminCheck.js";
 import { resolveMember } from "../utils/memberHelper.js";
+import { logCommand } from "../utils/logs.js";
 import {
   checkGlobalCooldown,
   autoDeleteMessageShort,
@@ -29,7 +31,11 @@ export const data = new SlashCommandBuilder()
       .setRequired(true),
   )
   .addIntegerOption((option) =>
-    option.setName("amount").setDescription("Количество SP").setRequired(true),
+    option
+      .setName("amount")
+      .setDescription("Количество SP")
+      .setRequired(true)
+      .setMinValue(0),
   )
   .addIntegerOption((option) =>
     option
@@ -69,7 +75,6 @@ export async function execute(interaction) {
   const userId = targetUser.id;
   let slot = interaction.options.getInteger("slot");
   if (!slot) {
-    const { getActiveSlot } = await import("../utils/dataManager.js");
     slot = await getActiveSlot(userId);
   }
   if (slot !== 1 && slot !== 2) slot = 1;
@@ -176,6 +181,21 @@ export async function execute(interaction) {
       fetchReply: true,
     });
     autoDeleteMessageShort(msg);
+    try {
+      await logCommand({
+        client: interaction.client,
+        guildId: interaction.guildId,
+        channelId: interaction.channelId,
+        userId: interaction.user.id,
+        userTag: interaction.user.tag,
+        command: "set-sp",
+        targetId: playerId,
+        targetTag: `${player.character_name || player.username} <@${playerId}>`,
+        extra: { amount, style: style.name },
+      });
+    } catch (e) {
+      console.error("logCommand error", e);
+    }
   } else {
     const msg = await interaction.reply({
       embeds: [createErrorEmbed("Ошибка", "Не удалось обновить SP.")],

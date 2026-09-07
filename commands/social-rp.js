@@ -40,12 +40,10 @@ export async function execute(interaction) {
   const globalCooldown = checkGlobalCooldown(interaction.user.id);
   if (globalCooldown.onCooldown) {
     const retryAt = Math.floor((Date.now() + globalCooldown.remaining) / 1000);
-    const msg = await interaction.reply({
+    return interaction.reply({
       embeds: [createCooldownEmbed("Социальное RP", retryAt)],
-      fetchReply: true,
+      flags: MessageFlags.Ephemeral,
     });
-    autoDeleteMessageShort(msg);
-    return;
   }
 
   const slot = await getActiveSlot(interaction.user.id);
@@ -53,17 +51,15 @@ export async function execute(interaction) {
   const player = await getPlayer(playerId);
 
   if (!player) {
-    const msg = await interaction.reply({
+    return interaction.reply({
       embeds: [
         createErrorEmbed(
           "Пустой слот",
           "Сначала создайте персонажа в активном слоте через `/register`.",
         ),
       ],
-      fetchReply: true,
+      flags: MessageFlags.Ephemeral,
     });
-    autoDeleteMessageShort(msg);
-    return;
   }
 
   const blockCheck = await checkTrainingBlock(
@@ -72,12 +68,10 @@ export async function execute(interaction) {
     TRAINING_TYPES.SOCIAL_RP,
   );
   if (blockCheck.blocked) {
-    const msg = await interaction.reply({
+    return interaction.reply({
       embeds: [createTrainingBlockedEmbed(blockCheck)],
-      fetchReply: true,
+      flags: MessageFlags.Ephemeral,
     });
-    autoDeleteMessageLong(msg);
-    return;
   }
 
   const cooldown = checkCooldown(
@@ -87,12 +81,10 @@ export async function execute(interaction) {
   if (cooldown.onCooldown) {
     const retryAt =
       Math.floor(Date.now() / 1000) + Math.ceil(cooldown.remaining / 1000);
-    const msg = await interaction.reply({
+    return interaction.reply({
       embeds: [createCooldownEmbed("Социальное RP", retryAt)],
-      fetchReply: true,
+      flags: MessageFlags.Ephemeral,
     });
-    autoDeleteMessageShort(msg);
-    return;
   }
 
   await interaction.showModal(createSocialRPModal(slot));

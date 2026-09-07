@@ -23,6 +23,10 @@ export const data = new SlashCommandBuilder()
             option.setName('slot')
                 .setDescription('Номер слота (необязательно). Если не указан — используется активный слот.')
                 .setRequired(false)
+                .addChoices(
+                    { name: 'Слот 1', value: 1 },
+                    { name: 'Слот 2', value: 2 }
+                )
             );
 
 export async function execute(interaction) {

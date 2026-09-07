@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { getPlayer, addReputation, getReputationTier } from '../utils/dataManager.js';
+import { getPlayer, addReputation, getReputationTier, getActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { hasCommandPermission } from '../utils/adminCheck.js';
 import { resolveMember } from '../utils/memberHelper.js';
@@ -16,7 +16,8 @@ export const data = new SlashCommandBuilder()
     .addIntegerOption(option =>
         option.setName('amount')
             .setDescription('Сумма списания (положительное число)')
-            .setRequired(true))
+            .setRequired(true)
+            .setMinValue(1))
     .addStringOption(option =>
         option.setName('reason')
             .setDescription('Причина списания')
@@ -56,7 +57,6 @@ export async function execute(interaction) {
     const userId = targetUser.id;
     let slot = interaction.options.getInteger('slot');
     if (!slot) {
-        const { getActiveSlot } = await import('../utils/dataManager.js');
         slot = await getActiveSlot(userId);
     }
     if (slot !== 1 && slot !== 2) slot = 1;
@@ -64,9 +64,9 @@ export async function execute(interaction) {
     const amount = interaction.options.getInteger('amount');
     const reason = interaction.options.getString('reason') || null;
 
-    if (amount < 0) {
+    if (amount <= 0) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Некорректная сумма', 'Сумма должна быть положительной. Для добавления используйте `/add-reputation`.')],
+            embeds: [createErrorEmbed('Некорректная сумма', 'Сумма должна быть больше нуля. Для добавления используйте `/add-reputation`.')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

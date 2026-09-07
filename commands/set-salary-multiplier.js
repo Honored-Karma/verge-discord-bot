@@ -31,7 +31,7 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
     const member = await resolveMember(interaction);
-    if (!hasCommandPermission(member, 'set-ap')) {
+    if (!hasCommandPermission(member, 'set-salary-multiplier')) {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Доступ запрещён', 'Эта команда доступна только администраторам.')],
             fetchReply: true

@@ -5,12 +5,12 @@
 Открой `.env` в корне проекта и убедись что там есть:
 
 ```env
-DISCORD_TOKEN=MTQ0MTg2NDcyMjQzMjY1OTcwOA.G7tIOJ.DTZ9_FNzxvmBadGXSdLBkUouhvBgmvAOMNDHOU
-CLIENT_ID=1441864722432659708
-MONGODB_URI=mongodb+srv://zerokarma08_db_user:ПАРОЛЬ@verge.kh04id7.mongodb.net/?appName=Verge
+DISCORD_TOKEN=your_discord_bot_token_here
+CLIENT_ID=your_client_id_here
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/?appName=Verge
 ```
 
-⚠️ **Важно:** Замени `ПАРОЛЬ` на реальный пароль от MongoDB.
+⚠️ **Важно:** Замените значения на реальные токен Discord и строку подключения MongoDB.
 
 ## Шаг 2: Установи зависимости
 

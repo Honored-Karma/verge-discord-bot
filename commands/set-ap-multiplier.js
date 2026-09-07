@@ -3,6 +3,7 @@ import { getPlayer, setAPMultiplier, getActiveSlot } from '../utils/dataManager.
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
 import { resolveMember } from '../utils/memberHelper.js';
+import { logCommand } from '../utils/logs.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 import { makePlayerKey } from '../utils/playerKey.js';
 
@@ -44,9 +45,9 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
 const member = await resolveMember(interaction);
-if (!hasCommandPermission(member, 'set-ap')) {
+if (!hasCommandPermission(member, 'set-ap-multiplier')) {
     const msg = await interaction.reply({
-        embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторами.')],
+        embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
         fetchReply: true
     });
     autoDeleteMessageShort(msg);
@@ -97,6 +98,19 @@ if (!hasCommandPermission(member, 'set-ap')) {
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
+        try {
+            await logCommand({
+                client: interaction.client,
+                guildId: interaction.guildId,
+                channelId: interaction.channelId,
+                userId: interaction.user.id,
+                userTag: interaction.user.tag,
+                command: 'set-ap-multiplier',
+                targetId: playerId,
+                targetTag: `${player.character_name || player.username} <@${playerId}>`,
+                extra: { multiplier: result.multiplier, durationSeconds }
+            });
+        } catch (e) { console.error('logCommand error', e); }
     } else {
         const msg = await interaction.reply({
             embeds: [createErrorEmbed('Ошибка', 'Не удалось установить множитель AP.')],

@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { getPlayer, addAP } from '../utils/dataManager.js';
+import { getPlayer, addAP, getActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { hasCommandPermission } from '../utils/adminCheck.js';
 import { resolveMember } from '../utils/memberHelper.js';
@@ -61,7 +61,6 @@ export async function execute(interaction) {
     const slot = interaction.options.getInteger('slot');
     let usedSlot = slot;
     if (!usedSlot) {
-        const { getActiveSlot } = await import('../utils/dataManager.js');
         usedSlot = await getActiveSlot(userId);
     }
     if (usedSlot !== 1 && usedSlot !== 2) usedSlot = 1;
