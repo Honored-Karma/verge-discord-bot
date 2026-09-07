@@ -17,6 +17,14 @@ export const data = new SlashCommandBuilder()
         option.setName('amount')
             .setDescription('Количество AP (может быть отрицательным)')
             .setRequired(true))
+    .addStringOption(option =>
+        option.setName('multiplier')
+            .setDescription('Учитывать множитель игрока (по умолчанию: С множителем)')
+            .setRequired(false)
+            .addChoices(
+                { name: 'С множителем', value: 'yes' },
+                { name: 'Без множителя', value: 'no' }
+            ))
     .addIntegerOption(option =>
         option.setName('slot')
             .setDescription('Слот: 1 или 2 (по умолчанию активный)')
@@ -59,6 +67,9 @@ export async function execute(interaction) {
     if (usedSlot !== 1 && usedSlot !== 2) usedSlot = 1;
     const playerId = usedSlot === 1 ? userId : `${userId}_${usedSlot}`;
     const amount = interaction.options.getInteger('amount');
+    const multiplierChoice = interaction.options.getString('multiplier');
+    const applyMultiplier = multiplierChoice !== 'no';
+
     const player = await getPlayer(playerId);
     if (!player) {
         const msg = await interaction.reply({
@@ -69,14 +80,15 @@ export async function execute(interaction) {
         return;
     }
     const oldAP = player.ap || 0;
-    const newAP = await addAP(playerId, amount, 'admin');
+    const newAP = await addAP(playerId, amount, 'admin', applyMultiplier);
     
     if (newAP !== false) {
         const actualGained = newAP - oldAP;
         const sign = actualGained >= 0 ? '+' : '';
+        const multiplierNote = applyMultiplier ? '(с учётом множителя)' : '(без множителя)';
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('AP обновлено', 
-                `Запрошено: **${amount > 0 ? '+' : ''}${amount} AP**\nФактически начислено: **${sign}${actualGained} AP** (с учётом множителя)\n\nНовый баланс: **${newAP} AP**`, 'addAp')],
+                `Запрошено: **${amount > 0 ? '+' : ''}${amount} AP**\nФактически начислено: **${sign}${actualGained} AP** ${multiplierNote}\n\nНовый баланс: **${newAP} AP**`, 'addAp')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -91,7 +103,10 @@ export async function execute(interaction) {
                 command: 'add-ap',
                 targetId: playerId,
                 targetTag: `${player.character_name || player.username} <@${playerId}>`,
-                extra: { amount }
+                extra: { 
+                    amount,
+                    multiplier: applyMultiplier ? 'Да (с множителем)' : 'Нет (без множителя)'
+                }
             });
         } catch (e) { console.error('logCommand error', e); }
     } else {

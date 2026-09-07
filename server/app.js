@@ -17,6 +17,7 @@ import { createWikiRouter } from './routes/wiki.js';
 import { createAdminRouter } from './routes/admin.js';
 import { createSearchRouter } from './routes/search.js';
 import { createSeoRouter } from './routes/seo.js';
+import { createAvatarRouter } from './routes/avatar.js';
 import { createMetaInjectorMiddleware } from './middlewares/metaInjector.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 
@@ -147,6 +148,7 @@ export function createExpressApp(discordClient) {
     app.use('/api/wiki', createWikiRouter());
     app.use('/api/admin', createAdminRouter(discordClient));
     app.use('/api/search', createSearchRouter());
+    app.use('/api/avatar', createAvatarRouter());
 
     // 9. Static frontend serving & OpenGraph meta injection
     const distPath = join(__dirname, '..', 'web', 'dist');

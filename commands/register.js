@@ -85,14 +85,14 @@ export async function execute(interaction) {
         return;
     }
 
-    let avatarUrl = null;
+    let avatarSource = null;
     if (avatarAttachment) {
         if (avatarAttachment.contentType && avatarAttachment.contentType.startsWith('image/')) {
-            avatarUrl = avatarAttachment.url;
+            avatarSource = avatarAttachment;
         }
     }
 
-    const success = await createPlayer(playerId, username, characterName, avatarUrl, slot, attributeName);
+    const success = await createPlayer(playerId, username, characterName, avatarSource, slot, attributeName);
 
     if (success) {
         await setActiveSlot(playerId, slot);

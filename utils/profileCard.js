@@ -226,7 +226,7 @@ function loadAvatarImage(url, timeoutMs = AVATAR_TIMEOUT_MS) {
   ]);
 }
 
-async function drawAvatar(ctx, x, y, size, { avatarUrl, fallbackAvatarUrl, name }) {
+async function drawAvatar(ctx, x, y, size, { avatarBuffer, avatarUrl, fallbackAvatarUrl, name }) {
   ctx.save();
   roundRect(ctx, x, y, size, size, T.radius.md);
   ctx.clip();
@@ -235,10 +235,31 @@ async function drawAvatar(ctx, x, y, size, { avatarUrl, fallbackAvatarUrl, name 
   ctx.fillRect(x, y, size, size);
 
   let drawn = false;
-  for (const url of [avatarUrl, fallbackAvatarUrl]) {
-    if (!url || drawn) continue;
+
+  // 1. Прямой буфер из постоянного хранилища (без сети, мгновенно, никогда не истекает)
+  if (avatarBuffer) {
     try {
-      const image = await loadAvatarImage(url);
+      const image = await loadImage(avatarBuffer);
+      ctx.drawImage(image, x, y, size, size);
+      drawn = true;
+    } catch (err) {
+      console.warn("Failed to load avatar from buffer:", err.message);
+    }
+  }
+
+  // 2. URL аватара персонажа, если буфера нет
+  if (!drawn && avatarUrl) {
+    try {
+      const image = await loadAvatarImage(avatarUrl);
+      ctx.drawImage(image, x, y, size, size);
+      drawn = true;
+    } catch {}
+  }
+
+  // 3. Личный аватар пользователя Discord используется ТОЛЬКО если персонаж не имеет своего аватара
+  if (!drawn && !avatarUrl && !avatarBuffer && fallbackAvatarUrl) {
+    try {
+      const image = await loadAvatarImage(fallbackAvatarUrl);
       ctx.drawImage(image, x, y, size, size);
       drawn = true;
     } catch {}
@@ -270,6 +291,7 @@ export async function renderProfileCard(data) {
   await ensureCardFont();
   const {
     characterName,
+    avatarBuffer,
     avatarUrl,
     fallbackAvatarUrl,
     attributeName,
@@ -307,6 +329,7 @@ export async function renderProfileCard(data) {
   const avatarSize = T.space(22);
   const avatarY = headerY + T.space(5);
   await drawAvatar(ctx, colX, avatarY, avatarSize, {
+    avatarBuffer,
     avatarUrl,
     fallbackAvatarUrl,
     name: characterName,

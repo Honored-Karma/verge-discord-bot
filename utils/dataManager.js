@@ -12,6 +12,12 @@ import {
   transferItemInTransaction,
 } from "./itemTransferStore.js";
 import { getShopTrainingBonus } from "./shopStore.js";
+import {
+  saveCharacterAvatar,
+  getCharacterAvatarBuffer,
+  getCharacterAvatarData,
+  deleteCharacterAvatar
+} from "./avatarStorage.js";
 
 const PLAYER_DEFAULTS = {
   character_avatar: null,
@@ -360,11 +366,23 @@ export async function createPlayer(
     const existing = await db.collection("players").findOne({ id });
     if (existing) return true;
 
+    let finalAvatar = characterAvatar;
+    if (characterAvatar) {
+      try {
+        const saveRes = await saveCharacterAvatar(id, characterAvatar);
+        if (saveRes.success && saveRes.avatarUrl) {
+          finalAvatar = saveRes.avatarUrl;
+        }
+      } catch (err) {
+        console.warn("Could not save initial character avatar to storage:", err);
+      }
+    }
+
     await db.collection("players").insertOne({
       id,
       username,
       character_name: characterName,
-      character_avatar: characterAvatar,
+      character_avatar: finalAvatar,
       attribute_name: attributeName,
       krw: 0,
       yen: 0,
@@ -413,34 +431,42 @@ export function getEffectiveAPMultiplier(player) {
   return apMultiplier + dynamicBonus;
 }
 
-export async function addAP(playerId, amount, actionType = "train") {
+export async function addAP(
+  playerId,
+  amount,
+  actionType = "train",
+  applyMultiplier = true,
+) {
   try {
     const db = getDB();
     const player = await getPlayer(playerId);
     if (!player) return false;
 
-    const now = Math.floor(Date.now() / 1000);
-    let apMultiplier = player.ap_multiplier || 100;
-    if (
-      player.ap_multiplier_expires_at > 0 &&
-      now >= player.ap_multiplier_expires_at
-    ) {
-      apMultiplier = 100;
-      await db
-        .collection("players")
-        .updateOne(
-          { id: playerId },
-          { $set: { ap_multiplier: 100, ap_multiplier_expires_at: 0 } },
-        );
+    let adjustedAmount = amount;
+    if (applyMultiplier) {
+      const now = Math.floor(Date.now() / 1000);
+      let apMultiplier = player.ap_multiplier || 100;
+      if (
+        player.ap_multiplier_expires_at > 0 &&
+        now >= player.ap_multiplier_expires_at
+      ) {
+        apMultiplier = 100;
+        await db
+          .collection("players")
+          .updateOne(
+            { id: playerId },
+            { $set: { ap_multiplier: 100, ap_multiplier_expires_at: 0 } },
+          );
+      }
+      const dynamicBonus =
+        getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
+      const effectiveMultiplier = apMultiplier + dynamicBonus;
+      adjustedAmount = Math.round(amount * (effectiveMultiplier / 100));
     }
-    const dynamicBonus =
-      getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
-    const effectiveMultiplier = apMultiplier + dynamicBonus;
-    const adjustedAmount = Math.round(amount * (effectiveMultiplier / 100));
     // Отрицательный amount — это админская коррекция, но результат ниже нуля
     // ломает прогресс-бары и пороги, поэтому AP не уходит в минус.
     const newAP = Math.max(0, player.ap + adjustedAmount);
-    const timestamp = now;
+    const timestamp = Math.floor(Date.now() / 1000);
 
     const updateObj = { ap: newAP, last_ap_change_at: timestamp };
     if (actionType === "train") {
@@ -726,30 +752,36 @@ export async function addSP(
   amount,
   adminId = null,
   source = "add-sp",
+  applyMultiplier = true,
 ) {
   try {
     const db = getDB();
     const player = await getPlayer(playerId);
     if (!player) return false;
 
-    const now = Math.floor(Date.now() / 1000);
-    let spMultiplier = player.sp_multiplier || 100;
-    if (
-      player.sp_multiplier_expires_at > 0 &&
-      now >= player.sp_multiplier_expires_at
-    ) {
-      spMultiplier = 100;
-      await db
-        .collection("players")
-        .updateOne(
-          { id: playerId },
-          { $set: { sp_multiplier: 100, sp_multiplier_expires_at: 0 } },
-        );
+    let adjustedAmount = amount;
+    let logMultiplierText = "без множителя";
+    if (applyMultiplier) {
+      const now = Math.floor(Date.now() / 1000);
+      let spMultiplier = player.sp_multiplier || 100;
+      if (
+        player.sp_multiplier_expires_at > 0 &&
+        now >= player.sp_multiplier_expires_at
+      ) {
+        spMultiplier = 100;
+        await db
+          .collection("players")
+          .updateOne(
+            { id: playerId },
+            { $set: { sp_multiplier: 100, sp_multiplier_expires_at: 0 } },
+          );
+      }
+      const dynamicBonus =
+        getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
+      const effectiveMultiplier = spMultiplier + dynamicBonus;
+      adjustedAmount = Math.round(amount * (effectiveMultiplier / 100));
+      logMultiplierText = `×${effectiveMultiplier}%`;
     }
-    const dynamicBonus =
-      getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
-    const effectiveMultiplier = spMultiplier + dynamicBonus;
-    const adjustedAmount = Math.round(amount * (effectiveMultiplier / 100));
 
     const currentSP = await getSP(playerId, styleId);
     // Как и с AP: коррекция вниз разрешена, отрицательный итог — нет.
@@ -772,7 +804,7 @@ export async function addSP(
       logAdminAction(
         adminId,
         "ADD_SP",
-        `Добавил ${amount} SP (×${spMultiplier}% = ${adjustedAmount}) стиль ${styleId} игроку ${playerId}`,
+        `Добавил ${amount} SP (${logMultiplierText} = ${adjustedAmount}) стиль ${styleId} игроку ${playerId}`,
       );
     }
     await addProgressionHistory(playerId, "sp", currentSP, newSP, source);
@@ -1605,6 +1637,7 @@ export async function deletePlayer(playerId, adminId) {
     await db.collection("player_sp").deleteMany({ player_id: playerId });
     await db.collection("inventory").deleteMany({ player_id: playerId });
     await db.collection("players").deleteOne({ id: playerId });
+    await deleteCharacterAvatar(playerId);
 
     // Keep active slot consistent after deletions.
     // Example: slot1 deleted but slot2 exists -> switch active slot to 2.
@@ -1866,18 +1899,37 @@ export async function getAdminActions(limit = 50) {
   }
 }
 
-export async function setCharacterAvatar(playerId, avatarUrl) {
+export async function setCharacterAvatar(playerId, avatarSource) {
   try {
     const db = getDB();
+    let savedUrl = typeof avatarSource === 'string' ? avatarSource : null;
+
+    if (avatarSource) {
+      const saveRes = await saveCharacterAvatar(playerId, avatarSource);
+      if (saveRes.success && saveRes.avatarUrl) {
+        savedUrl = saveRes.avatarUrl;
+      } else if (!saveRes.success && typeof avatarSource !== 'string') {
+        console.error("Failed to save avatar into storage:", saveRes.error);
+        return false;
+      }
+    }
+
     const result = await db
       .collection("players")
-      .updateOne({ id: playerId }, { $set: { character_avatar: avatarUrl } });
-    return result.modifiedCount > 0;
+      .updateOne({ id: playerId }, { $set: { character_avatar: savedUrl } });
+    return result.modifiedCount > 0 || result.matchedCount > 0;
   } catch (error) {
     console.error("Error setting character avatar:", error);
     return false;
   }
 }
+
+export {
+  saveCharacterAvatar,
+  getCharacterAvatarBuffer,
+  getCharacterAvatarData,
+  deleteCharacterAvatar
+};
 
 /**
  * Устанавливает индивидуальный множитель зарплаты для игрока/слота.

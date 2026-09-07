@@ -22,6 +22,14 @@ export const data = new SlashCommandBuilder()
         option.setName('amount')
             .setDescription('Количество SP для добавления')
             .setRequired(true))
+    .addStringOption(option =>
+        option.setName('multiplier')
+            .setDescription('Учитывать множитель игрока (по умолчанию: С множителем)')
+            .setRequired(false)
+            .addChoices(
+                { name: 'С множителем', value: 'yes' },
+                { name: 'Без множителя', value: 'no' }
+            ))
     .addIntegerOption(option =>
         option.setName('slot')
             .setDescription('Слот: 1 или 2 (по умолчанию активный)')
@@ -56,6 +64,8 @@ export async function execute(interaction) {
     const targetUser = interaction.options.getUser('user');
     const styleInput = interaction.options.getString('style');
     const amount = interaction.options.getInteger('amount');
+    const multiplierChoice = interaction.options.getString('multiplier');
+    const applyMultiplier = multiplierChoice !== 'no';
     const userId = targetUser.id;
     let slot = interaction.options.getInteger('slot');
     if (!slot) {
@@ -114,15 +124,16 @@ export async function execute(interaction) {
     }
 
     const oldSP = style.sp || 0;
-    const newSP = await addSP(playerId, style.id, amount, interaction.user.id);
+    const newSP = await addSP(playerId, style.id, amount, interaction.user.id, 'add-sp', applyMultiplier);
     
     if (newSP !== false) {
         const actualGained = newSP - oldSP;
         const sign = actualGained >= 0 ? '+' : '';
         const rank = getSPMastery(newSP).rank;
+        const multiplierNote = applyMultiplier ? '(с учётом множителя)' : '(без множителя)';
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('SP обновлено', 
-                `Запрошено: **+${amount} SP** к стилю **${style.name}** игроку **${player.character_name || player.username}**\nФактически начислено: **${sign}${actualGained} SP** (с учётом множителя)\n\nНовый баланс: **${newSP} SP** (${rank})`, 'addSp')],
+                `Запрошено: **${amount > 0 ? '+' : ''}${amount} SP** к стилю **${style.name}** игроку **${player.character_name || player.username}**\nФактически начислено: **${sign}${actualGained} SP** ${multiplierNote}\n\nНовый баланс: **${newSP} SP** (${rank})`, 'addSp')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -136,7 +147,11 @@ export async function execute(interaction) {
                 command: 'add-sp',
                 targetId: playerId,
                 targetTag: `${player.character_name || player.username} <@${playerId}>`,
-                extra: { amount, style: style.name }
+                extra: { 
+                    amount, 
+                    style: style.name,
+                    multiplier: applyMultiplier ? 'Да (с множителем)' : 'Нет (без множителя)'
+                }
             });
         } catch (e) { console.error('logCommand error', e); }
     } else {

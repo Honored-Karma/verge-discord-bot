@@ -1,6 +1,7 @@
 import { getDB } from '../utils/db.js';
 import { getPlayerByPublicIdentifier, slugifyCharacterName, generatePublicId } from './playerService.js';
 import { isValidSafeUrl, sanitizeSafeUrl } from '../utils/urlHelper.js';
+import { saveCharacterAvatar } from '../utils/avatarStorage.js';
 
 export { slugifyCharacterName };
 
@@ -487,7 +488,12 @@ export async function updateApplication(slugOrId, updates = {}, actor = null) {
     if (updates.sync_to_player && existing.player_id) {
         const playerUpdates = {};
         if (safeUpdates.character_name) playerUpdates.character_name = safeUpdates.character_name;
-        if (safeUpdates.character_avatar !== undefined) playerUpdates.character_avatar = safeUpdates.character_avatar;
+        if (safeUpdates.character_avatar !== undefined) {
+            playerUpdates.character_avatar = safeUpdates.character_avatar;
+            if (safeUpdates.character_avatar) {
+                saveCharacterAvatar(existing.player_id, safeUpdates.character_avatar).catch(() => {});
+            }
+        }
         if (safeUpdates.banner_url !== undefined) playerUpdates.character_banner = safeUpdates.banner_url;
         if (safeUpdates.attribute_name !== undefined) playerUpdates.attribute_name = safeUpdates.attribute_name;
         if (safeUpdates.organization !== undefined) playerUpdates.organization = safeUpdates.organization;

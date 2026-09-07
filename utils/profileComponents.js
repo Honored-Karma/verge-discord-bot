@@ -149,12 +149,16 @@ export function createProfileV2Components({
       `## История • ${name}\n${formatHistory(history)}\n\n-# ID: ${player.id} • Слот ${slot}`,
     );
 
+    const historyAvatar = player.character_avatar
+      ? safeAvatarUrl(player.character_avatar)
+      : safeAvatarUrl(user?.displayAvatarURL?.({ extension: "png", size: 256 }));
+
     container.addSectionComponents(
       new SectionBuilder()
         .addTextDisplayComponents(historyText)
         .setThumbnailAccessory(
           new ThumbnailBuilder()
-            .setURL(safeAvatarUrl(user?.displayAvatarURL?.({ extension: "png", size: 256 })))
+            .setURL(historyAvatar)
             .setDescription(`Аватар ${name}`),
         ),
     );

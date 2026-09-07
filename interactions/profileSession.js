@@ -5,6 +5,8 @@ import {
   getRecentProgressionHistory,
   getReputationTier,
   getTotalSP,
+  getCharacterAvatarBuffer,
+  saveCharacterAvatar,
 } from "../utils/dataManager.js";
 import { getProfileMultipliers } from "../utils/embeds.js";
 import { renderPhysicalCard, renderProfileCard } from "../utils/profileCard.js";
@@ -42,7 +44,7 @@ function avatarUrls(player, targetUser) {
   const fallback = targetUser?.displayAvatarURL?.({ extension: "png", size: 512 }) || null;
   const custom = String(player?.character_avatar || "").trim();
   return {
-    avatarUrl: /^https?:\/\//i.test(custom) ? custom : fallback,
+    avatarUrl: /^https?:\/\//i.test(custom) ? custom : null,
     fallbackAvatarUrl: fallback,
   };
 }
@@ -59,11 +61,24 @@ export async function renderProfilePage(state, targetUser, { disabled = false } 
   if (!player) return null;
 
   const page = IMAGE_BY_PAGE[state.page] ? state.page : "history";
-  const [history, styles, totalSP] = await Promise.all([
+  const [history, styles, totalSP, initialAvatarBuffer] = await Promise.all([
     getRecentProgressionHistory(state.player_id, 8),
     getAllPlayerSP(state.player_id),
     getTotalSP(state.player_id),
+    getCharacterAvatarBuffer(state.player_id),
   ]);
+
+  let avatarBuffer = initialAvatarBuffer;
+  // Автовосстановление: если буфер еще не был сохранен в MongoDB, но в профиле есть URL аватара,
+  // сохраняем его в постоянное хранилище сейчас
+  if (!avatarBuffer && player.character_avatar && /^https?:\/\//i.test(player.character_avatar)) {
+    try {
+      const saveRes = await saveCharacterAvatar(state.player_id, player.character_avatar);
+      if (saveRes.success) {
+        avatarBuffer = await getCharacterAvatarBuffer(state.player_id);
+      }
+    } catch {}
+  }
 
   const { avatarUrl, fallbackAvatarUrl } = avatarUrls(player, targetUser);
   const characterName = player.character_name || player.username;
@@ -73,6 +88,7 @@ export async function renderProfilePage(state, targetUser, { disabled = false } 
   if (state.page === "main") {
     buffer = await renderProfileCard({
       characterName,
+      avatarBuffer,
       avatarUrl,
       fallbackAvatarUrl,
       styles,
