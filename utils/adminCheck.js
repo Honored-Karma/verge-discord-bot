@@ -53,6 +53,7 @@ export function hasCommandPermission(member, commandName) {
     "add-reputation",
     "deduct-reputation",
     "set-reputation",
+    "train-block",
   ];
 
   // Commands that style-giver roles can use

@@ -707,3 +707,60 @@ export function createStyleNavigationButtons(currentPage, totalPages) {
 
   return row;
 }
+
+export function createTrainingBlockedEmbed(blockInfo) {
+  const trainingName = blockInfo.trainingName || "Тренировка";
+  const slotText =
+    blockInfo.slot !== null && blockInfo.slot !== undefined
+      ? `Слот ${blockInfo.slot}`
+      : "Все слоты (аккаунт)";
+
+  const embed = new EmbedBuilder()
+    .setColor(0xed4245)
+    .setTitle(`🚫 ${trainingName}: доступ заблокирован`)
+    .setDescription(
+      "Администрация ограничила для вас проведение данной тренировки.",
+    )
+    .addFields(
+      { name: "🎯 Тренировка", value: trainingName, inline: true },
+      { name: "📁 Слот", value: slotText, inline: true },
+      {
+        name: "👮 Заблокировал",
+        value: blockInfo.blockedBy ? `<@${blockInfo.blockedBy}>` : "Администрация",
+        inline: true,
+      },
+      {
+        name: "📝 Причина",
+        value: blockInfo.reason || "Не указана",
+        inline: false,
+      },
+    );
+
+  if (blockInfo.blockedAt) {
+    embed.addFields({
+      name: "📅 Дата блокировки",
+      value: `<t:${blockInfo.blockedAt}:f>`,
+      inline: true,
+    });
+  }
+
+  if (blockInfo.expiresAt) {
+    embed.addFields({
+      name: "⏳ Действует до",
+      value: `<t:${blockInfo.expiresAt}:f> (<t:${blockInfo.expiresAt}:R>)`,
+      inline: true,
+    });
+  } else {
+    embed.addFields({
+      name: "⏳ Срок",
+      value: "Бессрочно",
+      inline: true,
+    });
+  }
+
+  embed.setFooter({
+    text: "Если вы считаете блокировку ошибочной, обратитесь к администрации сервера.",
+  });
+
+  return embed;
+}

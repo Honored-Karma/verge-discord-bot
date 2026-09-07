@@ -1,0 +1,115 @@
+:root {
+  /* ==========================================================================
+     VERGE TRP • TACTICAL CYBERPUNK & DARK LUXURY DESIGN TOKENS
+     ========================================================================== */
+
+  /* Background Planes (Obsidian Depth) */
+  --bg-core: #07080d;
+  --bg-core-alt: #0b0d16;
+  --bg-surface: #0f121d;
+  --bg-surface-elevated: #151928;
+  --bg-surface-hover: #1c2236;
+  --bg-glass: rgba(15, 18, 29, 0.78);
+  --bg-glass-card: rgba(18, 22, 36, 0.82);
+  --bg-glass-elevated: rgba(24, 30, 50, 0.90);
+  --bg-glass-dock: rgba(11, 13, 22, 0.85);
+
+  /* Double-Bezel (Doppelrand) Architecture Tokens */
+  --bezel-outer-bg: rgba(255, 255, 255, 0.035);
+  --bezel-outer-border: rgba(255, 255, 255, 0.08);
+  --bezel-outer-radius: 24px;
+  --bezel-inner-radius: calc(var(--bezel-outer-radius) - 6px);
+  --bezel-padding: 6px;
+  --bezel-inner-highlight: inset 0 1px 1px rgba(255, 255, 255, 0.12);
+
+  /* Borders & Tactical Dividers */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-medium: rgba(255, 255, 255, 0.16);
+  --border-strong: rgba(255, 255, 255, 0.28);
+  --border-accent: rgba(139, 92, 246, 0.45);
+  --border-crimson: rgba(239, 68, 68, 0.45);
+  --border-cyan: rgba(6, 182, 212, 0.45);
+  --border-amber: rgba(245, 158, 11, 0.45);
+  --border-glass: rgba(255, 255, 255, 0.14);
+
+  /* Typography Colors */
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+  --text-accent: #c4b5fd;
+  --text-crimson: #fca5a5;
+  --text-cyan: #a5f3fc;
+  --text-amber: #fde68a;
+
+  /* Theme Accents (Genesis, Qi & Character Identity) */
+  --accent-purple: #8b5cf6;
+  --accent-purple-glow: rgba(139, 92, 246, 0.28);
+  --accent-purple-bright: #a78bfa;
+  --accent-purple-light: #c4b5fd;
+
+  --accent-crimson: #ef4444;
+  --accent-crimson-glow: rgba(239, 68, 68, 0.28);
+  --accent-crimson-bright: #f87171;
+  --accent-crimson-light: #fca5a5;
+
+  --accent-cyan: #06b6d4;
+  --accent-cyan-glow: rgba(6, 182, 212, 0.25);
+  --accent-cyan-bright: #22d3ee;
+  --accent-cyan-light: #67e8f9;
+
+  --accent-amber: #f59e0b;
+  --accent-amber-glow: rgba(245, 158, 11, 0.25);
+  --accent-amber-bright: #fbbf24;
+
+  --accent-emerald: #10b981;
+  --accent-emerald-glow: rgba(16, 185, 129, 0.25);
+
+  /* Luxury Gradients */
+  --gradient-genesis: linear-gradient(135deg, #ef4444 0%, #8b5cf6 50%, #06b6d4 100%);
+  --gradient-crimson-fire: linear-gradient(135deg, #ef4444 0%, #f43f5e 50%, #fb7185 100%);
+  --gradient-purple-neon: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 50%, #c084fc 100%);
+  --gradient-cyan-surge: linear-gradient(135deg, #0891b2 0%, #06b6d4 50%, #22d3ee 100%);
+  --gradient-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+  --gradient-card-shine: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.12) 50%, transparent 100%);
+  --gradient-bezel-shine: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, transparent 40%, rgba(139, 92, 246, 0.12) 100%);
+
+  /* Rarity System Colors */
+  --rarity-common: #94a3b8;
+  --rarity-common-glow: rgba(148, 163, 184, 0.2);
+  --rarity-uncommon: #22c55e;
+  --rarity-uncommon-glow: rgba(34, 197, 94, 0.25);
+  --rarity-rare: #3b82f6;
+  --rarity-rare-glow: rgba(59, 130, 246, 0.3);
+  --rarity-epic: #a855f7;
+  --rarity-epic-glow: rgba(168, 85, 247, 0.35);
+  --rarity-legendary: #f59e0b;
+  --rarity-legendary-glow: rgba(245, 158, 11, 0.4);
+
+  /* Factions */
+  --faction-tenryu: #8b5cf6;
+  --faction-guardians: #06b6d4;
+  --faction-darkluster: #64748b;
+  --faction-eclipse: #ef4444;
+
+  /* Typography Fonts */
+  --font-display: 'Cinzel', serif;
+  --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Layout & Geometry */
+  --nav-height: 72px;
+  --max-content-width: 1320px;
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-pill: 9999px;
+
+  /* Physics-based Spring Transitions */
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-fast: 0.18s var(--ease-smooth);
+  --transition-normal: 0.3s var(--ease-spring);
+  --transition-spring: 0.5s var(--ease-spring);
+}

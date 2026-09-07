@@ -11,7 +11,12 @@ import {
   autoDeleteMessageShort,
   autoDeleteMessageLong,
 } from "../utils/cooldowns.js";
-import { createCooldownEmbed, createErrorEmbed } from "../utils/embeds.js";
+import {
+  createCooldownEmbed,
+  createErrorEmbed,
+  createTrainingBlockedEmbed,
+} from "../utils/embeds.js";
+import { checkTrainingBlock, TRAINING_TYPES } from "../utils/trainingBlocks.js";
 import { logCommand } from "../utils/logs.js";
 import { makePlayerKey } from "../utils/playerKey.js";
 import {
@@ -61,6 +66,20 @@ export async function execute(interaction) {
     return;
   }
 
+  const blockCheck = await checkTrainingBlock(
+    interaction.user.id,
+    slot,
+    TRAINING_TYPES.TRAIN_AP,
+  );
+  if (blockCheck.blocked) {
+    const msg = await interaction.reply({
+      embeds: [createTrainingBlockedEmbed(blockCheck)],
+      fetchReply: true,
+    });
+    autoDeleteMessageLong(msg);
+    return;
+  }
+
   const cooldown = checkCooldown(player.last_train_timestamp, TRAIN_COOLDOWN);
   if (cooldown.onCooldown) {
     const retryAt =
@@ -103,6 +122,21 @@ export async function handleModalSubmit(interaction) {
       ),
     );
     autoDeleteMessageShort(msg);
+    return;
+  }
+
+  const blockCheck = await checkTrainingBlock(
+    interaction.user.id,
+    slot,
+    TRAINING_TYPES.TRAIN_AP,
+  );
+  if (blockCheck.blocked) {
+    const msg = await interaction.editReply({
+      content: null,
+      embeds: [createTrainingBlockedEmbed(blockCheck)],
+      components: [],
+    });
+    autoDeleteMessageLong(msg);
     return;
   }
 

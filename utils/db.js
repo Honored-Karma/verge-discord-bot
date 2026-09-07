@@ -63,11 +63,49 @@ async function initializeDatabase() {
         const collections = await db.listCollections().toArray();
         const collectionNames = collections.map(c => c.name);
 
-        // Create collections if they don't exist
+        // 1. Players collection and indexes
         if (!collectionNames.includes('players')) {
             await db.createCollection('players');
             await db.collection('players').createIndex({ id: 1 }, { unique: true });
         }
+        await db.collection('players').createIndex(
+            { slug: 1 },
+            { unique: true, sparse: true, name: 'player_slug_unique' }
+        );
+        await db.collection('players').createIndex(
+            { public_id: 1 },
+            { unique: true, sparse: true, name: 'player_public_id_unique' }
+        );
+
+        // 2. Applications collection and indexes
+        if (!collectionNames.includes('applications')) {
+            await db.createCollection('applications');
+        }
+        await db.collection('applications').createIndex(
+            { slug: 1 },
+            { unique: true, name: 'application_slug_unique' }
+        );
+        await db.collection('applications').createIndex(
+            { public_id: 1 },
+            { unique: true, sparse: true, name: 'application_public_id_unique' }
+        );
+
+        // 3. Wiki articles collection and indexes
+        if (!collectionNames.includes('wiki_articles')) {
+            await db.createCollection('wiki_articles');
+        }
+        await db.collection('wiki_articles').createIndex(
+            { slug: 1 },
+            { unique: true, name: 'wiki_article_slug_unique' }
+        );
+        await db.collection('wiki_articles').createIndex(
+            { public_id: 1 },
+            { unique: true, name: 'wiki_article_public_id_unique' }
+        );
+        await db.collection('wiki_articles').createIndex(
+            { category: 1, status: 1, sort_order: 1 },
+            { name: 'wiki_articles_category_status' }
+        );
 
         if (!collectionNames.includes('user_settings')) {
             await db.createCollection('user_settings');
@@ -92,9 +130,11 @@ async function initializeDatabase() {
 
         if (!collectionNames.includes('admin_actions')) {
             await db.createCollection('admin_actions');
-            await db.collection('admin_actions').createIndex({ admin_id: 1 });
-            await db.collection('admin_actions').createIndex({ timestamp: 1 });
         }
+        await db.collection('admin_actions').createIndex({ admin_id: 1 });
+        await db.collection('admin_actions').createIndex({ timestamp: 1 });
+        await db.collection('admin_actions').createIndex({ created_at: -1 }, { name: 'admin_actions_created_at' });
+        await db.collection('admin_actions').createIndex({ entity_type: 1 }, { name: 'admin_actions_entity_type' });
 
         if (!collectionNames.includes('command_logs')) {
             await db.createCollection('command_logs');
@@ -217,6 +257,22 @@ async function initializeDatabase() {
             { name: 'economy_ledger_player_history' }
         );
 
+        if (!collectionNames.includes('training_blocks')) {
+            await db.createCollection('training_blocks');
+        }
+        await db.collection('training_blocks').createIndex(
+            { user_id: 1, training: 1, slot: 1 },
+            { name: 'training_blocks_user_training_slot' }
+        );
+        await db.collection('training_blocks').createIndex(
+            { user_id: 1, is_active: 1 },
+            { name: 'training_blocks_user_active' }
+        );
+        await db.collection('training_blocks').createIndex(
+            { expires_at: 1 },
+            { name: 'training_blocks_expires' }
+        );
+
         await initializeShopCatalog(db);
         console.log('✅ Database initialized successfully');
         await backfillPlayerDefaults();
@@ -230,6 +286,7 @@ async function initializeDatabase() {
 export function getDB() {
     return db;
 }
+export const getDatabase = getDB;
 
 async function normalizeInventory() {
     const inventory = db.collection('inventory');

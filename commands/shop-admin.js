@@ -1,5 +1,4 @@
-import { MessageFlags, SlashCommandBuilder } from "discord.js";
-import { isAdmin } from "../utils/adminCheck.js";
+import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import { resolveMember } from "../utils/memberHelper.js";
 import { logCommand } from "../utils/logs.js";
 import {
@@ -26,6 +25,23 @@ import {
 import { createShopStatusComponents } from "../utils/shopComponents.js";
 
 const CONFIRMATION_DURATION = 2 * 60 * 1000;
+
+function canManageShop(member) {
+  if (!member) return false;
+  if (member.guild?.ownerId === member.id) return true;
+  if (member.permissions?.has(PermissionFlagsBits.Administrator)) return true;
+  const adminIds = String(process.env.ADMIN_IDS || "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  if (adminIds.includes(member.id)) return true;
+  const adminRoleIds = String(process.env.ADMIN_ROLE_IDS || "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  return adminRoleIds.length > 0
+    && member.roles?.cache?.some((role) => adminRoleIds.includes(role.id));
+}
 
 const CATEGORY_CHOICES = [
   { name: "Свитки и тома", value: "scrolls" },
@@ -268,7 +284,7 @@ async function confirmChange(interaction, context) {
 
 export async function execute(interaction) {
   const member = await resolveMember(interaction);
-  if (!isAdmin(member)) {
+  if (!canManageShop(member)) {
     return interaction.reply({
       components: createShopStatusComponents(
         "Недостаточно прав",
