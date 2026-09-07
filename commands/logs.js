@@ -13,12 +13,7 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
     const logsChannel = process.env.LOGS_CHANNEL_ID || null;
-
-    // Only allow running in the designated logs channel
-    if (logsChannel && interaction.channelId !== logsChannel) {
-        const msg = await interaction.reply({ embeds: [createErrorEmbed('Недоступно в этом канале', `Эту команду можно запускать только в канале логов <#${logsChannel}>.`)], flags: 64, fetchReply: true });
-        return;
-    }
+    const db = getDB();
 
     // Permission: admin or allowed limited role
     const member = await resolveMember(interaction);
@@ -27,20 +22,50 @@ export async function execute(interaction) {
         return;
     }
 
+    // Only allow running in designated logs channel or any channel enabled via /log-enable
+    let isAllowedChannel = false;
+    if (!logsChannel && !db) {
+        isAllowedChannel = true;
+    } else {
+        if (logsChannel && interaction.channelId === logsChannel) {
+            isAllowedChannel = true;
+        }
+        if (!isAllowedChannel && db) {
+            const registered = await db.collection('log_channels').findOne({ channel_id: interaction.channelId, enabled: true });
+            if (registered) isAllowedChannel = true;
+        }
+        if (!isAllowedChannel && !logsChannel && db) {
+            const anyChannel = await db.collection('log_channels').findOne({ enabled: true });
+            if (!anyChannel) isAllowedChannel = true;
+        }
+    }
+
+    if (!isAllowedChannel) {
+        const targetRef = logsChannel ? `<#${logsChannel}>` : 'канале логов';
+        return interaction.reply({
+            embeds: [createErrorEmbed('Недоступно в этом канале', `Эту команду можно запускать только в канале логов (${targetRef}).`)],
+            flags: 64
+        });
+    }
+
     await interaction.deferReply({ flags: 64 });
 
     const limit = Math.min(interaction.options.getInteger('limit') || 10, 50);
     const commandFilter = interaction.options.getString('command');
     const userFilter = interaction.options.getUser('user');
 
-    const db = getDB();
     if (!db) {
         return interaction.editReply({ embeds: [createErrorEmbed('Ошибка', 'База данных недоступна.')] });
     }
 
     const query = {};
     if (commandFilter) query.command = commandFilter;
-    if (userFilter) query.user_id = userFilter.id;
+    if (userFilter) {
+        query.$or = [
+            { user_id: userFilter.id },
+            { user_id: new RegExp(`^${userFilter.id}(_|$)`) }
+        ];
+    }
     if (interaction.guildId) query.guild_id = interaction.guildId;
 
     const rows = await db.collection('command_logs').find(query).sort({ timestamp: -1 }).limit(limit).toArray();
@@ -51,11 +76,33 @@ export async function execute(interaction) {
 
     const lines = rows.map(r => {
         const time = new Date(r.timestamp).toLocaleString('ru-RU');
-        const who = r.user_tag || `<@${r.user_id}>`;
+        const cleanUserId = r.user_id ? String(r.user_id).replace(/_slot\d+$/, '') : null;
+        const who = r.user_tag
+            ? `**${r.user_tag}** (<@${cleanUserId}>)`
+            : (cleanUserId ? `<@${cleanUserId}>` : 'неизвестно');
         const cmd = r.command || 'неизвестно';
         const target = r.target_tag ? ` → ${r.target_tag}` : '';
         const ch = r.channel_id ? ` в <#${r.channel_id}>` : '';
-        return `• [${time}] **${who}** использовал **/${cmd}**${target}${ch}`;
+
+        let extraInfo = '';
+        if (r.extra) {
+            const parts = [];
+            if (r.extra.slot) parts.push(`Слот ${r.extra.slot}`);
+            if (r.extra.character_name) parts.push(`персонаж: **${r.extra.character_name}**`);
+            if (r.extra.style) parts.push(`стиль: **${r.extra.style}**`);
+            if (r.extra.ap_gained !== undefined) parts.push(`+${r.extra.ap_gained} AP`);
+            if (r.extra.sp_gained !== undefined) parts.push(`+${r.extra.sp_gained} SP`);
+            if (r.extra.multiplier) parts.push(`${r.extra.multiplier}%`);
+            if (parts.length) extraInfo = ` • ${parts.join(', ')}`;
+        }
+
+        let line = `• [${time}] ${who} — **/${cmd}**${target}${ch}${extraInfo}`;
+        if (r.extra?.text) {
+            const snippet = String(r.extra.text).trim().replace(/\s+/g, ' ');
+            const preview = snippet.length > 120 ? snippet.slice(0, 117) + '...' : snippet;
+            line += `\n  > 💬 *«${preview}»*`;
+        }
+        return line;
     });
 
     // Discord message limit considerations: send as multiple replies if needed
