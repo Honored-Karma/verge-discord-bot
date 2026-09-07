@@ -19,6 +19,10 @@ import {
   TRAIN_SP_NAMESPACE,
   trainSpInteractionHandler,
 } from "./trainSpSession.js";
+import {
+  MISSION_NAMESPACE,
+  missionInteractionHandler,
+} from "./missionSession.js";
 
 /**
  * Single place where persistent interaction handlers are wired up. Every panel
@@ -34,6 +38,7 @@ export function registerInteractionHandlers() {
   registerInteractionHandler(SHOP_ORDER_NAMESPACE, shopOrderInteractionHandler);
   registerInteractionHandler(TRAIN_SP_NAMESPACE, trainSpInteractionHandler);
   registerInteractionHandler(HELP_NAMESPACE, helpInteractionHandler);
+  registerInteractionHandler(MISSION_NAMESPACE, missionInteractionHandler);
   return [
     SHOP_NAMESPACE,
     PAY_NAMESPACE,
@@ -43,5 +48,6 @@ export function registerInteractionHandlers() {
     SHOP_ORDER_NAMESPACE,
     TRAIN_SP_NAMESPACE,
     HELP_NAMESPACE,
+    MISSION_NAMESPACE,
   ];
 }

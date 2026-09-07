@@ -36,7 +36,7 @@ const PLAYER_GROUPS = [
     label: "Броски",
     emoji: "🎲",
     description: "Кубики и случайный выбор для отыгрыша.",
-    commands: ["roll", "pick"],
+    commands: ["roll", "pick", "mission"],
   },
   {
     id: "economy",

@@ -204,6 +204,7 @@ export function logAdminAction(adminId, action, details) {
   const timestamp = Math.floor(Date.now() / 1000);
   try {
     const db = getDB();
+    if (!db) return;
     db.collection("admin_actions")
       .insertOne({
         admin_id: adminId,

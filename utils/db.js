@@ -292,6 +292,48 @@ async function initializeDatabase() {
             { name: 'interaction_session_owner_history' }
         );
 
+        // 4. Missions collection and indexes
+        if (!collectionNames.includes('missions')) {
+            await db.createCollection('missions');
+        }
+        await db.collection('missions').createIndex(
+            { public_id: 1 },
+            { unique: true, name: 'mission_public_id_unique' }
+        );
+        await db.collection('missions').createIndex(
+            { message_id: 1 },
+            { sparse: true, name: 'mission_message_id' }
+        );
+        await db.collection('missions').createIndex(
+            { guild_id: 1, status: 1, created_at: -1 },
+            { name: 'mission_guild_status' }
+        );
+        await db.collection('missions').createIndex(
+            { guild_id: 1, organization_key: 1 },
+            { name: 'mission_guild_org' }
+        );
+        await db.collection('missions').createIndex(
+            { channel_id: 1 },
+            { name: 'mission_channel' }
+        );
+
+        // 5. Organization mission channel settings
+        if (!collectionNames.includes('organization_mission_settings')) {
+            await db.createCollection('organization_mission_settings');
+        }
+        await db.collection('organization_mission_settings').createIndex(
+            { guild_id: 1, organization_key: 1 },
+            { unique: true, name: 'org_mission_channel_unique' }
+        );
+        await db.collection('organization_mission_settings').createIndex(
+            { guild_id: 1, channel_id: 1 },
+            { name: 'org_mission_guild_channel' }
+        );
+        await db.collection('organization_mission_settings').createIndex(
+            { channel_id: 1 },
+            { name: 'org_mission_channel' }
+        );
+
         await initializeShopCatalog(db);
         console.log('✅ Database initialized successfully');
         await backfillPlayerDefaults();
@@ -306,6 +348,10 @@ export function getDB() {
     return db;
 }
 export const getDatabase = getDB;
+
+export function setDB(customDb) {
+    db = customDb;
+}
 
 async function normalizeInventory() {
     const inventory = db.collection('inventory');

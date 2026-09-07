@@ -31,8 +31,8 @@ const MONTHLY_SALARY = {
 
 export function normalizeOrganization(input) {
     const value = String(input || '').trim().toUpperCase();
-    if (value === ORGANIZATIONS.TENRYU || value === 'ТЕНРЮ') return ORGANIZATIONS.TENRYU;
-    if (value === ORGANIZATIONS.GUARDIANS || value === 'СТРАЖИ') return ORGANIZATIONS.GUARDIANS;
+    if (value === ORGANIZATIONS.TENRYU || value === 'TENRYŪ' || value === 'ТЕНРЮ') return ORGANIZATIONS.TENRYU;
+    if (value === ORGANIZATIONS.GUARDIANS || value === 'СТРАЖИ' || value === 'СТРАЖИ МИРА') return ORGANIZATIONS.GUARDIANS;
     return null;
 }
 

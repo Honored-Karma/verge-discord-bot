@@ -19,6 +19,7 @@ export const data = new SlashCommandBuilder()
     .addChoices(
       { name: "🚀 Начало", value: "start" },
       { name: "⚡ Развитие", value: "growth" },
+      { name: "🎲 Броски и миссии", value: "tabletop" },
       { name: "💳 Экономика", value: "economy" },
       { name: "🛠️ Для персонала", value: "staff" },
     ));
