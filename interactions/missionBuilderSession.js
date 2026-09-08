@@ -53,6 +53,7 @@ export const MB_SELECT_CHANNEL = "mb_select_channel";
 
 export const MB_BTN_MAIN = "mb_btn_main";
 export const MB_BTN_REWARDS = "mb_btn_rewards";
+export const MB_BTN_MEDIA = "mb_btn_media";
 export const MB_BTN_PUBLISH = "mb_btn_publish";
 export const MB_BTN_CANCEL = "mb_btn_cancel";
 
@@ -66,6 +67,9 @@ export const MB_INPUT_SP = "mb_input_sp";
 export const MB_INPUT_REP = "mb_input_rep";
 export const MB_INPUT_ITEM = "mb_input_item";
 export const MB_INPUT_QTY = "mb_input_qty";
+
+export const MB_INPUT_IMAGE = "mb_input_image";
+export const MB_INPUT_THUMBNAIL = "mb_input_thumbnail";
 
 export const ACCESS_LABELS = {
   [MISSION_ACCESS.open]: "🌐 Открытая для всех",
@@ -90,6 +94,8 @@ export function createDraftState({
   organization_name = null,
   channel_id = null,
   reward = null,
+  image_url = null,
+  thumbnail_url = null,
 } = {}) {
   return {
     title: String(title || "").slice(0, 100),
@@ -100,6 +106,8 @@ export function createDraftState({
     organization_key: organization_key ? String(organization_key) : null,
     organization_name: organization_name ? String(organization_name) : null,
     channel_id: channel_id ? String(channel_id) : null,
+    image_url: image_url ? String(image_url).trim().slice(0, 500) : null,
+    thumbnail_url: thumbnail_url ? String(thumbnail_url).trim().slice(0, 500) : null,
     reward: {
       ap: Math.max(0, Number(reward?.ap) || 0),
       sp: Math.max(0, Number(reward?.sp) || 0),
@@ -136,7 +144,12 @@ export function createMissionBuilderEmbed(state) {
     ? state.description.trim()
     : "*(Описание не заполнено — нажмите кнопку 【📝 Основное】 ниже)*";
 
-  return new EmbedBuilder()
+  const mediaLines = [];
+  if (state.image_url) mediaLines.push(`• Баннер: [Открыть арт](${state.image_url})`);
+  if (state.thumbnail_url) mediaLines.push(`• Значок: [Открыть лого](${state.thumbnail_url})`);
+  const mediaText = mediaLines.length > 0 ? mediaLines.join("\n") : "*Не заданы (кнопка 【🖼️ Обложка】)*";
+
+  const embed = new EmbedBuilder()
     .setColor(0x8b5cf6)
     .setTitle("🛠️ Мастер создания миссии · Черновик")
     .setDescription(
@@ -148,11 +161,28 @@ export function createMissionBuilderEmbed(state) {
       `**📢 Канал публикации:** ${channelText}\n` +
       `**👥 Лимит участников:** ${state.max_players} чел.\n\n` +
       `**📜 Описание и вводная:**\n${descriptionText}\n\n` +
-      `**🎁 Награды:**\n${rewardText}`
+      `**🎁 Награды:**\n${rewardText}\n\n` +
+      `**🖼️ Изображения / Арт:**\n${mediaText}`
     )
     .setFooter({
-      text: "Кнопки 【📝 Основное】 и 【🎁 Награды】 вызывают всплывающие окна ввода текста.",
+      text: "Кнопки 【📝 Основное】, 【🎁 Награды】 и 【🖼️ Обложка】 вызывают всплывающие окна ввода текста.",
     });
+
+  if (state.image_url?.trim()) {
+    try {
+      new URL(state.image_url.trim());
+      embed.setImage(state.image_url.trim());
+    } catch {}
+  }
+
+  if (state.thumbnail_url?.trim()) {
+    try {
+      new URL(state.thumbnail_url.trim());
+      embed.setThumbnail(state.thumbnail_url.trim());
+    } catch {}
+  }
+
+  return embed;
 }
 
 /**
@@ -251,6 +281,12 @@ export function createMissionBuilderComponents(state, orgs = [], messageId = nul
       .setCustomId(MB_BTN_REWARDS)
       .setLabel("Награды")
       .setEmoji("🎁")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(disabled),
+    new ButtonBuilder()
+      .setCustomId(MB_BTN_MEDIA)
+      .setLabel("Обложка")
+      .setEmoji("🖼️")
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(disabled),
     new ButtonBuilder()
@@ -404,6 +440,46 @@ export function createRewardsModal(state, messageId) {
 }
 
 /**
+ * Создаёт модалку ввода ссылок на изображения (баннер, миниатюра)
+ */
+export function createMediaModal(state, messageId) {
+  const modal = new ModalBuilder()
+    .setCustomId(buildModalCustomId(MISSION_BUILDER_NAMESPACE, "media", messageId))
+    .setTitle("Изображения и обложка миссии");
+
+  const imageInput = new TextInputBuilder()
+    .setCustomId(MB_INPUT_IMAGE)
+    .setLabel("URL большого баннера/арта (необязательно)")
+    .setStyle(TextInputStyle.Short)
+    .setMaxLength(500)
+    .setRequired(false)
+    .setPlaceholder("https://example.com/art.png");
+
+  if (state.image_url && state.image_url.trim()) {
+    imageInput.setValue(state.image_url.trim());
+  }
+
+  const thumbInput = new TextInputBuilder()
+    .setCustomId(MB_INPUT_THUMBNAIL)
+    .setLabel("URL миниатюры/значка (необязательно)")
+    .setStyle(TextInputStyle.Short)
+    .setMaxLength(500)
+    .setRequired(false)
+    .setPlaceholder("https://example.com/icon.png");
+
+  if (state.thumbnail_url && state.thumbnail_url.trim()) {
+    thumbInput.setValue(state.thumbnail_url.trim());
+  }
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(imageInput),
+    new ActionRowBuilder().addComponents(thumbInput)
+  );
+
+  return modal;
+}
+
+/**
  * Публикация миссии из состояния черновика
  */
 async function publishMission({ interaction, session }) {
@@ -425,11 +501,11 @@ async function publishMission({ interaction, session }) {
 
   // 1. Определение целевой организации и канала
   let resolvedOrg = null;
-  let targetChannelId = null;
+  let targetChannelId = state.channel_id;
 
   if (state.organization_key) {
     resolvedOrg = await getOrganizationByKey(state.organization_key);
-    if (resolvedOrg) {
+    if (!targetChannelId && resolvedOrg) {
       const orgChannelSetting = await getOrganizationMissionChannel({
         guildId: interaction.guildId,
         orgKey: resolvedOrg.key,
@@ -441,7 +517,7 @@ async function publishMission({ interaction, session }) {
   }
 
   if (!targetChannelId) {
-    targetChannelId = state.channel_id || interaction.channelId;
+    targetChannelId = interaction.channelId;
   }
 
   // 2. Получение канала Discord
@@ -493,6 +569,8 @@ async function publishMission({ interaction, session }) {
     description: state.description.trim(),
     access: state.access || MISSION_ACCESS.open,
     maxPlayers: state.max_players || 5,
+    imageUrl: state.image_url?.trim() || null,
+    thumbnailUrl: state.thumbnail_url?.trim() || null,
     createdBy: {
       user_id: interaction.user.id,
       username: interaction.user.username,
@@ -584,7 +662,7 @@ async function handleComponent({ interaction, session }) {
   const customId = interaction.customId;
   const state = { ...session.state };
 
-  // 1. Нажатие кнопки «Основное» -> открыть модалку
+  // 1. Нажатие кнопки 【Основное】 -> открыть модалку
   if (customId === MB_BTN_MAIN) {
     const modal = createMainInfoModal(state, session.message_id);
     return interaction.showModal(modal).catch((err) => {
@@ -592,7 +670,7 @@ async function handleComponent({ interaction, session }) {
     });
   }
 
-  // 2. Нажатие кнопки «Награды» -> открыть модалку
+  // 2. Нажатие кнопки 【Награды】 -> открыть модалку
   if (customId === MB_BTN_REWARDS) {
     const modal = createRewardsModal(state, session.message_id);
     return interaction.showModal(modal).catch((err) => {
@@ -600,12 +678,20 @@ async function handleComponent({ interaction, session }) {
     });
   }
 
-  // 3. Нажатие кнопки «Опубликовать»
+  // 3. Нажатие кнопки 【Обложка】 -> открыть модалку
+  if (customId === MB_BTN_MEDIA) {
+    const modal = createMediaModal(state, session.message_id);
+    return interaction.showModal(modal).catch((err) => {
+      console.error("Mission builder media modal error:", err);
+    });
+  }
+
+  // 4. Нажатие кнопки 【Опубликовать】
   if (customId === MB_BTN_PUBLISH) {
     return publishMission({ interaction, session });
   }
 
-  // 4. Нажатие кнопки «Отмена»
+  // 5. Нажатие кнопки 【Отмена】
   if (customId === MB_BTN_CANCEL) {
     await closeInteractionSession(session.message_id);
     const cancelEmbed = new EmbedBuilder()
@@ -619,17 +705,17 @@ async function handleComponent({ interaction, session }) {
     });
   }
 
-  // 5. Выбор типа миссии
+  // 6. Выбор типа миссии
   if (customId === MB_SELECT_TYPE && interaction.isStringSelectMenu()) {
     state.type = interaction.values[0];
   }
 
-  // 6. Выбор доступа
+  // 7. Выбор доступа
   if (customId === MB_SELECT_ACCESS && interaction.isStringSelectMenu()) {
     state.access = interaction.values[0];
   }
 
-  // 7. Выбор организации
+  // 8. Выбор организации
   if (customId === MB_SELECT_ORG && interaction.isStringSelectMenu()) {
     const selectedOrg = interaction.values[0];
     if (selectedOrg === "none") {
@@ -652,9 +738,9 @@ async function handleComponent({ interaction, session }) {
     }
   }
 
-  // 8. Выбор канала
+  // 9. Выбор канала
   if (customId === MB_SELECT_CHANNEL && interaction.isChannelSelectMenu()) {
-    state.channel_id = interaction.values[0];
+    state.channel_id = interaction.values?.[0] || null;
   }
 
   // Сохраняем обновлённое состояние в MongoDB
@@ -708,6 +794,28 @@ async function handleModal({ interaction, session, action }) {
       item_name: itemName.slice(0, 100),
       item_qty: qty,
     };
+  } else if (action === "media") {
+    const rawImage = interaction.fields.getTextInputValue(MB_INPUT_IMAGE)?.trim() || "";
+    const rawThumb = interaction.fields.getTextInputValue(MB_INPUT_THUMBNAIL)?.trim() || "";
+
+    let validImage = null;
+    if (rawImage) {
+      try {
+        new URL(rawImage);
+        validImage = rawImage.slice(0, 500);
+      } catch {}
+    }
+
+    let validThumb = null;
+    if (rawThumb) {
+      try {
+        new URL(rawThumb);
+        validThumb = rawThumb.slice(0, 500);
+      } catch {}
+    }
+
+    state.image_url = validImage;
+    state.thumbnail_url = validThumb;
   }
 
   // Сохраняем состояние

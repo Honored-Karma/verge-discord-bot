@@ -114,6 +114,20 @@ export function createMissionCardEmbed(mission) {
     });
   }
 
+  if (mission.image_url) {
+    try {
+      new URL(mission.image_url);
+      embed.setImage(mission.image_url);
+    } catch {}
+  }
+
+  if (mission.thumbnail_url) {
+    try {
+      new URL(mission.thumbnail_url);
+      embed.setThumbnail(mission.thumbnail_url);
+    } catch {}
+  }
+
   embed.setFooter({ text: `ID: ${mission.public_id} • Verge RPG` });
   embed.setTimestamp(mission.created_at ? new Date(mission.created_at) : new Date());
 

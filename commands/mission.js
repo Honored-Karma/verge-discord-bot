@@ -583,9 +583,28 @@ async function handleMissionManage(interaction, member) {
   }
 
   // Opens GM completion dialog or status review
-  return interaction.reply({
+  const reply = await interaction.reply({
     embeds: [createCompletionConfirmationEmbed(mission)],
     components: createCompletionActionRows(),
     flags: MessageFlags.Ephemeral,
+    withResponse: true,
   });
+  const message = reply?.resource?.message || (await interaction.fetchReply().catch(() => null));
+
+  if (message?.id) {
+    await createInteractionSession({
+      messageId: message.id,
+      namespace: MISSION_NAMESPACE,
+      ownerId: interaction.user.id,
+      guildId: interaction.guildId,
+      channelId: interaction.channelId,
+      state: {
+        public_id: mission.public_id,
+        mission_id: mission._id?.toString?.() || mission.public_id,
+      },
+      ttlMs: MISSION_SESSION_TTL_MS,
+    });
+  }
+
+  return reply;
 }

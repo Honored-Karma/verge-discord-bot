@@ -3,20 +3,24 @@ import test from "node:test";
 import {
   createDraftState,
   createMainInfoModal,
+  createMediaModal,
   createMissionBuilderComponents,
   createMissionBuilderEmbed,
   createRewardsModal,
   MB_BTN_CANCEL,
   MB_BTN_MAIN,
+  MB_BTN_MEDIA,
   MB_BTN_PUBLISH,
   MB_BTN_REWARDS,
   MB_INPUT_AP,
   MB_INPUT_DESC,
+  MB_INPUT_IMAGE,
   MB_INPUT_ITEM,
   MB_INPUT_PLAYERS,
   MB_INPUT_QTY,
   MB_INPUT_REP,
   MB_INPUT_SP,
+  MB_INPUT_THUMBNAIL,
   MB_INPUT_TITLE,
   MB_SELECT_ACCESS,
   MB_SELECT_CHANNEL,
@@ -226,6 +230,7 @@ test("createMissionBuilderEmbed and createMissionBuilderComponents generate vali
   assert.deepEqual(buttons, [
     MB_BTN_MAIN,
     MB_BTN_REWARDS,
+    MB_BTN_MEDIA,
     MB_BTN_PUBLISH,
     MB_BTN_CANCEL,
   ]);
@@ -254,6 +259,14 @@ test("createMainInfoModal and createRewardsModal build valid modal dialogs with 
   assert.equal(parsedRew.namespace, MISSION_BUILDER_NAMESPACE);
   assert.equal(parsedRew.action, "rewards");
   assert.equal(parsedRew.messageId, "msg_rew_999");
+
+  const mediaModal = createMediaModal(state, "msg_media_999");
+  const mediaData = mediaModal.toJSON();
+  assert.equal(mediaData.title, "Изображения и обложка миссии");
+  const parsedMedia = parseModalCustomId(mediaData.custom_id);
+  assert.equal(parsedMedia.namespace, MISSION_BUILDER_NAMESPACE);
+  assert.equal(parsedMedia.action, "media");
+  assert.equal(parsedMedia.messageId, "msg_media_999");
 
   // Проверяем, что при пустом начальном состоянии поля с min_length не содержат value: ""
   const emptyState = createDraftState();
@@ -462,6 +475,32 @@ test("missionBuilderInteractionHandler handles modal submissions for main info a
   assert.equal(afterRewDoc.state.reward.item_name, "Свиток молнии");
   assert.equal(afterRewDoc.state.reward.item_qty, 3);
   assert.ok(modalUpdatePayload.embeds[0].data.description.includes("Свиток молнии"));
+
+  // 3. Отправка модалки "media"
+  const mediaModalInteraction = {
+    fields: {
+      getTextInputValue(fieldId) {
+        if (fieldId === MB_INPUT_IMAGE) return "https://example.com/banner.png";
+        if (fieldId === MB_INPUT_THUMBNAIL) return "https://example.com/icon.png";
+        return "";
+      },
+    },
+    update: async (payload) => {
+      modalUpdatePayload = payload;
+    },
+  };
+
+  await missionBuilderInteractionHandler.handleModal({
+    interaction: mediaModalInteraction,
+    session: afterRewDoc,
+    action: "media",
+  });
+
+  const afterMediaDoc = await db.collection("interaction_sessions").findOne({ message_id: "msg_modal_test" });
+  assert.equal(afterMediaDoc.state.image_url, "https://example.com/banner.png");
+  assert.equal(afterMediaDoc.state.thumbnail_url, "https://example.com/icon.png");
+  assert.equal(modalUpdatePayload.embeds[0].data.image.url, "https://example.com/banner.png");
+  assert.equal(modalUpdatePayload.embeds[0].data.thumbnail.url, "https://example.com/icon.png");
 });
 
 test("publishMission validates required fields, permissions and publishes mission", async () => {

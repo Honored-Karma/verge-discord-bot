@@ -101,6 +101,8 @@ export async function createMission({
   maxPlayers = 5,
   createdBy,
   reward = {},
+  imageUrl = null,
+  thumbnailUrl = null,
   db = null,
 }) {
   const target = collection(db);
@@ -146,6 +148,9 @@ export async function createMission({
     access: MISSION_ACCESS[access] || MISSION_ACCESS.open,
     status: MISSION_STATUS.recruiting,
     max_players: Math.max(1, Math.min(50, Number(maxPlayers) || 5)),
+
+    image_url: imageUrl ? String(imageUrl).trim() : null,
+    thumbnail_url: thumbnailUrl ? String(thumbnailUrl).trim() : null,
 
     created_by: {
       user_id: String(createdBy.user_id),

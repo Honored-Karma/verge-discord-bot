@@ -833,3 +833,252 @@ test("компоненты карточки миссии и сессия вос�
   assert.equal(row1.components.length, 4, "первый ряд содержит 4 кнопки игрока");
   assert.equal(row2.components.length, 3, "второй ряд содержит 3 кнопки управления");
 });
+
+test("диалог завершения миссии (CONFIRM_FINISH и ABORT_FINISH) корректно работает даже при 0 участников", async () => {
+  const db = createMockDatabase();
+  setDB(db);
+
+  const mission = await createMission({
+    guildId: "guild_finish_1",
+    channelId: "chan_finish_1",
+    title: "Зачистка аномальной скважины",
+    maxPlayers: 5,
+    createdBy: { user_id: "gm_finisher", username: "GameMaster" },
+    reward: { ap: 45, sp: 3, reputation: 345 },
+    db,
+  });
+
+  const publicCardMsgId = "msg_public_card_777";
+  await setMissionMessageId(mission.public_id, publicCardMsgId, db);
+
+  // 1. Открытие диалога завершения (MISSION_BTN_FINISH)
+  let finishReplyPayload = null;
+  const finishInteraction = {
+    customId: "mission_finish",
+    user: { id: "gm_finisher", username: "GameMaster" },
+    guildId: "guild_finish_1",
+    channelId: "chan_finish_1",
+    member: {
+      id: "gm_finisher",
+      permissions: { has: () => true },
+      roles: { cache: { some: () => true } },
+    },
+    async reply(payload) {
+      finishReplyPayload = payload;
+      return { resource: { message: { id: "msg_ephemeral_confirm_888" } } };
+    },
+  };
+
+  const cardSession = {
+    message_id: publicCardMsgId,
+    state: { public_id: mission.public_id },
+  };
+
+  await missionInteractionHandler.handleComponent({
+    interaction: finishInteraction,
+    session: cardSession,
+  });
+
+  assert.ok(finishReplyPayload);
+  assert.ok(finishReplyPayload.embeds);
+
+  // Проверяем, что в БД зарегистрировалась сессия для эфемера
+  const ephemeralSession = await db.collection("interaction_sessions").findOne({
+    message_id: "msg_ephemeral_confirm_888",
+  });
+  assert.ok(ephemeralSession, "сессия для эфемерного окна подтверждения должна быть создана");
+  assert.equal(ephemeralSession.state.public_id, mission.public_id);
+
+  // 2. Нажатие «Подтвердить и выдать награды» (MISSION_BTN_CONFIRM_FINISH)
+  let publicCardEdited = false;
+  const mockPublicCard = {
+    id: publicCardMsgId,
+    async edit() {
+      publicCardEdited = true;
+    },
+  };
+
+  let editReplyPayload = null;
+  const confirmInteraction = {
+    customId: "mission_finish_confirm",
+    user: { id: "gm_finisher", username: "GameMaster" },
+    guildId: "guild_finish_1",
+    channelId: "chan_finish_1",
+    message: { id: "msg_ephemeral_confirm_888" },
+    client: {
+      channels: {
+        async fetch(chId) {
+          if (chId === "chan_finish_1") {
+            return {
+              messages: {
+                async fetch(mId) {
+                  if (mId === publicCardMsgId) return mockPublicCard;
+                  return null;
+                },
+              },
+            };
+          }
+          return null;
+        },
+      },
+    },
+    member: {
+      id: "gm_finisher",
+      permissions: { has: () => true },
+      roles: { cache: { some: () => true } },
+    },
+    async deferUpdate() {},
+    async editReply(payload) {
+      editReplyPayload = payload;
+    },
+  };
+
+  await missionInteractionHandler.handleComponent({
+    interaction: confirmInteraction,
+    session: ephemeralSession,
+  });
+
+  // Проверяем, что миссия перешла в статус completed даже при 0 участников
+  const completedMission = await getMissionByPublicId(mission.public_id, db);
+  assert.equal(completedMission.status, "completed");
+  assert.ok(publicCardEdited, "публичная карточка миссии должна быть обновлена в канале");
+  assert.ok(editReplyPayload);
+  assert.ok(editReplyPayload.embeds[0].data.title.includes("Награды успешно выданы"));
+
+  // Сессия подтверждения закрыта
+  const closedSession = await db.collection("interaction_sessions").findOne({
+    message_id: "msg_ephemeral_confirm_888",
+  });
+  assert.equal(closedSession.status, "closed");
+});
+
+test("интерактивные кнопки: старт с переиспользованием ветки, просмотр пати и досье участников", async () => {
+  const db = createMockDatabase();
+  setDB(db);
+
+  // Добавляем тестового игрока
+  await db.collection("players").insertOne({
+    id: "user_party_1_1",
+    user_id: "user_party_1",
+    slot: 1,
+    character_name: "Тестовый Ниндзя",
+    organization: "Сопротивление",
+    rank: "Ветеран",
+    ap: 50,
+  });
+
+  const mission = await createMission(
+    {
+      guildId: "guild_audit_1",
+      channelId: "chan_audit_1",
+      title: "Операция в порту",
+      type: MISSION_TYPES.anomaly,
+      description: "Зачистка порта",
+      access: MISSION_ACCESS.open,
+      maxPlayers: 4,
+      createdBy: { user_id: "gm_auditor", username: "Master" },
+      reward: { ap: 10, sp: 5, reputation: 1 },
+    },
+    db
+  );
+
+  // Игрок вступает в миссию
+  await joinMission(
+    {
+      publicId: mission.public_id,
+      playerId: "user_party_1_1",
+      userId: "user_party_1",
+      characterName: "Тестовый Ниндзя",
+    },
+    db
+  );
+
+  const cardSession = {
+    message_id: "msg_card_audit_999",
+    state: { public_id: mission.public_id },
+  };
+
+  // 1. Проверка кнопки «Состав пати» (MISSION_BTN_PARTY)
+  let partyEditPayload = null;
+  const partyInteraction = {
+    customId: "mission_party",
+    user: { id: "user_party_1" },
+    async deferReply() {},
+    async editReply(payload) {
+      partyEditPayload = payload;
+    },
+  };
+
+  await missionInteractionHandler.handleComponent({
+    interaction: partyInteraction,
+    session: cardSession,
+  });
+
+  assert.ok(partyEditPayload, "просмотр состава пати должен вернуть embed");
+  assert.ok(partyEditPayload.embeds[0].data.title.includes("Состав пати"));
+
+  // 2. Проверка выбора участника из селекта (MISSION_SELECT_MEMBER)
+  let memberProfilePayload = null;
+  const memberSelectInteraction = {
+    customId: "mission_member_select",
+    user: { id: "user_party_1" },
+    values: ["user_party_1_1"],
+    async deferUpdate() {},
+    async editReply(payload) {
+      memberProfilePayload = payload;
+    },
+  };
+
+  await missionInteractionHandler.handleComponent({
+    interaction: memberSelectInteraction,
+    session: cardSession,
+  });
+
+  assert.ok(memberProfilePayload, "просмотр досье участника должен вернуть обновлённое сообщение");
+  assert.ok(memberProfilePayload.embeds[0].data.title.includes("Тестовый Ниндзя"));
+
+  // 3. Проверка запуска миссии (MISSION_BTN_START) с уже существующей веткой
+  let threadMessageSent = false;
+  const existingThread = {
+    id: "thread_rp_existing_123",
+    async send(text) {
+      threadMessageSent = true;
+    },
+  };
+
+  let startNotice = null;
+  const startInteraction = {
+    customId: "mission_start",
+    user: { id: "gm_auditor", username: "Master" },
+    guildId: "guild_audit_1",
+    channelId: "chan_audit_1",
+    message: {
+      id: "msg_card_audit_999",
+      thread: existingThread,
+      hasThread: true,
+      async edit() {},
+    },
+    member: {
+      id: "gm_auditor",
+      permissions: { has: () => true },
+      roles: { cache: { some: () => true } },
+    },
+    deferred: true,
+    async deferReply() {},
+    async editReply(payload) {
+      startNotice = payload;
+    },
+  };
+
+  await missionInteractionHandler.handleComponent({
+    interaction: startInteraction,
+    session: cardSession,
+  });
+
+  assert.ok(threadMessageSent, "бот должен отправить сообщение в существующую ветку");
+  const startedMission = await getMissionByPublicId(mission.public_id, db);
+  assert.equal(startedMission.status, "active");
+  assert.equal(startedMission.thread_id, "thread_rp_existing_123");
+  assert.ok(startNotice.content.includes("успешно запущена"));
+  assert.ok(!startNotice.content.includes("не удалось создать"), "не должно быть ложного предупреждения о правах на ветку");
+});

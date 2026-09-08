@@ -36,6 +36,11 @@ import {
   MISSION_SELECT_MEMBER,
 } from "../utils/missionComponents.js";
 
+import {
+  closeInteractionSession,
+  createInteractionSession,
+} from "../utils/interactionSessions.js";
+
 export const MISSION_NAMESPACE = "mission";
 export const MISSION_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -57,7 +62,10 @@ async function sendNotice(interaction, content, options = {}) {
     flags: MessageFlags.Ephemeral,
     ...options,
   };
-  if (interaction.replied || interaction.deferred) {
+  if (interaction.deferred) {
+    return interaction.editReply(payload).catch(() => {});
+  }
+  if (interaction.replied) {
     return interaction.followUp(payload).catch(() => {});
   }
   return interaction.reply(payload).catch(() => {});
@@ -83,11 +91,29 @@ async function resolveMission(interaction, session) {
  */
 async function updateMissionCardMessage(interaction, mission) {
   try {
-    if (interaction.message && typeof interaction.message.edit === "function") {
+    if (interaction.message?.id === mission.message_id && typeof interaction.message.edit === "function") {
       await interaction.message.edit({
         embeds: [createMissionCardEmbed(mission)],
         components: createMissionActionRows(mission),
       });
+      return;
+    }
+
+    if (mission.channel_id && mission.message_id) {
+      const channel = interaction.guild?.channels
+        ? await interaction.guild.channels.fetch(mission.channel_id).catch(() => null)
+        : (interaction.client?.channels
+          ? await interaction.client.channels.fetch(mission.channel_id).catch(() => null)
+          : null);
+      if (channel && typeof channel.messages?.fetch === "function") {
+        const publicMessage = await channel.messages.fetch(mission.message_id).catch(() => null);
+        if (publicMessage && typeof publicMessage.edit === "function") {
+          await publicMessage.edit({
+            embeds: [createMissionCardEmbed(mission)],
+            components: createMissionActionRows(mission),
+          });
+        }
+      }
     }
   } catch (error) {
     console.error(`Failed to update mission card for ${mission.public_id}:`, error);
@@ -117,6 +143,8 @@ export const missionInteractionHandler = {
     // 1. ВСТУПИТЬ В ПАТИ
     // ──────────────────────────────────────────────────────────────────────────
     if (customId === MISSION_BTN_JOIN) {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
       const slot = (await getActiveSlot(interaction.user.id)) || 1;
       const playerId = makePlayerKey(interaction.user.id, slot);
       const player = await getPlayer(playerId);
@@ -168,6 +196,8 @@ export const missionInteractionHandler = {
     // 2. ПОКИНУТЬ ПАТИ
     // ──────────────────────────────────────────────────────────────────────────
     if (customId === MISSION_BTN_LEAVE) {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
       const slot = (await getActiveSlot(interaction.user.id)) || 1;
       const playerId = makePlayerKey(interaction.user.id, slot);
 
@@ -195,10 +225,10 @@ export const missionInteractionHandler = {
     // 3. СОСТАВ ПАТИ
     // ──────────────────────────────────────────────────────────────────────────
     if (customId === MISSION_BTN_PARTY) {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const fresh = (await getMissionByPublicId(mission.public_id)) || mission;
-      return interaction.reply({
+      return interaction.editReply({
         embeds: [createPartyListEmbed(fresh)],
-        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -212,11 +242,30 @@ export const missionInteractionHandler = {
         return sendNotice(interaction, "В пати пока нет участников для просмотра.");
       }
 
-      return interaction.reply({
+      const reply = await interaction.reply({
         content: "📋 Выберите участника из списка, чтобы просмотреть его публичное досье:",
         components: [selectRow],
         flags: MessageFlags.Ephemeral,
+        withResponse: true,
       });
+      const message = reply?.resource?.message || (await interaction.fetchReply().catch(() => null));
+
+      if (message?.id) {
+        await createInteractionSession({
+          messageId: message.id,
+          namespace: MISSION_NAMESPACE,
+          ownerId: interaction.user.id,
+          guildId: interaction.guildId,
+          channelId: interaction.channelId,
+          state: {
+            public_id: fresh.public_id,
+            mission_id: fresh._id?.toString?.() || fresh.public_id,
+          },
+          ttlMs: MISSION_SESSION_TTL_MS,
+        });
+      }
+
+      return reply;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -228,17 +277,27 @@ export const missionInteractionHandler = {
         return sendNotice(interaction, "Участник не выбран.");
       }
 
+      await interaction.deferUpdate();
+
       const player = await getPlayer(targetPlayerId);
       if (!player) {
-        return sendNotice(interaction, "Персонаж не найден в базе данных.");
+        return interaction.editReply({
+          content: "Персонаж не найден в базе данных.",
+          embeds: [],
+          components: [],
+        });
       }
 
       const styles = await getAllPlayerSP(targetPlayerId);
       const profileEmbed = createPublicProfileEmbed(player, styles);
 
-      return interaction.reply({
+      const fresh = (await getMissionByPublicId(mission.public_id)) || mission;
+      const selectRow = createMemberProfileSelectRow(fresh);
+
+      return interaction.editReply({
+        content: "📋 Профиль участника:",
         embeds: [profileEmbed],
-        flags: MessageFlags.Ephemeral,
+        components: selectRow ? [selectRow] : [],
       });
     }
 
@@ -254,6 +313,8 @@ export const missionInteractionHandler = {
         );
       }
 
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
       if (mission.status !== MISSION_STATUS.recruiting) {
         return sendNotice(
           interaction,
@@ -264,23 +325,34 @@ export const missionInteractionHandler = {
       let threadId = null;
       let threadNotice = "";
 
-      // Attempt creating a public thread for RP
-      try {
-        if (
-          interaction.message?.channel &&
-          typeof interaction.message.startThread === "function"
-        ) {
-          const thread = await interaction.message.startThread({
+      // Attempt reusing existing thread or creating a new public thread for RP
+      let thread = interaction.message?.thread || null;
+      if (!thread && interaction.message?.hasThread && typeof interaction.message.fetchThread === "function") {
+        thread = await interaction.message.fetchThread().catch(() => null);
+      }
+      if (!thread && typeof interaction.message?.startThread === "function") {
+        try {
+          thread = await interaction.message.startThread({
             name: `Миссия: ${mission.title}`.slice(0, 95),
             autoArchiveDuration: 1440,
             reason: `RP ветка для миссии ${mission.public_id}`,
           });
-          threadId = thread.id;
+        } catch (err) {
+          if (interaction.message?.hasThread && typeof interaction.message.fetchThread === "function") {
+            thread = await interaction.message.fetchThread().catch(() => null);
+          } else {
+            console.warn("Could not create public thread for mission:", err.message);
+            threadNotice =
+              "\n⚠️ *Боту не удалось создать новую ветку. Миссия всё равно запущена.*";
+          }
         }
-      } catch (err) {
-        console.warn("Could not create public thread for mission:", err.message);
-        threadNotice =
-          "\n⚠️ *Боту не удалось создать ветку (проверьте права CreatePublicThreads). Миссия всё равно запущена.*";
+      }
+
+      if (thread) {
+        threadId = thread.id;
+        await thread
+          .send(`⚔️ **Миссия запущена!** Организатор зафиксировал состав участников. Удачи!`)
+          .catch(() => {});
       }
 
       const result = await startMission({
@@ -321,17 +393,39 @@ export const missionInteractionHandler = {
         return sendNotice(interaction, "Эта миссия была отменена.");
       }
 
-      return interaction.reply({
+      const reply = await interaction.reply({
         embeds: [createCompletionConfirmationEmbed(fresh)],
         components: createCompletionActionRows(),
         flags: MessageFlags.Ephemeral,
+        withResponse: true,
       });
+      const message = reply?.resource?.message || (await interaction.fetchReply().catch(() => null));
+
+      if (message?.id) {
+        await createInteractionSession({
+          messageId: message.id,
+          namespace: MISSION_NAMESPACE,
+          ownerId: interaction.user.id,
+          guildId: interaction.guildId,
+          channelId: interaction.channelId,
+          state: {
+            public_id: fresh.public_id,
+            mission_id: fresh._id?.toString?.() || fresh.public_id,
+          },
+          ttlMs: MISSION_SESSION_TTL_MS,
+        });
+      }
+
+      return reply;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
     // 8. ОТМЕНА ДИАЛОГА ЗАВЕРШЕНИЯ
     // ──────────────────────────────────────────────────────────────────────────
     if (customId === MISSION_BTN_ABORT_FINISH) {
+      if (session?.message_id) {
+        await closeInteractionSession(session.message_id);
+      }
       return interaction.update({
         content: "Завершение миссии отменено. Награды не выдавались.",
         embeds: [],
@@ -371,6 +465,9 @@ export const missionInteractionHandler = {
 
       // If all delivered, update public mission card
       if (result.allDelivered) {
+        if (session?.message_id) {
+          await closeInteractionSession(session.message_id);
+        }
         await updateMissionCardMessage(interaction, fresh);
         return interaction.editReply({
           content: null,
@@ -398,6 +495,8 @@ export const missionInteractionHandler = {
           "⛔ Отменить миссию может только организатор (ГМ) или администратор."
         );
       }
+
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       const fresh = (await getMissionByPublicId(mission.public_id)) || mission;
       if (fresh.status === MISSION_STATUS.completed) {
