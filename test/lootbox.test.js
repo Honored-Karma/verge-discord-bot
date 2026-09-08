@@ -49,9 +49,9 @@ test('boundary rolls map to precise prizes from Twig specifications', () => {
     assert.equal(getLootboxOutcome(46).id, 'gift_reroll');
     assert.equal(getLootboxOutcome(55).id, 'gift_reroll');
 
-    // 56..65: custom role
-    assert.equal(getLootboxOutcome(56).id, 'custom_role');
-    assert.equal(getLootboxOutcome(65).id, 'custom_role');
+    // 56..65: lootbox reroll
+    assert.equal(getLootboxOutcome(56).id, 'lootbox_reroll');
+    assert.equal(getLootboxOutcome(65).id, 'lootbox_reroll');
 
     // 66..75: 100 AP
     assert.equal(getLootboxOutcome(66).id, 'ap_100');
