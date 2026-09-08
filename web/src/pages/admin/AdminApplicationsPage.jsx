@@ -16,6 +16,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
+import { resolveAvatarUrl } from '../../utils/imageHelper';
 
 export function AdminApplicationsPage() {
   const [applications, setApplications] = useState([]);
@@ -229,13 +230,24 @@ export function AdminApplicationsPage() {
                       <td style={{ padding: '14px 16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           {app.character_avatar ? (
-                            <img 
-                              src={app.character_avatar} 
-                              alt={app.character_name} 
-                              style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-subtle)' }} 
-                            />
+                            <div style={{ width: '36px', height: '36px', borderRadius: '50%', overflow: 'hidden', position: 'relative', flexShrink: 0 }}>
+                              <img 
+                                src={resolveAvatarUrl(app.character_avatar, app.slug || app.public_id)} 
+                                alt={app.character_name} 
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  if (e.currentTarget.nextElementSibling) {
+                                    e.currentTarget.nextElementSibling.style.display = 'flex';
+                                  }
+                                }}
+                                style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-subtle)' }} 
+                              />
+                              <div style={{ display: 'none', width: '100%', height: '100%', borderRadius: '50%', background: 'rgba(139, 92, 246, 0.2)', alignItems: 'center', justifyContent: 'center' }}>
+                                <FileText size={16} color="var(--accent-purple-light)" />
+                              </div>
+                            </div>
                           ) : (
-                            <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(139, 92, 246, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(139, 92, 246, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                               <FileText size={16} color="var(--accent-purple-light)" />
                             </div>
                           )}

@@ -16,6 +16,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import sampleApplications from '../data/sampleApplications.json';
+import { resolveAvatarUrl } from '../utils/imageHelper';
 
 export function ApplicationDetailPage() {
   const { slug } = useParams();
@@ -140,8 +141,12 @@ export function ApplicationDetailPage() {
               <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                   <img 
-                    src={app.character_avatar || '/assets/character/hero_portrait.png'} 
+                    src={resolveAvatarUrl(app.character_avatar, app.slug || app.public_id) || '/assets/character/hero_portrait.png'} 
                     alt={app.character_name}
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = '/assets/character/hero_portrait.png';
+                    }}
                     style={{
                       width: '88px',
                       height: '88px',

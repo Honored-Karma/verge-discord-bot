@@ -336,7 +336,7 @@ async function handleChannelGroup(interaction, sub, member) {
           createErrorEmbed(
             "Недостаточно прав у бота",
             `Бот не может использовать канал <#${channel.id}>. Отсутствуют права:\n` +
-              permCheck.missing.map((m) => `• ${m}`).join("\n")
+            permCheck.missing.map((m) => `• ${m}`).join("\n")
           ),
         ],
         flags: MessageFlags.Ephemeral,

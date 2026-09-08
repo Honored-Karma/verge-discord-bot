@@ -47,9 +47,7 @@ export function createExpressApp(discordClient) {
                     "'self'", 
                     'data:', 
                     'blob:', 
-                    'https://cdn.discordapp.com', 
-                    'https://media.discordapp.net', 
-                    'https://images.unsplash.com'
+                    'https:'
                 ],
                 connectSrc: ["'self'", 'https://discord.com'],
                 frameAncestors: ["'none'"]
@@ -148,7 +146,7 @@ export function createExpressApp(discordClient) {
     app.use('/api/wiki', createWikiRouter());
     app.use('/api/admin', createAdminRouter(discordClient));
     app.use('/api/search', createSearchRouter());
-    app.use('/api/avatar', createAvatarRouter());
+    app.use('/api/avatar', createAvatarRouter(discordClient));
 
     // 9. Static frontend serving & OpenGraph meta injection
     const distPath = join(__dirname, '..', 'web', 'dist');

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { resolveAvatarUrl } from '../utils/imageHelper';
 import { 
   Shield, 
   User, 
@@ -168,13 +169,24 @@ export function Navbar({ onOpenSearch }) {
                 }}
               >
                 {activeChar?.character_avatar ? (
-                  <img 
-                    src={activeChar.character_avatar} 
-                    alt={user.global_name}
-                    style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover' }} 
-                  />
+                  <div style={{ width: '26px', height: '26px', borderRadius: '50%', overflow: 'hidden', position: 'relative', flexShrink: 0 }}>
+                    <img 
+                      src={resolveAvatarUrl(activeChar.character_avatar, activeChar.slug || activeChar.id)} 
+                      alt={user.global_name}
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        if (e.currentTarget.nextElementSibling) {
+                          e.currentTarget.nextElementSibling.style.display = 'flex';
+                        }
+                      }}
+                      style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} 
+                    />
+                    <div style={{ display: 'none', width: '100%', height: '100%', borderRadius: '50%', background: 'rgba(139, 92, 246, 0.3)', alignItems: 'center', justifyContent: 'center' }}>
+                      <User size={14} color="var(--accent-purple-light)" />
+                    </div>
+                  </div>
                 ) : (
-                  <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'rgba(139, 92, 246, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'rgba(139, 92, 246, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <User size={14} color="var(--accent-purple-light)" />
                   </div>
                 )}

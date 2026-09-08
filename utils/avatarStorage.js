@@ -119,7 +119,7 @@ export async function refreshDiscordAttachmentUrl(url, client = null) {
 /**
  * Downloads image bytes from a URL or Attachment
  */
-async function fetchImageBuffer(source) {
+export async function fetchImageBuffer(source, client = null) {
   let url = '';
   if (typeof source === 'string') {
     url = source.trim();
@@ -142,12 +142,37 @@ async function fetchImageBuffer(source) {
     throw new Error('URL должен начинаться с http:// или https://');
   }
 
-  const response = await fetch(url, {
+  // Pre-refresh Discord CDN URLs if expired
+  if (isDiscordCdnUrl(url) && isExpiredDiscordCdnUrl(url)) {
+    try {
+      url = await refreshDiscordAttachmentUrl(url, client);
+    } catch (err) {
+      console.warn('Pre-refresh Discord attachment URL failed:', err.message);
+    }
+  }
+
+  let response = await fetch(url, {
     signal: AbortSignal.timeout(10000),
     headers: {
       'User-Agent': 'Verge-Discord-Bot/2.0'
     }
-  });
+  }).catch(err => ({ ok: false, status: 0, statusText: err.message }));
+
+  // If failed and is a Discord CDN URL, attempt a force refresh via Discord API
+  if (!response.ok && isDiscordCdnUrl(url)) {
+    try {
+      const refreshed = await refreshDiscordAttachmentUrl(url, client);
+      if (refreshed && refreshed !== url) {
+        url = refreshed;
+        response = await fetch(url, {
+          signal: AbortSignal.timeout(10000),
+          headers: {
+            'User-Agent': 'Verge-Discord-Bot/2.0'
+          }
+        }).catch(err => ({ ok: false, status: 0, statusText: err.message }));
+      }
+    } catch {}
+  }
 
   if (!response.ok) {
     throw new Error(`Не удалось загрузить изображение (HTTP ${response.status} ${response.statusText})`);
@@ -163,7 +188,7 @@ async function fetchImageBuffer(source) {
   // Validate real magic bytes
   let contentType = detectImageType(buffer);
   if (!contentType) {
-    const headerType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
+    const headerType = response.headers?.get ? response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() : null;
     if (headerType && ALLOWED_CONTENT_TYPES.has(headerType)) {
       contentType = headerType;
     }
@@ -181,11 +206,12 @@ async function fetchImageBuffer(source) {
  *
  * @param {string} playerId Character/Player ID (e.g. "123456" or "123456_2")
  * @param {string|Buffer|object} source URL string, Attachment object, or Buffer
+ * @param {object|null} client Optional Discord client
  * @returns {Promise<{ success: boolean, avatarUrl: string, error?: string }>}
  */
-export async function saveCharacterAvatar(playerId, source) {
+export async function saveCharacterAvatar(playerId, source, client = null) {
   try {
-    const { buffer, contentType, originalUrl } = await fetchImageBuffer(source);
+    const { buffer, contentType, originalUrl } = await fetchImageBuffer(source, client);
 
     // 1. Update in-memory cache
     if (memoryCache.size >= MEMORY_CACHE_LIMIT) {

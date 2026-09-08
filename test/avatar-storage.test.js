@@ -140,8 +140,13 @@ test('express API: GET /api/avatar/:playerId returns avatar with cache headers',
     // Test non-existent player
     const res404 = await fetch(`http://127.0.0.1:${port}/api/avatar/non_existent_player_12345`);
     assert.equal(res404.status, 404);
+
+    // Test CSP header allows https: in imgSrc
+    const cspHeader = res.headers.get('content-security-policy') || '';
+    assert.ok(cspHeader.includes("img-src 'self' data: blob: https:"));
   } finally {
     server.close();
     await deleteCharacterAvatar(playerId);
   }
 });
+

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { BANNER_PRESETS } from '../../constants/bannerPresets';
+import { resolveAvatarUrl } from '../../utils/imageHelper';
 
 export function AdminCharactersPage() {
   const { showSuccess, showError } = useToast();
@@ -211,13 +212,24 @@ export function AdminCharactersPage() {
                     <td style={{ padding: '14px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         {char.character_avatar ? (
-                          <img 
-                            src={char.character_avatar} 
-                            alt={char.character_name} 
-                            style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} 
-                          />
+                          <div style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', position: 'relative', flexShrink: 0 }}>
+                            <img 
+                              src={resolveAvatarUrl(char.character_avatar, char.slug || char.id)} 
+                              alt={char.character_name} 
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                if (e.currentTarget.nextElementSibling) {
+                                  e.currentTarget.nextElementSibling.style.display = 'flex';
+                                }
+                              }}
+                              style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} 
+                            />
+                            <div style={{ display: 'none', width: '100%', height: '100%', borderRadius: '50%', background: 'rgba(139, 92, 246, 0.2)', alignItems: 'center', justifyContent: 'center' }}>
+                              <Users size={15} color="var(--accent-purple-light)" />
+                            </div>
+                          </div>
                         ) : (
-                          <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(139, 92, 246, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(139, 92, 246, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             <Users size={15} color="var(--accent-purple-light)" />
                           </div>
                         )}
@@ -358,20 +370,31 @@ export function AdminCharactersPage() {
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px', zIndex: 1 }}>
                   {editForm.character_avatar ? (
-                    <img 
-                      src={editForm.character_avatar} 
-                      alt="Аватар" 
-                      style={{ 
-                        width: '56px', 
-                        height: '56px', 
-                        borderRadius: '12px', 
-                        objectFit: 'cover', 
-                        border: '2px solid var(--accent-purple)',
-                        boxShadow: '0 4px 14px rgba(0,0,0,0.6)' 
-                      }} 
-                    />
+                    <div style={{ width: '56px', height: '56px', borderRadius: '12px', overflow: 'hidden', position: 'relative', flexShrink: 0 }}>
+                      <img 
+                        src={resolveAvatarUrl(editForm.character_avatar, editingChar?.slug || editingChar?.id)} 
+                        alt="Аватар" 
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          if (e.currentTarget.nextElementSibling) {
+                            e.currentTarget.nextElementSibling.style.display = 'flex';
+                          }
+                        }}
+                        style={{ 
+                          width: '100%', 
+                          height: '100%', 
+                          borderRadius: '12px', 
+                          objectFit: 'cover', 
+                          border: '2px solid var(--accent-purple)',
+                          boxShadow: '0 4px 14px rgba(0,0,0,0.6)' 
+                        }} 
+                      />
+                      <div style={{ display: 'none', width: '100%', height: '100%', borderRadius: '12px', background: 'rgba(255,255,255,0.06)', border: '2px dashed var(--border-color)', alignItems: 'center', justifyContent: 'center' }}>
+                        <Users size={22} color="var(--text-muted)" />
+                      </div>
+                    </div>
                   ) : (
-                    <div style={{ width: '56px', height: '56px', borderRadius: '12px', background: 'rgba(255,255,255,0.06)', border: '2px dashed var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: '56px', height: '56px', borderRadius: '12px', background: 'rgba(255,255,255,0.06)', border: '2px dashed var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <Users size={22} color="var(--text-muted)" />
                     </div>
                   )}

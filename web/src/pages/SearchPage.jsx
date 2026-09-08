@@ -179,11 +179,35 @@ export function SearchPage() {
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', minWidth: 0 }}>
                 {res.image ? (
-                  <img 
-                    src={res.image} 
-                    alt={res.title} 
-                    style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-                  />
+                  <div style={{ width: '44px', height: '44px', borderRadius: '50%', overflow: 'hidden', position: 'relative', flexShrink: 0 }}>
+                    <img 
+                      src={res.image} 
+                      alt={res.title} 
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        if (e.currentTarget.nextElementSibling) {
+                          e.currentTarget.nextElementSibling.style.display = 'flex';
+                        }
+                      }}
+                      style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+                    />
+                    <div 
+                      style={{ 
+                        display: 'none',
+                        width: '100%', 
+                        height: '100%', 
+                        borderRadius: '50%', 
+                        background: res.type === 'character' ? 'rgba(6, 182, 212, 0.15)' : res.type === 'application' ? 'rgba(139, 92, 246, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: res.type === 'character' ? 'var(--accent-cyan)' : res.type === 'application' ? 'var(--accent-purple-light)' : 'var(--accent-emerald)'
+                      }}
+                    >
+                      {res.type === 'character' && <User size={20} />}
+                      {res.type === 'application' && <FileText size={20} />}
+                      {res.type === 'wiki' && <BookOpen size={20} />}
+                    </div>
+                  </div>
                 ) : (
                   <div 
                     style={{ 

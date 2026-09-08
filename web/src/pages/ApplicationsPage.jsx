@@ -14,6 +14,7 @@ import {
   User
 } from 'lucide-react';
 import sampleApplications from '../data/sampleApplications.json';
+import { resolveAvatarUrl } from '../utils/imageHelper';
 
 export function ApplicationsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -272,9 +273,13 @@ export function ApplicationsPage() {
                       {/* Card Header */}
                       <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '14px' }}>
                         <img 
-                          src={app.character_avatar || '/assets/character/hero_portrait.png'} 
+                          src={resolveAvatarUrl(app.character_avatar, app.slug || app.public_id) || '/assets/character/hero_portrait.png'} 
                           alt={app.character_name}
                           loading="lazy"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = '/assets/character/hero_portrait.png';
+                          }}
                           style={{
                             width: '54px',
                             height: '54px',

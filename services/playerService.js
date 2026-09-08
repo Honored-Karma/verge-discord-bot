@@ -1,6 +1,7 @@
 import { getDB } from '../utils/db.js';
 import { getWeeklySalary, normalizeOrganization, normalizeRank } from '../utils/rankSystem.js';
 import { isValidSafeUrl } from '../utils/urlHelper.js';
+import { isDiscordCdnUrl } from '../utils/avatarStorage.js';
 import crypto from 'crypto';
 
 // Cyrillic transliteration map for clean slugs
@@ -197,6 +198,11 @@ export function normalizePlayer(doc, slotNumber = 1) {
     const publicId = base.public_id || generatePublicId(internalId, slotNumber);
     const slug = base.slug || slugifyCharacterName(base.character_name || 'character');
 
+    let resolvedAvatar = base.character_avatar || null;
+    if (resolvedAvatar && isDiscordCdnUrl(resolvedAvatar)) {
+        resolvedAvatar = `/api/avatar/${slug || publicId || internalId}`;
+    }
+
     return {
         // Internal ID preserved for bot/database operations, but hidden by sanitizeCharacter
         player_id: internalId,
@@ -205,7 +211,7 @@ export function normalizePlayer(doc, slotNumber = 1) {
         id: slug, // Default public identifier
         slot: slotNumber,
         character_name: base.character_name || 'Безымянный персонаж',
-        character_avatar: base.character_avatar || null,
+        character_avatar: resolvedAvatar,
         character_banner: base.character_banner || base.banner_url || null,
         banner_url: base.character_banner || base.banner_url || null,
         character_url: isValidSafeUrl(base.character_url) ? base.character_url : null,

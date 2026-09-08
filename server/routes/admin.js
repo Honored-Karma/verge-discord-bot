@@ -30,6 +30,7 @@ import {
     deleteApplication
 } from '../../services/applicationService.js';
 import { isValidSafeUrl } from '../../utils/urlHelper.js';
+import { isDiscordCdnUrl, saveCharacterAvatar } from '../../utils/avatarStorage.js';
 
 // Mutex lock for batch sync operations
 let isSyncRunning = false;
@@ -655,20 +656,27 @@ export function createAdminRouter(discordClient) {
                 db.collection('players').find(query).sort({ reputation: -1, created_at: -1 }).skip(skip).limit(limitNum).toArray()
             ]);
 
-            const items = docs.map(doc => ({
-                id: doc.slug || doc.public_id || doc.id,
-                slug: doc.slug,
-                public_id: doc.public_id,
-                slot: doc.slot || (String(doc.id).endsWith('_2') ? 2 : 1),
-                character_name: doc.character_name || 'Безымянный',
-                character_avatar: doc.character_avatar || null,
-                organization: doc.organization || 'Не состоит',
-                rank: doc.rank || '—',
-                reputation: Number(doc.reputation || 0),
-                attribute_name: doc.attribute_name || 'Отсутствует',
-                has_sheet: Boolean(doc.character_url),
-                has_physical_stats: Boolean(doc.physical_stats_registered || doc.punch_kg)
-            }));
+            const items = docs.map(doc => {
+                const charId = doc.slug || doc.public_id || doc.id;
+                let avatar = doc.character_avatar || null;
+                if (avatar && isDiscordCdnUrl(avatar)) {
+                    avatar = `/api/avatar/${charId}`;
+                }
+                return {
+                    id: charId,
+                    slug: doc.slug,
+                    public_id: doc.public_id,
+                    slot: doc.slot || (String(doc.id).endsWith('_2') ? 2 : 1),
+                    character_name: doc.character_name || 'Безымянный',
+                    character_avatar: avatar,
+                    organization: doc.organization || 'Не состоит',
+                    rank: doc.rank || '—',
+                    reputation: Number(doc.reputation || 0),
+                    attribute_name: doc.attribute_name || 'Отсутствует',
+                    has_sheet: Boolean(doc.character_url),
+                    has_physical_stats: Boolean(doc.physical_stats_registered || doc.punch_kg)
+                };
+            });
 
             res.json({
                 page: pageNum,
@@ -688,6 +696,9 @@ export function createAdminRouter(discordClient) {
             const player = await getPlayerByPublicIdentifier(req.params.id);
             if (!player) {
                 return res.status(404).json({ error: 'NotFound', message: 'Персонаж не найден' });
+            }
+            if (player.character_avatar && isDiscordCdnUrl(player.character_avatar)) {
+                player.character_avatar = `/api/avatar/${player.slug || player.public_id || player.id}`;
             }
             res.json({ character: player });
         } catch (error) {
@@ -725,7 +736,11 @@ export function createAdminRouter(discordClient) {
                 updates.character_name = character_name.trim().slice(0, 60);
             }
             if (character_avatar !== undefined) {
-                updates.character_avatar = typeof character_avatar === 'string' && character_avatar.trim() ? character_avatar.trim() : null;
+                const trimmedAvatar = typeof character_avatar === 'string' && character_avatar.trim() ? character_avatar.trim() : null;
+                updates.character_avatar = trimmedAvatar;
+                if (trimmedAvatar && player.id) {
+                    saveCharacterAvatar(player.id, trimmedAvatar, discordClient).catch(() => {});
+                }
             }
             const banner = character_banner !== undefined ? character_banner : banner_url;
             if (banner !== undefined) {

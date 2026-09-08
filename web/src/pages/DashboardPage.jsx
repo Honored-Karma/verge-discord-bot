@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { resolveAvatarUrl } from '../utils/imageHelper';
 import { 
   User, 
   Shield, 
@@ -86,6 +87,10 @@ export function DashboardPage() {
                 <img 
                   src={user.avatarUrl} 
                   alt={user.global_name}
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = '/assets/character/hero_portrait.png';
+                  }}
                   style={{
                     width: '68px',
                     height: '68px',
@@ -187,8 +192,12 @@ export function DashboardPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '22px' }}>
                   <div style={{ position: 'relative' }}>
                     <img 
-                      src={activeChar.character_avatar || user.avatarUrl} 
+                      src={resolveAvatarUrl(activeChar.character_avatar, activeChar.slug || activeChar.id) || user.avatarUrl || '/assets/character/hero_portrait.png'} 
                       alt={activeChar.character_name}
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = user.avatarUrl || '/assets/character/hero_portrait.png';
+                      }}
                       style={{
                         width: '92px',
                         height: '92px',

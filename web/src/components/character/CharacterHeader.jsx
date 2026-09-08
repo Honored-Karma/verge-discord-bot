@@ -12,6 +12,7 @@ import {
   FileText,
   User
 } from 'lucide-react';
+import { resolveAvatarUrl } from '../../utils/imageHelper';
 
 export function CharacterHeader({ character, isOwnCharacter }) {
   const [copied, setCopied] = useState(false);
@@ -52,9 +53,13 @@ export function CharacterHeader({ character, isOwnCharacter }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '22px', flex: '1 1 320px' }}>
             <div style={{ position: 'relative' }}>
               <img 
-                src={character.character_avatar || '/assets/character/hero_portrait.png'} 
+                src={resolveAvatarUrl(character.character_avatar, character.slug || character.id) || '/assets/character/hero_portrait.png'} 
                 alt={character.character_name}
                 loading="lazy"
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = '/assets/character/hero_portrait.png';
+                }}
                 style={{
                   width: '96px',
                   height: '96px',
