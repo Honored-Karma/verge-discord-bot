@@ -18,6 +18,10 @@ import { initializeOrgRoles } from './utils/orgRoles.js';
 import { createExpressApp } from './server/app.js';
 import { validateEnv } from './config/env.js';
 import { logger } from './utils/logger.js';
+import { createLootboxPayload } from './utils/lootbox.js';
+import { checkGlobalCooldown } from './utils/cooldowns.js';
+import { logCommand } from './utils/logs.js';
+import { isAdmin } from './utils/adminCheck.js';
 
 config();
 
@@ -226,6 +230,50 @@ client.on(Events.InteractionCreate, async interaction => {
             await interaction.followUp(errorMessage).catch(() => {});
         } else {
             await interaction.reply(errorMessage).catch(() => {});
+        }
+    }
+});
+
+client.on(Events.MessageCreate, async message => {
+    if (message.author.bot) return;
+
+    const content = message.content.trim().toLowerCase();
+    if (['!lootbox', '!lucky-lootbox', '!box', '!бокс', '!лутбокс'].includes(content)) {
+        if (!isAdmin(message.member)) {
+            return message.reply({
+                content: '❌ Эта команда доступна только администраторам и владельцу сервера.'
+            }).then(msg => setTimeout(() => msg.delete().catch(() => {}), 5000)).catch(() => {});
+        }
+
+        const cooldown = checkGlobalCooldown(message.author.id);
+        if (cooldown.onCooldown) {
+            return message.reply({
+                content: `⏱️ Подождите **${cooldown.remainingFormatted}** перед следующей командой!`
+            }).catch(() => {});
+        }
+
+        try {
+            const { roll, outcome, embed, components } = createLootboxPayload();
+            await message.channel.send({
+                embeds: [embed],
+                components
+            });
+
+            await logCommand({
+                client,
+                guildId: message.guildId,
+                channelId: message.channelId,
+                userId: message.author.id,
+                userTag: message.author.tag,
+                command: 'lootbox',
+                extra: {
+                    roll,
+                    reward: outcome.name,
+                    source: 'prefix_command'
+                }
+            }).catch(err => logger.error('Error logging lootbox message command:', err));
+        } catch (err) {
+            logger.error('Error executing message lootbox command:', err);
         }
     }
 });
