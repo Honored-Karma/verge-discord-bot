@@ -175,13 +175,17 @@ export function rollLootboxNumber() {
 
 /**
  * Создать кнопку Price List
+ * @param {boolean} [includeEmoji=true] Включать ли кастомное эмодзи на кнопку
  */
-export function createLootboxActionRow() {
+export function createLootboxActionRow(includeEmoji = true) {
     const button = new ButtonBuilder()
         .setStyle(ButtonStyle.Link)
         .setURL(LOOTBOX_PRICE_LIST_URL)
-        .setLabel('PRICE LIST')
-        .setEmoji(LOOTBOX_PRICE_LIST_EMOJI);
+        .setLabel('PRICE LIST');
+
+    if (includeEmoji && LOOTBOX_PRICE_LIST_EMOJI) {
+        button.setEmoji(LOOTBOX_PRICE_LIST_EMOJI);
+    }
 
     return new ActionRowBuilder().addComponents(button);
 }
@@ -189,8 +193,9 @@ export function createLootboxActionRow() {
 /**
  * Создать Embed и ActionRow для ответа лутбокса
  * @param {number} [customRoll] Число (опционально, если нужно проверить конкретный исход)
+ * @param {boolean} [includeEmoji=true] Включать ли кастомное эмодзи на кнопку
  */
-export function createLootboxPayload(customRoll = null) {
+export function createLootboxPayload(customRoll = null, includeEmoji = true) {
     const roll = Number.isInteger(customRoll) ? customRoll : rollLootboxNumber();
     const outcome = getLootboxOutcome(roll);
 
@@ -200,7 +205,7 @@ export function createLootboxPayload(customRoll = null) {
         .setColor(LOOTBOX_COLOR)
         .setImage(outcome.image);
 
-    const row = createLootboxActionRow();
+    const row = createLootboxActionRow(includeEmoji);
 
     return {
         roll,

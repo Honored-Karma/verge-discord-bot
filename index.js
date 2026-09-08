@@ -1,4 +1,4 @@
-import { Client, Collection, Events, GatewayIntentBits, REST, Routes } from 'discord.js';
+import { Client, Collection, Events, GatewayIntentBits, PermissionFlagsBits, REST, Routes } from 'discord.js';
 import { config } from 'dotenv';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
@@ -237,44 +237,101 @@ client.on(Events.InteractionCreate, async interaction => {
 client.on(Events.MessageCreate, async message => {
     if (message.author.bot) return;
 
-    const content = message.content.trim().toLowerCase();
-    if (['!lootbox', '!lucky-lootbox', '!box', '!бокс', '!лутбокс'].includes(content)) {
-        if (!isAdmin(message.member)) {
-            return message.reply({
-                content: '❌ Эта команда доступна только администраторам и владельцу сервера.'
-            }).then(msg => setTimeout(() => msg.delete().catch(() => {}), 5000)).catch(() => {});
-        }
+    const raw = message.content ? message.content.trim() : '';
+    if (!raw.startsWith('!')) return;
 
-        const cooldown = checkGlobalCooldown(message.author.id);
-        if (cooldown.onCooldown) {
-            return message.reply({
-                content: `⏱️ Подождите **${cooldown.remainingFormatted}** перед следующей командой!`
-            }).catch(() => {});
-        }
+    const [cmd, ...args] = raw.split(/\s+/);
+    const commandName = cmd.toLowerCase();
+    const allowedCommands = ['!лутбокс', '!lootbox', '!бокс', '!box', '!lucky-lootbox', '!рулетка', '!lb'];
 
+    if (!allowedCommands.includes(commandName)) return;
+
+    // Проверка прав: только владельцы и администраторы
+    let member = message.member;
+    if (!member && message.guild) {
+        member = await message.guild.members.fetch(message.author.id).catch(() => null);
+    }
+
+    const isOwner = Boolean(message.guild?.ownerId && message.guild.ownerId === message.author.id);
+    const isPermAdmin = Boolean(member?.permissions?.has(PermissionFlagsBits.Administrator));
+    const hasAdmin = isOwner || isPermAdmin || (member ? isAdmin(member) : false);
+
+    if (!hasAdmin) {
+        return message.reply({
+            content: '❌ Эта команда доступна только администраторам и владельцу сервера.'
+        }).then(msg => setTimeout(() => msg.delete().catch(() => {}), 7000)).catch(() => {});
+    }
+
+    const cooldown = checkGlobalCooldown(message.author.id);
+    if (cooldown.onCooldown) {
+        return message.reply({
+            content: `⏱️ Подождите **${cooldown.remainingFormatted}** перед следующей командой!`
+        }).catch(() => {});
+    }
+
+    // Если администратор указал число (например: !лутбокс 100), используем его
+    let customRoll = null;
+    if (args.length > 0) {
+        const parsed = parseInt(args[0], 10);
+        if (!isNaN(parsed) && parsed >= 1 && parsed <= 100) {
+            customRoll = parsed;
+        }
+    }
+
+    try {
+        const { roll, outcome, embed, components } = createLootboxPayload(customRoll, true);
+
+        let sentMessage = null;
+        // 1. Пробуем отправить с эмодзи на кнопке
         try {
-            const { roll, outcome, embed, components } = createLootboxPayload();
-            await message.channel.send({
+            sentMessage = await message.channel.send({
                 embeds: [embed],
                 components
             });
-
-            await logCommand({
-                client,
-                guildId: message.guildId,
-                channelId: message.channelId,
-                userId: message.author.id,
-                userTag: message.author.tag,
-                command: 'lootbox',
-                extra: {
-                    roll,
-                    reward: outcome.name,
-                    source: 'prefix_command'
-                }
-            }).catch(err => logger.error('Error logging lootbox message command:', err));
-        } catch (err) {
-            logger.error('Error executing message lootbox command:', err);
+        } catch (emojiErr) {
+            logger.warn('Failed to send lootbox with custom emoji, trying without emoji:', emojiErr?.message || emojiErr);
         }
+
+        // 2. Если Discord отклонил эмодзи (Unknown Emoji 10014 / 50035), отправляем без эмодзи
+        if (!sentMessage) {
+            try {
+                const fallbackPayload = createLootboxPayload(roll, false);
+                sentMessage = await message.channel.send({
+                    embeds: [fallbackPayload.embed],
+                    components: fallbackPayload.components
+                });
+            } catch (btnErr) {
+                logger.warn('Failed to send lootbox with button, sending embed only:', btnErr?.message || btnErr);
+            }
+        }
+
+        // 3. Если даже кнопка отклонена, отправляем только эмбед
+        if (!sentMessage) {
+            try {
+                sentMessage = await message.channel.send({
+                    embeds: [embed]
+                });
+            } catch (embedErr) {
+                logger.error('Fatal error sending lootbox embed:', embedErr);
+                return message.reply({ content: `❌ Ошибка отправки: ${embedErr.message}` }).catch(() => {});
+            }
+        }
+
+        await logCommand({
+            client,
+            guildId: message.guildId,
+            channelId: message.channelId,
+            userId: message.author.id,
+            userTag: message.author.tag,
+            command: 'lootbox',
+            extra: {
+                roll,
+                reward: outcome.name,
+                source: 'prefix_command'
+            }
+        }).catch(err => logger.error('Error logging lootbox message command:', err));
+    } catch (err) {
+        logger.error('Error executing message lootbox command:', err);
     }
 });
 

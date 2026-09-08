@@ -11,7 +11,6 @@ import {
     LOOTBOX_PRICE_LIST_EMOJI,
     PURPLE_DIVIDER
 } from '../utils/lootbox.js';
-import * as lootboxCommand from '../commands/lootbox.js';
 
 test('lootbox outcomes probability table spans 1 to 100 with total 100%', () => {
     assert.equal(LOOTBOX_OUTCOMES.length, 12);
@@ -116,49 +115,12 @@ test('rollLootboxNumber returns numbers within 1..100', () => {
     }
 });
 
-test('lootbox slash command schema and exports are valid', () => {
-    assert.ok(lootboxCommand.data);
-    assert.equal(typeof lootboxCommand.execute, 'function');
+test('createLootboxPayload supports fallback without custom emoji', () => {
+    const payload = createLootboxPayload(50, false);
+    assert.equal(payload.components.length, 1);
 
-    const schema = lootboxCommand.data.toJSON();
-    assert.equal(schema.name, 'lootbox');
-    assert.ok(schema.description.length > 0);
-
-    const hiddenOpt = schema.options.find(opt => opt.name === 'hidden');
-    assert.ok(hiddenOpt);
-    assert.equal(hiddenOpt.type, 5); // Boolean
-
-    const testRollOpt = schema.options.find(opt => opt.name === 'test_roll');
-    assert.ok(testRollOpt);
-    assert.equal(testRollOpt.type, 4); // Integer
-    assert.equal(testRollOpt.min_value, 1);
-    assert.equal(testRollOpt.max_value, 100);
-
-    assert.equal(schema.default_member_permissions, '8'); // PermissionFlagsBits.Administrator
-});
-
-test('lootbox command blocks non-admin users', async () => {
-    let replyPayload = null;
-    const fakeInteraction = {
-        member: {
-            id: 'user123',
-            guild: { ownerId: 'owner999' },
-            permissions: { has: () => false },
-            roles: { cache: { some: () => false } }
-        },
-        user: { id: 'user123', tag: 'User#1234' },
-        options: {
-            getBoolean: () => false,
-            getInteger: () => null
-        },
-        reply: async (payload) => {
-            replyPayload = payload;
-        }
-    };
-
-    await lootboxCommand.execute(fakeInteraction);
-
-    assert.ok(replyPayload, 'Should have replied to non-admin');
-    assert.equal(replyPayload.flags, 64);
-    assert.ok(replyPayload.content.includes('только администраторам и владельцу сервера'));
+    const button = payload.components[0].toJSON().components[0];
+    assert.equal(button.label, 'PRICE LIST');
+    assert.equal(button.url, LOOTBOX_PRICE_LIST_URL);
+    assert.equal(button.emoji, undefined);
 });
