@@ -160,7 +160,7 @@ export const missionInteractionHandler = {
       await updateMissionCardMessage(interaction, result.mission);
       return sendNotice(
         interaction,
-        `✅ Вы успешно вступили в миссию «**${mission.title}**» персонажем **${characterName}**!`
+        `✅ Вы успешно вступили в миссию **【${mission.title}】** персонажем **${characterName}**!`
       );
     }
 
@@ -188,7 +188,7 @@ export const missionInteractionHandler = {
       }
 
       await updateMissionCardMessage(interaction, result.mission);
-      return sendNotice(interaction, `🚪 Вы вышли из пати миссии «**${mission.title}**».`);
+      return sendNotice(interaction, `🚪 Вы вышли из пати миссии **【${mission.title}】**.`);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -257,7 +257,7 @@ export const missionInteractionHandler = {
       if (mission.status !== MISSION_STATUS.recruiting) {
         return sendNotice(
           interaction,
-          `Миссия уже находится в статусе «${mission.status}».`
+          `Миссия уже находится в статусе 【${mission.status}】.`
         );
       }
 
@@ -297,7 +297,7 @@ export const missionInteractionHandler = {
       await updateMissionCardMessage(interaction, result.mission);
       return sendNotice(
         interaction,
-        `⚔️ Миссия «**${mission.title}**» успешно запущена! Состав участников зафиксирован.${threadNotice}`
+        `⚔️ Миссия **【${mission.title}】** успешно запущена! Состав участников зафиксирован.${threadNotice}`
       );
     }
 
@@ -416,7 +416,7 @@ export const missionInteractionHandler = {
       }
 
       await updateMissionCardMessage(interaction, result.mission);
-      return sendNotice(interaction, `❌ Миссия «**${mission.title}**» отменена. Награды не выдавались.`);
+      return sendNotice(interaction, `❌ Миссия **【${mission.title}】** отменена. Награды не выдавались.`);
     }
   },
 };

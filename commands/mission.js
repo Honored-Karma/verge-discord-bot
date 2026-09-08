@@ -309,7 +309,7 @@ async function handleChannelGroup(interaction, sub, member) {
         embeds: [
           createErrorEmbed(
             "Организация не найдена",
-            `Организация «${rawOrg}» не найдена в базе данных.`
+            `Организация **【${rawOrg}】** не найдена в базе данных.`
           ),
         ],
         flags: MessageFlags.Ephemeral,
@@ -390,7 +390,7 @@ async function handleChannelGroup(interaction, sub, member) {
         embeds: [
           createErrorEmbed(
             "Не найдено",
-            `Для организации «${rawOrg}» не был назначен канал миссий.`
+            `Для организации **【${rawOrg}】** не был назначен канал миссий.`
           ),
         ],
         flags: MessageFlags.Ephemeral,
@@ -521,7 +521,7 @@ async function handleMissionInfo(interaction) {
 
   if (!mission || mission.guild_id !== interaction.guildId) {
     return interaction.reply({
-      embeds: [createErrorEmbed("Не найдено", `Миссия с ID «${publicId}» не найдена.`)],
+      embeds: [createErrorEmbed("Не найдено", `Миссия с ID \`${publicId}\` не найдена.`)],
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -550,7 +550,7 @@ async function handleMissionManage(interaction, member) {
 
   if (!mission || mission.guild_id !== interaction.guildId) {
     return interaction.reply({
-      embeds: [createErrorEmbed("Не найдено", `Миссия с ID «${publicId}» не найдена.`)],
+      embeds: [createErrorEmbed("Не найдено", `Миссия с ID \`${publicId}\` не найдена.`)],
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -570,14 +570,14 @@ async function handleMissionManage(interaction, member) {
 
   if (mission.status === MISSION_STATUS.completed) {
     return interaction.reply({
-      embeds: [createInfoEmbed("Миссия завершена", `Миссия «**${mission.title}**» уже завершена, все награды начислены.`)],
+      embeds: [createInfoEmbed("Миссия завершена", `Миссия **【${mission.title}】** уже завершена, все награды начислены.`)],
       flags: MessageFlags.Ephemeral,
     });
   }
 
   if (mission.status === MISSION_STATUS.cancelled) {
     return interaction.reply({
-      embeds: [createInfoEmbed("Миссия отменена", `Миссия «**${mission.title}**» была отменена.`)],
+      embeds: [createInfoEmbed("Миссия отменена", `Миссия **【${mission.title}】** была отменена.`)],
       flags: MessageFlags.Ephemeral,
     });
   }

@@ -70,7 +70,7 @@ export function createAnnouncePreviewEmbed(state, guildName = "Сервер") {
   const footerText = state.footer?.trim() || guildName;
   const descriptionText = state.message?.trim()
     ? state.message.trim()
-    : "*(Текст объявления пока не заполнен — нажмите кнопку «📝 Текст и Заголовок» ниже)*";
+    : "*(Текст объявления пока не заполнен — нажмите кнопку 【📝 Текст и Заголовок】 ниже)*";
 
   let targetNotice = "";
   if (state.target === "channel") {
@@ -197,7 +197,11 @@ export function createAnnounceTextModal(state, messageId) {
     .setStyle(TextInputStyle.Short)
     .setMaxLength(100)
     .setRequired(true)
-    .setValue(state.title || "📢 Объявление");
+    .setPlaceholder("📢 Объявление");
+
+  if (state.title && state.title.trim()) {
+    titleInput.setValue(state.title.trim());
+  }
 
   const msgInput = new TextInputBuilder()
     .setCustomId(ANN_INPUT_MESSAGE)
@@ -206,8 +210,11 @@ export function createAnnounceTextModal(state, messageId) {
     .setMinLength(1)
     .setMaxLength(4000)
     .setRequired(true)
-    .setPlaceholder("Введите текст объявления… Поддерживается markdown-разметка.")
-    .setValue(state.message || "");
+    .setPlaceholder("Введите текст объявления… Поддерживается markdown-разметка.");
+
+  if (state.message && state.message.trim()) {
+    msgInput.setValue(state.message.trim());
+  }
 
   const footerInput = new TextInputBuilder()
     .setCustomId(ANN_INPUT_FOOTER)
@@ -215,8 +222,11 @@ export function createAnnounceTextModal(state, messageId) {
     .setStyle(TextInputStyle.Short)
     .setMaxLength(100)
     .setRequired(false)
-    .setPlaceholder("Например: Администрация сервера")
-    .setValue(state.footer || "");
+    .setPlaceholder("Например: Администрация сервера");
+
+  if (state.footer && state.footer.trim()) {
+    footerInput.setValue(state.footer.trim());
+  }
 
   modal.addComponents(
     new ActionRowBuilder().addComponents(titleInput),
@@ -239,8 +249,11 @@ export function createAnnounceStyleModal(state, messageId) {
     .setMinLength(4)
     .setMaxLength(7)
     .setRequired(false)
-    .setPlaceholder("#b209d4")
-    .setValue(state.color || "#b209d4");
+    .setPlaceholder("#b209d4");
+
+  if (state.color && state.color.trim()) {
+    colorInput.setValue(state.color.trim());
+  }
 
   const imgInput = new TextInputBuilder()
     .setCustomId(ANN_INPUT_IMAGE)
@@ -248,8 +261,11 @@ export function createAnnounceStyleModal(state, messageId) {
     .setStyle(TextInputStyle.Short)
     .setMaxLength(500)
     .setRequired(false)
-    .setPlaceholder("https://example.com/banner.png")
-    .setValue(state.image || "");
+    .setPlaceholder("https://example.com/banner.png");
+
+  if (state.image && state.image.trim()) {
+    imgInput.setValue(state.image.trim());
+  }
 
   const thumbInput = new TextInputBuilder()
     .setCustomId(ANN_INPUT_THUMBNAIL)
@@ -257,8 +273,11 @@ export function createAnnounceStyleModal(state, messageId) {
     .setStyle(TextInputStyle.Short)
     .setMaxLength(500)
     .setRequired(false)
-    .setPlaceholder("https://example.com/thumb.png")
-    .setValue(state.thumbnail || "");
+    .setPlaceholder("https://example.com/thumb.png");
+
+  if (state.thumbnail && state.thumbnail.trim()) {
+    thumbInput.setValue(state.thumbnail.trim());
+  }
 
   modal.addComponents(
     new ActionRowBuilder().addComponents(colorInput),
@@ -274,7 +293,7 @@ async function sendAnnouncement({ interaction, session }) {
 
   if (!state.message || !state.message.trim()) {
     return interaction.reply({
-      content: "❌ Заполните текст объявления перед отправкой (кнопка «📝 Текст и Заголовок»).",
+      content: "❌ Заполните текст объявления перед отправкой (кнопка 【📝 Текст и Заголовок】).",
       flags: MessageFlags.Ephemeral,
     });
   }

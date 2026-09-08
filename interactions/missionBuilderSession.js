@@ -134,14 +134,14 @@ export function createMissionBuilderEmbed(state) {
 
   const descriptionText = state.description?.trim()
     ? state.description.trim()
-    : "*(Описание не заполнено — нажмите кнопку «📝 Основное» ниже)*";
+    : "*(Описание не заполнено — нажмите кнопку 【📝 Основное】 ниже)*";
 
   return new EmbedBuilder()
     .setColor(0x8b5cf6)
     .setTitle("🛠️ Мастер создания миссии · Черновик")
     .setDescription(
-      `Заполните параметры миссии с помощью выпадающих списков и модальных окон ввода, затем нажмите **«🚀 Опубликовать»**.\n\n` +
-      `**📌 Название:** ${state.title ? `**${state.title}**` : "*(не указано — заполните через «📝 Основное»)*"}\n` +
+      `Заполните параметры миссии с помощью выпадающих списков и модальных окон ввода, затем нажмите **【🚀 Опубликовать】**.\n\n` +
+      `**📌 Название:** ${state.title ? `**${state.title}**` : "*(не указано — заполните через 【📝 Основное】)*"}\n` +
       `**🌀 Тип миссии:** ${typeIcon} ${typeLabel}\n` +
       `**🌐 Доступ:** ${formatAccess(state.access)}\n` +
       `**🏢 Организация:** ${orgText}\n` +
@@ -151,7 +151,7 @@ export function createMissionBuilderEmbed(state) {
       `**🎁 Награды:**\n${rewardText}`
     )
     .setFooter({
-      text: "Кнопки «📝 Основное» и «🎁 Награды» вызывают всплывающие окна ввода текста.",
+      text: "Кнопки 【📝 Основное】 и 【🎁 Награды】 вызывают всплывающие окна ввода текста.",
     });
 }
 
@@ -291,8 +291,11 @@ export function createMainInfoModal(state, messageId) {
     .setMinLength(1)
     .setMaxLength(100)
     .setRequired(true)
-    .setPlaceholder("Например: Зачистка аномальной скважины")
-    .setValue(state.title || "");
+    .setPlaceholder("Например: Зачистка аномальной скважины");
+
+  if (state.title && state.title.trim()) {
+    titleInput.setValue(state.title.trim());
+  }
 
   const playersInput = new TextInputBuilder()
     .setCustomId(MB_INPUT_PLAYERS)
@@ -311,8 +314,11 @@ export function createMainInfoModal(state, messageId) {
     .setMinLength(1)
     .setMaxLength(1000)
     .setRequired(true)
-    .setPlaceholder("Краткая цель, условия или сюжетная вводная для участников…")
-    .setValue(state.description || "");
+    .setPlaceholder("Краткая цель, условия или сюжетная вводная для участников…");
+
+  if (state.description && state.description.trim()) {
+    descInput.setValue(state.description.trim());
+  }
 
   modal.addComponents(
     new ActionRowBuilder().addComponents(titleInput),
@@ -336,40 +342,55 @@ export function createRewardsModal(state, messageId) {
     .setLabel("Награда AP (0 или положительное число)")
     .setStyle(TextInputStyle.Short)
     .setRequired(false)
-    .setPlaceholder("0")
-    .setValue(state.reward?.ap ? String(state.reward.ap) : "");
+    .setPlaceholder("0");
+
+  if (state.reward?.ap !== undefined && state.reward?.ap !== null && Number(state.reward.ap) > 0) {
+    apInput.setValue(String(state.reward.ap));
+  }
 
   const spInput = new TextInputBuilder()
     .setCustomId(MB_INPUT_SP)
     .setLabel("Награда SP (0 или положительное число)")
     .setStyle(TextInputStyle.Short)
     .setRequired(false)
-    .setPlaceholder("0")
-    .setValue(state.reward?.sp ? String(state.reward.sp) : "");
+    .setPlaceholder("0");
+
+  if (state.reward?.sp !== undefined && state.reward?.sp !== null && Number(state.reward.sp) > 0) {
+    spInput.setValue(String(state.reward.sp));
+  }
 
   const repInput = new TextInputBuilder()
     .setCustomId(MB_INPUT_REP)
     .setLabel("Награда репутации Rtg (0 или больше)")
     .setStyle(TextInputStyle.Short)
     .setRequired(false)
-    .setPlaceholder("0")
-    .setValue(state.reward?.reputation ? String(state.reward.reputation) : "");
+    .setPlaceholder("0");
+
+  if (state.reward?.reputation !== undefined && state.reward?.reputation !== null && Number(state.reward.reputation) > 0) {
+    repInput.setValue(String(state.reward.reputation));
+  }
 
   const itemInput = new TextInputBuilder()
     .setCustomId(MB_INPUT_ITEM)
     .setLabel("Предмет (название из каталога/кастом)")
     .setStyle(TextInputStyle.Short)
     .setRequired(false)
-    .setPlaceholder("Например: Зелье восстановления")
-    .setValue(state.reward?.item_name || "");
+    .setPlaceholder("Например: Зелье восстановления");
+
+  if (state.reward?.item_name && state.reward.item_name.trim()) {
+    itemInput.setValue(state.reward.item_name.trim());
+  }
 
   const qtyInput = new TextInputBuilder()
     .setCustomId(MB_INPUT_QTY)
     .setLabel("Количество предмета")
     .setStyle(TextInputStyle.Short)
     .setRequired(false)
-    .setPlaceholder("1")
-    .setValue(state.reward?.item_name ? String(state.reward.item_qty || 1) : "");
+    .setPlaceholder("1");
+
+  if (state.reward?.item_qty !== undefined && state.reward?.item_qty !== null && Number(state.reward.item_qty) > 0) {
+    qtyInput.setValue(String(state.reward.item_qty));
+  }
 
   modal.addComponents(
     new ActionRowBuilder().addComponents(apInput),
@@ -390,14 +411,14 @@ async function publishMission({ interaction, session }) {
 
   if (!state.title || !state.title.trim()) {
     return interaction.reply({
-      content: "❌ Укажите название миссии перед публикацией (кнопка «📝 Основное»).",
+      content: "❌ Укажите название миссии перед публикацией (кнопка 【📝 Основное】).",
       flags: MessageFlags.Ephemeral,
     });
   }
 
   if (!state.description || !state.description.trim()) {
     return interaction.reply({
-      content: "❌ Укажите описание миссии перед публикацией (кнопка «📝 Основное»).",
+      content: "❌ Укажите описание миссии перед публикацией (кнопка 【📝 Основное】).",
       flags: MessageFlags.Ephemeral,
     });
   }

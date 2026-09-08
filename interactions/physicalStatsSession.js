@@ -103,7 +103,7 @@ export function createPhysicalStatsEmbed(state) {
     )
     .setDescription(lines.join("\n"))
     .setFooter({
-      text: "Нажмите «🥊 Показатели» или «🔗 Анкета» для ввода значений через окна ввода.",
+      text: "Нажмите 【🥊 Показатели】 или 【🔗 Анкета】 для ввода значений через окна ввода.",
     });
 
   if (state.character_avatar) {
@@ -158,40 +158,55 @@ export function createStatsInputModal(state, messageId) {
     .setLabel("Сила удара (в кг)")
     .setStyle(TextInputStyle.Short)
     .setRequired(state.mode === "register")
-    .setPlaceholder("Например: 120.5")
-    .setValue(s.punch_strength_kg !== null ? String(s.punch_strength_kg) : "");
+    .setPlaceholder("Например: 120.5");
+
+  if (s.punch_strength_kg !== null && s.punch_strength_kg !== undefined) {
+    punch.setValue(String(s.punch_strength_kg));
+  }
 
   const lift = new TextInputBuilder()
     .setCustomId(PS_INPUT_LIFT)
     .setLabel("Сила на подъём (в кг)")
     .setStyle(TextInputStyle.Short)
     .setRequired(state.mode === "register")
-    .setPlaceholder("Например: 250")
-    .setValue(s.lifting_strength_kg !== null ? String(s.lifting_strength_kg) : "");
+    .setPlaceholder("Например: 250");
+
+  if (s.lifting_strength_kg !== null && s.lifting_strength_kg !== undefined) {
+    lift.setValue(String(s.lifting_strength_kg));
+  }
 
   const speed = new TextInputBuilder()
     .setCustomId(PS_INPUT_SPEED)
     .setLabel("Скорость (в км/ч)")
     .setStyle(TextInputStyle.Short)
     .setRequired(state.mode === "register")
-    .setPlaceholder("Например: 35")
-    .setValue(s.speed_kmh !== null ? String(s.speed_kmh) : "");
+    .setPlaceholder("Например: 35");
+
+  if (s.speed_kmh !== null && s.speed_kmh !== undefined) {
+    speed.setValue(String(s.speed_kmh));
+  }
 
   const stamina = new TextInputBuilder()
     .setCustomId(PS_INPUT_STAMINA)
     .setLabel("Стамина (в %)")
     .setStyle(TextInputStyle.Short)
     .setRequired(state.mode === "register")
-    .setPlaceholder("Например: 85")
-    .setValue(s.stamina_percent !== null ? String(s.stamina_percent) : "");
+    .setPlaceholder("Например: 85");
+
+  if (s.stamina_percent !== null && s.stamina_percent !== undefined) {
+    stamina.setValue(String(s.stamina_percent));
+  }
 
   const reaction = new TextInputBuilder()
     .setCustomId(PS_INPUT_REACTION)
     .setLabel("Скорость реакции (в мс)")
     .setStyle(TextInputStyle.Short)
     .setRequired(state.mode === "register")
-    .setPlaceholder("Например: 150")
-    .setValue(s.reaction_ms !== null ? String(s.reaction_ms) : "");
+    .setPlaceholder("Например: 150");
+
+  if (s.reaction_ms !== null && s.reaction_ms !== undefined) {
+    reaction.setValue(String(s.reaction_ms));
+  }
 
   modal.addComponents(
     new ActionRowBuilder().addComponents(punch),
@@ -215,8 +230,11 @@ export function createUrlInputModal(state, messageId) {
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
     .setMaxLength(500)
-    .setPlaceholder("https://example.com/character-sheet")
-    .setValue(state.stats?.character_url || "");
+    .setPlaceholder("https://example.com/character-sheet");
+
+  if (state.stats?.character_url && state.stats.character_url.trim()) {
+    urlInput.setValue(state.stats.character_url.trim());
+  }
 
   modal.addComponents(new ActionRowBuilder().addComponents(urlInput));
   return modal;
@@ -236,14 +254,14 @@ async function savePhysicalStats({ interaction, session }) {
       stats.reaction_ms === null
     ) {
       return interaction.reply({
-        content: "❌ Заполните все 5 физических показателей (кнопка «🥊 Показатели»).",
+        content: "❌ Заполните все 5 физических показателей (кнопка 【🥊 Показатели】).",
         flags: MessageFlags.Ephemeral,
       });
     }
 
     if (!stats.character_url || !isValidCharacterUrl(stats.character_url)) {
       return interaction.reply({
-        content: "❌ Укажите корректную ссылку на анкету (начинается с `https://` или `http://`, кнопка «🔗 Анкета»).",
+        content: "❌ Укажите корректную ссылку на анкету (начинается с `https://` или `http://`, кнопка 【🔗 Анкета】).",
         flags: MessageFlags.Ephemeral,
       });
     }

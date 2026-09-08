@@ -254,6 +254,15 @@ test("createMainInfoModal and createRewardsModal build valid modal dialogs with 
   assert.equal(parsedRew.namespace, MISSION_BUILDER_NAMESPACE);
   assert.equal(parsedRew.action, "rewards");
   assert.equal(parsedRew.messageId, "msg_rew_999");
+
+  // Проверяем, что при пустом начальном состоянии поля с min_length не содержат value: ""
+  const emptyState = createDraftState();
+  const emptyModal = createMainInfoModal(emptyState, "msg_empty");
+  const emptyData = emptyModal.toJSON();
+  const emptyTitle = emptyData.components[0].components[0];
+  const emptyDesc = emptyData.components[2].components[0];
+  assert.equal(emptyTitle.value, undefined);
+  assert.equal(emptyDesc.value, undefined);
 });
 
 test("missionBuilderInteractionHandler authorizes GM/Admin owner and rejects foreign or non-staff", () => {

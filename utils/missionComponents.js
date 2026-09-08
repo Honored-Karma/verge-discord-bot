@@ -71,7 +71,7 @@ export function createMissionCardEmbed(mission) {
   }
   if (mission.reward?.item?.item_name) {
     rewardLines.push(
-      `• Предмет: «${mission.reward.item.item_name}» ×${mission.reward.item.quantity || 1}`
+      `• Предмет: **${mission.reward.item.item_name}** ×${mission.reward.item.quantity || 1}`
     );
   }
   if (rewardLines.length === 0) {
@@ -301,7 +301,7 @@ export function createCompletionConfirmationEmbed(mission) {
   if (mission.reward.reputation > 0) rewards.push(`• +${mission.reward.reputation} Rtg каждому`);
   if (mission.reward.item?.item_name) {
     rewards.push(
-      `• Предмет: «${mission.reward.item.item_name}» ×${mission.reward.item.quantity || 1} каждому`
+      `• Предмет: **${mission.reward.item.item_name}** ×${mission.reward.item.quantity || 1} каждому`
     );
   }
 
