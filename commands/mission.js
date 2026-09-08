@@ -39,6 +39,13 @@ import {
 import { isGMOrAdmin, MISSION_NAMESPACE, MISSION_SESSION_TTL_MS } from "../interactions/missionSession.js";
 import { createInteractionSession } from "../utils/interactionSessions.js";
 import { orgRoleKey } from "../utils/orgRoles.js";
+import {
+  createDraftState,
+  createMissionBuilderComponents,
+  createMissionBuilderEmbed,
+  MISSION_BUILDER_NAMESPACE,
+  MISSION_BUILDER_TTL_MS,
+} from "../interactions/missionBuilderSession.js";
 
 export const data = new SlashCommandBuilder()
   .setName("mission")
@@ -47,104 +54,7 @@ export const data = new SlashCommandBuilder()
   .addSubcommand((sub) =>
     sub
       .setName("create")
-      .setDescription("[ГМ/АДМИН] Создать новую миссию")
-      .addStringOption((opt) =>
-        opt
-          .setName("title")
-          .setDescription("Название миссии")
-          .setRequired(true)
-          .setMaxLength(100)
-      )
-      .addStringOption((opt) =>
-        opt
-          .setName("type")
-          .setDescription("Тип миссии")
-          .setRequired(true)
-          .addChoices(
-            { name: "🌀 Скважина", value: MISSION_TYPES.well },
-            { name: "⚔️ Набег", value: MISSION_TYPES.raid },
-            { name: "🔍 Расследование", value: MISSION_TYPES.investigation },
-            { name: "🚩 Фракция", value: MISSION_TYPES.faction },
-            { name: "💬 Социальная", value: MISSION_TYPES.social },
-            { name: "📜 Другое", value: MISSION_TYPES.other }
-          )
-      )
-      .addStringOption((opt) =>
-        opt
-          .setName("description")
-          .setDescription("Краткая цель, условия или вводная")
-          .setRequired(true)
-          .setMaxLength(1000)
-      )
-      .addIntegerOption((opt) =>
-        opt
-          .setName("max_players")
-          .setDescription("Лимит участников (1–50)")
-          .setRequired(true)
-          .setMinValue(1)
-          .setMaxValue(50)
-      )
-      .addStringOption((opt) =>
-        opt
-          .setName("access")
-          .setDescription("Тип доступа к миссии")
-          .setRequired(true)
-          .addChoices(
-            { name: "🏢 Только организация", value: MISSION_ACCESS.organization },
-            { name: "🌐 Открытая для всех", value: MISSION_ACCESS.open },
-            { name: "✉️ Приглашённые", value: MISSION_ACCESS.invited }
-          )
-      )
-      .addStringOption((opt) =>
-        opt
-          .setName("organization")
-          .setDescription("Организация (autocomplete из базы данных)")
-          .setRequired(false)
-          .setAutocomplete(true)
-      )
-      .addIntegerOption((opt) =>
-        opt
-          .setName("reward_ap")
-          .setDescription("Награда AP (0 или положительное число)")
-          .setRequired(false)
-          .setMinValue(0)
-      )
-      .addIntegerOption((opt) =>
-        opt
-          .setName("reward_sp")
-          .setDescription("Награда SP (0 или положительное число)")
-          .setRequired(false)
-          .setMinValue(0)
-      )
-      .addIntegerOption((opt) =>
-        opt
-          .setName("reward_reputation")
-          .setDescription("Награда репутации Rtg (0 или положительное число)")
-          .setRequired(false)
-          .setMinValue(0)
-      )
-      .addStringOption((opt) =>
-        opt
-          .setName("reward_item")
-          .setDescription("Награда предметом из каталога")
-          .setRequired(false)
-          .setAutocomplete(true)
-      )
-      .addIntegerOption((opt) =>
-        opt
-          .setName("reward_item_qty")
-          .setDescription("Количество предмета (по умолчанию 1)")
-          .setRequired(false)
-          .setMinValue(1)
-          .setMaxValue(1000)
-      )
-      .addChannelOption((opt) =>
-        opt
-          .setName("target_channel")
-          .setDescription("Канал для открытой миссии (если не выбран канал организации)")
-          .setRequired(false)
-          .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
-      )
+      .setDescription("[ГМ/АДМИН] Открыть интерактивный мастер создания миссии")
   )
   // ── /mission list ────────────────────────────────────────────────────────────
   .addSubcommand((sub) =>
@@ -500,7 +410,7 @@ async function handleChannelGroup(interaction, sub, member) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. /mission create
+// 2. /mission create (Интерактивный мастер создания миссии)
 // ─────────────────────────────────────────────────────────────────────────────
 async function handleMissionCreate(interaction, member) {
   if (!isGMOrAdmin(member)) {
@@ -515,185 +425,53 @@ async function handleMissionCreate(interaction, member) {
     });
   }
 
-  const title = interaction.options.getString("title").trim();
-  const type = interaction.options.getString("type");
-  const description = interaction.options.getString("description").trim();
-  const maxPlayers = interaction.options.getInteger("max_players");
-  const access = interaction.options.getString("access");
-  const rewardAp = interaction.options.getInteger("reward_ap") || 0;
-  const rewardSp = interaction.options.getInteger("reward_sp") || 0;
-  const rewardRep = interaction.options.getInteger("reward_reputation") || 0;
-  const rewardItemName = interaction.options.getString("reward_item");
-  const rewardItemQty = interaction.options.getInteger("reward_item_qty") || 1;
-  const rawOrg = interaction.options.getString("organization");
-  const explicitTargetChannel = interaction.options.getChannel("target_channel");
+  // Проверяем, привязан ли текущий канал к какой-то организации
+  let defaultOrgKey = null;
+  let defaultOrgName = null;
+  let defaultChannelId = interaction.channelId;
+  let defaultAccess = MISSION_ACCESS.open;
 
-  // ── Определение организации и канала ─────────────────────────────────────
-  let resolvedOrg = null;
-  let targetChannelId = null;
-
-  if (rawOrg) {
-    resolvedOrg = await getOrganizationByKey(rawOrg);
-    if (!resolvedOrg) {
-      return interaction.reply({
-        embeds: [
-          createErrorEmbed(
-            "Организация не найдена",
-            `Организация «${rawOrg}» не найдена в базе данных.`
-          ),
-        ],
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    // Получаем канал организации из MongoDB
-    const orgChannelSetting = await getOrganizationMissionChannel({
-      guildId: interaction.guildId,
-      orgKey: resolvedOrg.key,
-    });
-
-    if (!orgChannelSetting || !orgChannelSetting.channel_id) {
-      return interaction.reply({
-        embeds: [
-          createErrorEmbed(
-            "Канал организации не назначен",
-            `Для организации «**${resolvedOrg.name}**» ещё не назначен канал миссий.\n` +
-              `Администратор должен выполнить \`/mission channel set organization:${resolvedOrg.name} channel:... \`.`
-          ),
-        ],
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    // Если ГМ выбрал организацию, но вручную указал другой канал — показываем понятную ошибку
-    if (explicitTargetChannel && explicitTargetChannel.id !== orgChannelSetting.channel_id) {
-      return interaction.reply({
-        embeds: [
-          createErrorEmbed(
-            "Несогласованный канал",
-            `Организация «**${resolvedOrg.name}**» привязана к каналу <#${orgChannelSetting.channel_id}>.\n` +
-              `При выборе организации миссия может публиковаться только в её официальный канал.`
-          ),
-        ],
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    targetChannelId = orgChannelSetting.channel_id;
-  } else {
-    // Организация не указана — проверяем, привязан ли текущий канал к какой-то организации
-    const channelOrgSetting = await getOrganizationByChannelId({
-      guildId: interaction.guildId,
-      channelId: interaction.channelId,
-    });
-
-    if (channelOrgSetting) {
-      // Автоматически подставляем организацию этого канала
-      resolvedOrg = await getOrganizationByKey(channelOrgSetting.organization_key);
-      targetChannelId = channelOrgSetting.channel_id;
-    } else {
-      // Полностью открытая миссия без организации
-      targetChannelId = explicitTargetChannel ? explicitTargetChannel.id : interaction.channelId;
-    }
-  }
-
-  // Получаем Discord-канал
-  const targetChannel = await interaction.guild.channels.fetch(targetChannelId).catch(() => null);
-  if (!targetChannel) {
-    return interaction.reply({
-      embeds: [createErrorEmbed("Ошибка канала", "Не удалось получить целевой канал для публикации миссии.")],
-      flags: MessageFlags.Ephemeral,
-    });
-  }
-
-  // Проверка прав бота в целевом канале
-  const me = interaction.guild?.members?.me;
-  const permCheck = verifyChannelPermissions(targetChannel, me);
-  if (!permCheck.ok) {
-    return interaction.reply({
-      embeds: [
-        createErrorEmbed(
-          "Недостаточно прав",
-          `Бот не может опубликовать миссию в канале <#${targetChannel.id}>. Отсутствуют права:\n` +
-            permCheck.missing.map((m) => `• ${m}`).join("\n")
-        ),
-      ],
-      flags: MessageFlags.Ephemeral,
-    });
-  }
-
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-  // Формируем награду
-  const reward = {
-    ap: rewardAp,
-    sp: rewardSp,
-    reputation: rewardRep,
-    item: rewardItemName
-      ? { item_id: rewardItemName, item_name: rewardItemName, quantity: rewardItemQty }
-      : null,
-  };
-
-  // Создаём миссию в MongoDB
-  const mission = await createMission({
+  const channelOrgSetting = await getOrganizationByChannelId({
     guildId: interaction.guildId,
-    organizationId: resolvedOrg?.id || null,
-    organizationKey: resolvedOrg?.key || null,
-    organizationName: resolvedOrg?.name || null,
-    channelId: targetChannel.id,
-    title,
-    type,
-    description,
-    access,
-    maxPlayers,
-    createdBy: {
-      user_id: interaction.user.id,
-      username: interaction.user.username,
-    },
-    reward,
+    channelId: interaction.channelId,
   });
 
-  // Публикуем постоянную интерактивную карточку в канал
-  let message;
-  try {
-    message = await targetChannel.send({
-      embeds: [createMissionCardEmbed(mission)],
-      components: createMissionActionRows(mission),
-    });
-  } catch (err) {
-    console.error("Error sending mission card to channel:", err);
-    return interaction.editReply({
-      embeds: [
-        createErrorEmbed(
-          "Ошибка отправки",
-          `Не удалось опубликовать карточку миссии в канал <#${targetChannel.id}>: ${err.message}`
-        ),
-      ],
-    });
+  if (channelOrgSetting) {
+    const org = await getOrganizationByKey(channelOrgSetting.organization_key);
+    if (org) {
+      defaultOrgKey = org.key;
+      defaultOrgName = org.name;
+      defaultChannelId = channelOrgSetting.channel_id;
+      defaultAccess = MISSION_ACCESS.organization;
+    }
   }
 
-  // Сохраняем message_id в MongoDB и регистрируем persistent interaction session
-  await Promise.all([
-    setMissionMessageId(mission.public_id, message.id),
-    createInteractionSession({
-      messageId: message.id,
-      namespace: MISSION_NAMESPACE,
-      ownerId: interaction.user.id,
-      guildId: interaction.guildId,
-      channelId: targetChannel.id,
-      state: { public_id: mission.public_id },
-      ttlMs: MISSION_SESSION_TTL_MS,
-    }),
-  ]);
+  const draftState = createDraftState({
+    channel_id: defaultChannelId,
+    organization_key: defaultOrgKey,
+    organization_name: defaultOrgName,
+    access: defaultAccess,
+  });
 
-  return interaction.editReply({
-    embeds: [
-      createSuccessEmbed(
-        "Миссия создана",
-        `Карточка миссии «**${mission.title}**» (\`${mission.public_id}\`) опубликована в канале <#${targetChannel.id}>.\n\n` +
-          `🔗 [Перейти к сообщению миссии](${message.url})`
-      ),
-    ],
+  const orgs = await getAllOrganizations();
+  const embed = createMissionBuilderEmbed(draftState);
+
+  await interaction.reply({
+    embeds: [embed],
+    components: createMissionBuilderComponents(draftState, orgs),
+    flags: MessageFlags.Ephemeral,
+  });
+
+  const response = await interaction.fetchReply();
+
+  await createInteractionSession({
+    messageId: response.id,
+    namespace: MISSION_BUILDER_NAMESPACE,
+    ownerId: interaction.user.id,
+    guildId: interaction.guildId,
+    channelId: interaction.channelId,
+    state: draftState,
+    ttlMs: MISSION_BUILDER_TTL_MS,
   });
 }
 

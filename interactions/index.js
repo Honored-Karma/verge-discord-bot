@@ -23,6 +23,18 @@ import {
   MISSION_NAMESPACE,
   missionInteractionHandler,
 } from "./missionSession.js";
+import {
+  MISSION_BUILDER_NAMESPACE,
+  missionBuilderInteractionHandler,
+} from "./missionBuilderSession.js";
+import {
+  PHYSICAL_STATS_NAMESPACE,
+  physicalStatsInteractionHandler,
+} from "./physicalStatsSession.js";
+import {
+  ANNOUNCE_BUILDER_NAMESPACE,
+  announceInteractionHandler,
+} from "./announceSession.js";
 
 /**
  * Single place where persistent interaction handlers are wired up. Every panel
@@ -39,6 +51,9 @@ export function registerInteractionHandlers() {
   registerInteractionHandler(TRAIN_SP_NAMESPACE, trainSpInteractionHandler);
   registerInteractionHandler(HELP_NAMESPACE, helpInteractionHandler);
   registerInteractionHandler(MISSION_NAMESPACE, missionInteractionHandler);
+  registerInteractionHandler(MISSION_BUILDER_NAMESPACE, missionBuilderInteractionHandler);
+  registerInteractionHandler(PHYSICAL_STATS_NAMESPACE, physicalStatsInteractionHandler);
+  registerInteractionHandler(ANNOUNCE_BUILDER_NAMESPACE, announceInteractionHandler);
   return [
     SHOP_NAMESPACE,
     PAY_NAMESPACE,
@@ -49,5 +64,8 @@ export function registerInteractionHandlers() {
     TRAIN_SP_NAMESPACE,
     HELP_NAMESPACE,
     MISSION_NAMESPACE,
+    MISSION_BUILDER_NAMESPACE,
+    PHYSICAL_STATS_NAMESPACE,
+    ANNOUNCE_BUILDER_NAMESPACE,
   ];
 }

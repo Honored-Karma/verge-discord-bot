@@ -1,71 +1,29 @@
-import { SlashCommandBuilder } from "discord.js";
+import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import {
-  editPhysicalStats,
   getActiveSlot,
   getPlayer,
 } from "../utils/dataManager.js";
 import { hasCommandPermission } from "../utils/adminCheck.js";
 import { resolveMember } from "../utils/memberHelper.js";
-import { createErrorEmbed, createSuccessEmbed } from "../utils/embeds.js";
+import { createErrorEmbed } from "../utils/embeds.js";
 import {
   checkGlobalCooldown,
-  autoDeleteMessageShort,
 } from "../utils/cooldowns.js";
-import { logCommand } from "../utils/logs.js";
+import { makeTargetPlayerId } from "../utils/physicalStats.js";
 import {
-  getPhysicalStatsFromInteraction,
-  isValidCharacterUrl,
-  makeTargetPlayerId,
-  physicalStatsSummary,
-} from "../utils/physicalStats.js";
+  createPhysicalStatsComponents,
+  createPhysicalStatsEmbed,
+  createPhysicalStatsState,
+  PHYSICAL_STATS_NAMESPACE,
+  PHYSICAL_STATS_TTL_MS,
+} from "../interactions/physicalStatsSession.js";
+import { createInteractionSession } from "../utils/interactionSessions.js";
 
 export const data = new SlashCommandBuilder()
   .setName("physical-edit")
   .setDescription("[ПЕРСОНАЛ] Изменить физические показатели персонажа")
   .addUserOption((option) =>
     option.setName("user").setDescription("Игрок").setRequired(true),
-  )
-  .addNumberOption((option) =>
-    option
-      .setName("punch_kg")
-      .setDescription("Новая сила удара в килограммах")
-      .setMinValue(0)
-      .setRequired(false),
-  )
-  .addNumberOption((option) =>
-    option
-      .setName("lift_kg")
-      .setDescription("Новая сила на подъём в килограммах")
-      .setMinValue(0)
-      .setRequired(false),
-  )
-  .addNumberOption((option) =>
-    option
-      .setName("speed_kmh")
-      .setDescription("Новая скорость в км/ч")
-      .setMinValue(0)
-      .setRequired(false),
-  )
-  .addNumberOption((option) =>
-    option
-      .setName("stamina_percent")
-      .setDescription("Новая стамина в процентах")
-      .setMinValue(0)
-      .setRequired(false),
-  )
-  .addNumberOption((option) =>
-    option
-      .setName("reaction_ms")
-      .setDescription("Новая скорость реакции в миллисекундах")
-      .setMinValue(0.001)
-      .setRequired(false),
-  )
-  .addStringOption((option) =>
-    option
-      .setName("character_url")
-      .setDescription("Новая ссылка на анкету или страницу персонажа")
-      .setMaxLength(500)
-      .setRequired(false),
   )
   .addIntegerOption((option) =>
     option
@@ -78,118 +36,93 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
   const member = await resolveMember(interaction);
   if (!hasCommandPermission(member, "physical-edit")) {
-    const msg = await interaction.reply({
+    return interaction.reply({
       embeds: [
         createErrorEmbed(
           "Доступ запрещён",
           "Команда доступна анкетологам, модераторам, ГМам и администраторам.",
         ),
       ],
-      fetchReply: true,
+      flags: MessageFlags.Ephemeral,
     });
-    autoDeleteMessageShort(msg);
-    return;
   }
 
   const globalCooldown = checkGlobalCooldown(interaction.user.id);
   if (globalCooldown.onCooldown) {
-    const msg = await interaction.reply({
+    return interaction.reply({
       content: `⏱️ Подождите **${globalCooldown.remainingFormatted}** перед следующей командой.`,
-      fetchReply: true,
+      flags: MessageFlags.Ephemeral,
     });
-    autoDeleteMessageShort(msg);
-    return;
-  }
-
-  const updates = getPhysicalStatsFromInteraction(interaction);
-  if (Object.keys(updates).length === 0) {
-    const msg = await interaction.reply({
-      embeds: [
-        createErrorEmbed(
-          "Нечего изменять",
-          "Укажите хотя бы один новый показатель или ссылку на персонажа.",
-        ),
-      ],
-      fetchReply: true,
-    });
-    autoDeleteMessageShort(msg);
-    return;
-  }
-
-  if (
-    Object.hasOwn(updates, "character_url") &&
-    !isValidCharacterUrl(updates.character_url)
-  ) {
-    const msg = await interaction.reply({
-      embeds: [
-        createErrorEmbed(
-          "Неверная ссылка",
-          "Укажите полную ссылку, начинающуюся с `https://` или `http://`.",
-        ),
-      ],
-      fetchReply: true,
-    });
-    autoDeleteMessageShort(msg);
-    return;
   }
 
   const targetUser = interaction.options.getUser("user", true);
   const requestedSlot = interaction.options.getInteger("slot");
   const slot = requestedSlot ?? (await getActiveSlot(targetUser.id));
   const playerId = makeTargetPlayerId(targetUser.id, slot);
-  const player = await getPlayer(playerId);
 
+  const player = await getPlayer(playerId);
   if (!player) {
-    const msg = await interaction.reply({
+    return interaction.reply({
       embeds: [
         createErrorEmbed(
           "Персонаж не найден",
-          `В слоте **${slot}** нет персонажа. Сначала зарегистрируйте его через \`/register\`.`,
+          `В слоте **${slot}** нет персонажа у <@${targetUser.id}>. Сначала зарегистрируйте его через \`/register\`.`,
         ),
       ],
-      fetchReply: true,
+      flags: MessageFlags.Ephemeral,
     });
-    autoDeleteMessageShort(msg);
-    return;
   }
 
-  const result = await editPhysicalStats(playerId, updates, interaction.user.id);
-  if (!result.success) {
-    const description =
-      result.reason === "not_registered"
-        ? "Сначала зарегистрируйте все показатели через `/physical-register`."
-        : "Не удалось обновить показатели. Попробуйте снова.";
-    const msg = await interaction.reply({
-      embeds: [createErrorEmbed("Показатели не обновлены", description)],
-      fetchReply: true,
+  if (!player.physical_stats) {
+    return interaction.reply({
+      embeds: [
+        createErrorEmbed(
+          "Показатели не зарегистрированы",
+          `У персонажа **${player.character_name || targetUser.username}** ещё не зарегистрированы физические показатели.\nИспользуйте команду \`/physical-register\`.`,
+        ),
+      ],
+      flags: MessageFlags.Ephemeral,
     });
-    autoDeleteMessageShort(msg);
-    return;
   }
 
-  const updatedPlayer = await getPlayer(playerId);
-  const name = player.character_name || player.username;
-  const stats = updatedPlayer.physical_stats;
-  const msg = await interaction.reply({
-    embeds: [
-      createSuccessEmbed(
-        "Физические показатели обновлены",
-        `**${name}** • слот ${slot}\n\n${physicalStatsSummary(stats)}\n\n**Анкета персонажа:** ${stats.character_url}`,
-      ),
-    ],
-    fetchReply: true,
+  const existingStats = player.physical_stats || {};
+
+  const state = createPhysicalStatsState({
+    mode: "edit",
+    target_user_id: targetUser.id,
+    target_username: targetUser.username,
+    slot,
+    player_id: playerId,
+    character_name: player.character_name || targetUser.username,
+    character_avatar: player.character_avatar || null,
+    stats: {
+      punch_strength_kg: existingStats.punch_strength_kg ?? null,
+      lifting_strength_kg: existingStats.lifting_strength_kg ?? null,
+      speed_kmh: existingStats.speed_kmh ?? null,
+      stamina_percent: existingStats.stamina_percent ?? null,
+      reaction_ms: existingStats.reaction_ms ?? null,
+      character_url: existingStats.character_url ?? null,
+    },
   });
-  autoDeleteMessageShort(msg);
 
-  await logCommand({
-    client: interaction.client,
+  const embed = createPhysicalStatsEmbed(state);
+  const components = createPhysicalStatsComponents(state);
+
+  await interaction.reply({
+    embeds: [embed],
+    components,
+    flags: MessageFlags.Ephemeral,
+  });
+
+  const response = await interaction.fetchReply();
+
+  await createInteractionSession({
+    messageId: response.id,
+    namespace: PHYSICAL_STATS_NAMESPACE,
+    ownerId: interaction.user.id,
     guildId: interaction.guildId,
     channelId: interaction.channelId,
-    userId: interaction.user.id,
-    userTag: interaction.user.tag,
-    command: "physical-edit",
-    targetId: playerId,
-    targetTag: `${name} (слот ${slot}) <@${targetUser.id}>`,
-    extra: updates,
+    state,
+    ttlMs: PHYSICAL_STATS_TTL_MS,
   });
 }
