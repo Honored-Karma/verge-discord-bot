@@ -1,33 +1,72 @@
 import { PermissionFlagsBits } from "discord.js";
 
+function getEnvRoleIds(...envNames) {
+  return envNames.flatMap((envName) =>
+    process.env[envName]
+      ? process.env[envName].split(",").map((id) => id.trim()).filter(Boolean)
+      : []
+  );
+}
+
+function memberHasAnyRole(member, roleIds) {
+  if (!member || !roleIds || roleIds.length === 0) return false;
+  try {
+    if (member.roles?.cache) {
+      if (typeof member.roles.cache.some === "function") {
+        return member.roles.cache.some((role) =>
+          roleIds.includes(typeof role === "object" ? role?.id : role)
+        );
+      }
+      if (Array.isArray(member.roles.cache)) {
+        return member.roles.cache.some((role) =>
+          roleIds.includes(typeof role === "object" ? role?.id : role)
+        );
+      }
+    }
+    if (Array.isArray(member.roles)) {
+      return member.roles.some((role) =>
+        roleIds.includes(typeof role === "object" ? role?.id : role)
+      );
+    }
+  } catch (e) {
+    console.error("Error checking member roles:", e);
+  }
+  return false;
+}
+
 export function isAdmin(member) {
   if (!member) return false;
 
   // Check if owner
-  if (member.guild.ownerId === member.id) return true;
+  if (member.guild?.ownerId === member.id) return true;
 
   // Check if has Administrator permission
-  if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
+  if (
+    member.permissions?.has &&
+    member.permissions.has(PermissionFlagsBits.Administrator)
+  )
+    return true;
 
   // Check specific admin user IDs
   const adminIds = process.env.ADMIN_IDS
-    ? process.env.ADMIN_IDS.split(",").map((id) => id.trim())
+    ? process.env.ADMIN_IDS.split(",").map((id) => id.trim()).filter(Boolean)
     : [];
   if (adminIds.includes(member.id)) return true;
 
   // Check if has role with name "Game Master"
-  if (member.roles.cache.some((role) => role.name === "Game Master"))
+  if (
+    member.roles?.cache &&
+    typeof member.roles.cache.some === "function" &&
+    member.roles.cache.some((role) => (role.name || role) === "Game Master")
+  ) {
     return true;
+  }
 
   // Check ADMIN_ROLE_IDS (admin role without owner permissions)
-  const adminRoleIds = process.env.ADMIN_ROLE_IDS
-    ? process.env.ADMIN_ROLE_IDS.split(",").map((id) => id.trim())
-    : [];
-  if (
-    adminRoleIds.length > 0 &&
-    member.roles.cache.some((role) => adminRoleIds.includes(role.id))
-  )
+  const adminRoleIds = getEnvRoleIds("ADMIN_ROLE_IDS", "ADMIN_ROLE_ID");
+  if (memberHasAnyRole(member, adminRoleIds)) {
     return true;
+  }
 
   return false;
 }
@@ -59,6 +98,7 @@ export function hasCommandPermission(member, commandName) {
     "train-block",
     "logs",
     "render-ui",
+    "set-rank",
   ];
 
   // Commands that style-giver roles can use
@@ -68,76 +108,76 @@ export function hasCommandPermission(member, commandName) {
   // LIMITED_ADMIN_ROLE_IDS is kept as a compatibility fallback for existing setups.
   const physicalStatsCommands = ["physical-register", "physical-edit"];
 
-  // Check GM commands
-  if (gmCommands.includes(commandName)) {
-    const gmRoleIds = process.env.GM_ROLE_IDS
-      ? process.env.GM_ROLE_IDS.split(",").map((r) => r.trim())
-      : [];
-    if (gmRoleIds.length > 0) {
-      try {
-        if (
-          member.roles &&
-          member.roles.cache &&
-          typeof member.roles.cache.some === "function"
-        ) {
-          if (member.roles.cache.some((role) => gmRoleIds.includes(role.id))) {
-            return true;
-          }
-        }
-      } catch (e) {
-        console.error("Error checking GM roles:", e);
-      }
-    }
-  }
+  // Commands that Anketolog (profile reviewers who approve character applications) can use:
+  // Allows granting combat styles, currency, SP/AP, items, rank, reputation, and physical stats.
+  const anketologCommands = [
+    "give-style",
+    "remove-player-style",
+    "add-currency",
+    "set-currency",
+    "deduct-currency",
+    "add-sp",
+    "set-sp",
+    "add-ap",
+    "set-ap",
+    "give-item",
+    "set-rank",
+    "add-reputation",
+    "set-reputation",
+    "deduct-reputation",
+    "physical-register",
+    "physical-edit",
+  ];
 
-  // Check style-giver commands
-  if (styleGiverCommands.includes(commandName)) {
-    const styleGiverRoleIds = process.env.GIVE_STYLE_ROLE_IDS
-      ? process.env.GIVE_STYLE_ROLE_IDS.split(",").map((r) => r.trim())
-      : [];
-    if (styleGiverRoleIds.length > 0) {
-      try {
-        if (
-          member.roles &&
-          member.roles.cache &&
-          typeof member.roles.cache.some === "function"
-        ) {
-          if (
-            member.roles.cache.some((role) =>
-              styleGiverRoleIds.includes(role.id),
-            )
-          ) {
-            return true;
-          }
-        }
-      } catch (e) {
-        console.error("Error checking style-giver roles:", e);
-      }
-    }
-  }
-
-  if (physicalStatsCommands.includes(commandName)) {
-    const roleEnvNames = [
+  // 1. Check Anketolog commands (application acceptance and player onboarding)
+  if (anketologCommands.includes(commandName)) {
+    const anketologRoleIds = getEnvRoleIds(
       "ANKETOLOG_ROLE_IDS",
-      "MODERATOR_ROLE_IDS",
-      "GM_ROLE_IDS",
-      "LIMITED_ADMIN_ROLE_IDS",
-    ];
-    const allowedRoleIds = roleEnvNames.flatMap((envName) =>
-      process.env[envName]
-        ? process.env[envName].split(",").map((id) => id.trim()).filter(Boolean)
-        : [],
+      "ANKETOLOG_ROLE_ID"
     );
+    if (memberHasAnyRole(member, anketologRoleIds)) {
+      return true;
+    }
+  }
 
-    try {
-      if (
-        allowedRoleIds.length > 0 &&
-        member.roles?.cache?.some((role) => allowedRoleIds.includes(role.id))
-      ) {
-        return true;
-      }
-    } catch (e) {
-      console.error("Error checking physical stats roles:", e);
+  // 2. Check GM commands
+  if (gmCommands.includes(commandName)) {
+    const gmRoleIds = getEnvRoleIds(
+      "GM_ROLE_IDS",
+      "GM_ROLE_ID",
+      "LIMITED_ADMIN_ROLE_IDS"
+    );
+    if (memberHasAnyRole(member, gmRoleIds)) {
+      return true;
+    }
+  }
+
+  // 3. Check style-giver commands
+  if (styleGiverCommands.includes(commandName)) {
+    const styleGiverRoleIds = getEnvRoleIds(
+      "GIVE_STYLE_ROLE_IDS",
+      "GIVE_STYLE_ROLE_ID",
+      "ANKETOLOG_ROLE_IDS",
+      "ANKETOLOG_ROLE_ID"
+    );
+    if (memberHasAnyRole(member, styleGiverRoleIds)) {
+      return true;
+    }
+  }
+
+  // 4. Check physical stats commands
+  if (physicalStatsCommands.includes(commandName)) {
+    const physicalRoleIds = getEnvRoleIds(
+      "ANKETOLOG_ROLE_IDS",
+      "ANKETOLOG_ROLE_ID",
+      "MODERATOR_ROLE_IDS",
+      "MODERATOR_ROLE_ID",
+      "GM_ROLE_IDS",
+      "GM_ROLE_ID",
+      "LIMITED_ADMIN_ROLE_IDS"
+    );
+    if (memberHasAnyRole(member, physicalRoleIds)) {
+      return true;
     }
   }
 

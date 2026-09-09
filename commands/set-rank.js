@@ -1,13 +1,14 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, updatePlayer, getActiveSlot } from '../utils/dataManager.js';
-import { isAdmin } from '../utils/adminCheck.js';
+import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
+import { resolveMember } from '../utils/memberHelper.js';
 import { createErrorEmbed, createSuccessEmbed } from '../utils/embeds.js';
 import { isValidRankForOrganization, normalizeOrganization, normalizeRank } from '../utils/rankSystem.js';
 import { describeOrgSync, syncOrgRoles } from '../utils/orgRoles.js';
 
 export const data = new SlashCommandBuilder()
     .setName('set-rank')
-    .setDescription('Установить ранг игроку (только для администраторов)')
+    .setDescription('[АДМИН/АНКЕТОЛОГ] Установить ранг игроку')
     .addUserOption(option => 
         option.setName('user')
             .setDescription('Пользователь, которому нужно установить ранг')
@@ -35,7 +36,8 @@ export const data = new SlashCommandBuilder()
     );
 
 export async function execute(interaction) {
-    if (!await isAdmin(interaction.member)) {
+    const member = await resolveMember(interaction);
+    if (!hasCommandPermission(member, 'set-rank')) {
         return interaction.reply({ embeds: [createErrorEmbed('Недостаточно прав', 'У вас нет прав на использование этой команды.')], ephemeral: true });
     }
 
