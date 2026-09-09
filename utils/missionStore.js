@@ -44,7 +44,23 @@ export const TYPE_LABELS = {
   other: "Другое",
 };
 
-export const TYPE_ICONS = {
+export const KNOWN_EMOJI_MARKUP = {
+  "45lootbox": "<:45lootbox:1499585857995411576>",
+  "14LightningPurple": "<:14LightningPurple:1494708639473074277>",
+};
+
+export const MISSION_EMOJIS = {
+  party: ":25user:",
+  objective: ":19warning:",
+  rewards: "<:45lootbox:1499585857995411576>",
+  borehole: ":63borehole:",
+  info: ":66info:",
+  link: ":15link:",
+  star: ":26star:",
+  lightning: "<:14LightningPurple:1494708639473074277>",
+};
+
+export const TYPE_FALLBACK_ICONS = {
   well: "🌀",
   raid: "⚔️",
   investigation: "🔍",
@@ -52,6 +68,65 @@ export const TYPE_ICONS = {
   social: "💬",
   other: "📜",
 };
+
+export const TYPE_ICONS = {
+  well: ":63borehole:",
+  raid: "<:14LightningPurple:1494708639473074277>",
+  investigation: ":66info:",
+  faction: ":26star:",
+  social: ":15link:",
+  other: ":66info:",
+};
+
+/**
+ * Разрешает кастомный эмодзи по названию или строке тега.
+ * Если передан client/guild, пытается найти эмодзи в кэше и вернуть полный формат <:name:id>.
+ */
+export function resolveCustomEmoji(emojiStrOrName, clientOrGuild = null, fallback = "") {
+  if (!emojiStrOrName) return fallback;
+  const str = String(emojiStrOrName).trim();
+
+  // Если уже в полном формате Discord <:name:id> или <a:name:id>
+  if (/^<a?:\w+:\d+>$/.test(str)) {
+    return str;
+  }
+
+  // Извлекаем имя, если строка вида :name:
+  const nameMatch = str.match(/^:?([a-zA-Z0-9_]+):?$/);
+  const name = nameMatch ? nameMatch[1] : str;
+
+  // 1. Проверяем известные статические теги
+  if (KNOWN_EMOJI_MARKUP[name]) {
+    return KNOWN_EMOJI_MARKUP[name];
+  }
+
+  // 2. Ищем в кэше Discord-клиента или гильдии, если передан
+  const cache = clientOrGuild?.emojis?.cache || clientOrGuild?.client?.emojis?.cache;
+  if (cache) {
+    const found = cache.find((e) => e.name === name);
+    if (found) return found.toString();
+  }
+
+  // 3. Возвращаем в формате :name:
+  return `:${name}:`;
+}
+
+/**
+ * Безопасный парсер для компонентов Discord (SelectMenu/Button),
+ * где недопустима строка вида :name: без ID.
+ */
+export function parseOptionEmoji(emojiStr, fallback = undefined) {
+  if (!emojiStr) return fallback;
+  const str = String(emojiStr).trim();
+  const match = str.match(/^<(a)?:(\w+):(\d+)>$/);
+  if (match) {
+    return { id: match[3], name: match[2], animated: Boolean(match[1]) };
+  }
+  if (!str.startsWith(":") && !str.includes("<")) {
+    return str;
+  }
+  return fallback;
+}
 
 export const STATUS_LABELS = {
   recruiting: "Набор",

@@ -14,8 +14,12 @@ import {
 import {
   createMission,
   MISSION_ACCESS,
+  MISSION_EMOJIS,
   MISSION_TYPES,
+  parseOptionEmoji,
+  resolveCustomEmoji,
   setMissionMessageId,
+  TYPE_FALLBACK_ICONS,
   TYPE_ICONS,
   TYPE_LABELS,
 } from "../utils/missionStore.js";
@@ -121,9 +125,13 @@ export function createDraftState({
 /**
  * Генерирует Embed превью черновика миссии
  */
-export function createMissionBuilderEmbed(state) {
-  const typeIcon = TYPE_ICONS[state.type] || "🌀";
+export function createMissionBuilderEmbed(state, client = null) {
+  const rawTypeIcon = TYPE_ICONS[state.type] || "🌀";
+  const typeIcon = resolveCustomEmoji(rawTypeIcon, client);
   const typeLabel = TYPE_LABELS[state.type] || state.type;
+  const partyIcon = resolveCustomEmoji(MISSION_EMOJIS.party, client);
+  const rewardIcon = resolveCustomEmoji(MISSION_EMOJIS.rewards, client);
+
   const orgText = state.organization_name
     ? `**${state.organization_name}**`
     : "*Без организации (открытая)*";
@@ -155,13 +163,13 @@ export function createMissionBuilderEmbed(state) {
     .setDescription(
       `Заполните параметры миссии с помощью выпадающих списков и модальных окон ввода, затем нажмите **【🚀 Опубликовать】**.\n\n` +
       `**📌 Название:** ${state.title ? `**${state.title}**` : "*(не указано — заполните через 【📝 Основное】)*"}\n` +
-      `**🌀 Тип миссии:** ${typeIcon} ${typeLabel}\n` +
+      `**Тип миссии:** ${typeIcon} ${typeLabel}\n` +
       `**🌐 Доступ:** ${formatAccess(state.access)}\n` +
       `**🏢 Организация:** ${orgText}\n` +
       `**📢 Канал публикации:** ${channelText}\n` +
-      `**👥 Лимит участников:** ${state.max_players} чел.\n\n` +
+      `**${partyIcon} Лимит участников:** ${state.max_players} чел.\n\n` +
       `**📜 Описание и вводная:**\n${descriptionText}\n\n` +
-      `**🎁 Награды:**\n${rewardText}\n\n` +
+      `**${rewardIcon} Награды:**\n${rewardText}\n\n` +
       `**🖼️ Изображения / Арт:**\n${mediaText}`
     )
     .setFooter({
@@ -188,7 +196,7 @@ export function createMissionBuilderEmbed(state) {
 /**
  * Создаёт компоненты интерфейса мастера (до 5 Action Rows)
  */
-export function createMissionBuilderComponents(state, orgs = [], messageId = null, disabled = false) {
+export function createMissionBuilderComponents(state, orgs = [], messageId = null, disabled = false, client = null) {
   // Row 1: Выбор типа миссии
   const typeMenu = new StringSelectMenuBuilder()
     .setCustomId(MB_SELECT_TYPE)
@@ -198,7 +206,7 @@ export function createMissionBuilderComponents(state, orgs = [], messageId = nul
       Object.entries(MISSION_TYPES).map(([k, val]) => ({
         label: TYPE_LABELS[val] || val,
         value: val,
-        emoji: TYPE_ICONS[val] || undefined,
+        emoji: parseOptionEmoji(resolveCustomEmoji(TYPE_ICONS[val], client), TYPE_FALLBACK_ICONS[val]),
         default: state.type === val,
       }))
     );
@@ -582,8 +590,8 @@ async function publishMission({ interaction, session }) {
   let message;
   try {
     message = await targetChannel.send({
-      embeds: [createMissionCardEmbed(mission)],
-      components: createMissionActionRows(mission),
+      embeds: [createMissionCardEmbed(mission, interaction.client)],
+      components: createMissionActionRows(mission, interaction.client),
     });
   } catch (err) {
     console.error("Error sending mission card to channel:", err);
@@ -635,7 +643,7 @@ async function publishMission({ interaction, session }) {
     .setTitle("✅ Миссия успешно создана и опубликована!")
     .setDescription(
       `Миссия **${mission.title}** (\`${mission.public_id}\`) опубликована в канале <#${targetChannel.id}>.\n\n` +
-      `• **Тип:** ${TYPE_ICONS[mission.type] || "🌀"} ${TYPE_LABELS[mission.type] || mission.type}\n` +
+      `• **Тип:** ${resolveCustomEmoji(TYPE_ICONS[mission.type] || "🌀", interaction.client)} ${TYPE_LABELS[mission.type] || mission.type}\n` +
       `• **Лимит участников:** ${mission.max_players} чел.\n` +
       `• **Доступ:** ${formatAccess(mission.access)}\n` +
       (mission.organization_name ? `• **Организация:** ${mission.organization_name}\n` : "") +
@@ -748,8 +756,8 @@ async function handleComponent({ interaction, session }) {
 
   // Обновляем карточку черновика
   const orgs = await getAllOrganizations();
-  const embed = createMissionBuilderEmbed(state);
-  const components = createMissionBuilderComponents(state, orgs, session.message_id);
+  const embed = createMissionBuilderEmbed(state, interaction.client);
+  const components = createMissionBuilderComponents(state, orgs, session.message_id, false, interaction.client);
 
   await interaction.update({
     embeds: [embed],
@@ -823,8 +831,8 @@ async function handleModal({ interaction, session, action }) {
 
   // Обновляем карточку черновика
   const orgs = await getAllOrganizations();
-  const embed = createMissionBuilderEmbed(state);
-  const components = createMissionBuilderComponents(state, orgs, session.message_id);
+  const embed = createMissionBuilderEmbed(state, interaction.client);
+  const components = createMissionBuilderComponents(state, orgs, session.message_id, false, interaction.client);
 
   await interaction.update({
     embeds: [embed],

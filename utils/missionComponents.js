@@ -6,7 +6,10 @@ import {
   StringSelectMenuBuilder,
 } from "discord.js";
 import {
+  MISSION_EMOJIS,
   MISSION_STATUS,
+  parseOptionEmoji,
+  resolveCustomEmoji,
   STATUS_ICONS,
   STATUS_LABELS,
   TYPE_ICONS,
@@ -36,12 +39,17 @@ export const MISSION_SELECT_MEMBER = "mission_member_select";
 /**
  * Creates the main interactive mission card embed.
  */
-export function createMissionCardEmbed(mission) {
-  const typeIcon = TYPE_ICONS[mission.type] || "📜";
+export function createMissionCardEmbed(mission, client = null) {
+  const rawTypeIcon = TYPE_ICONS[mission.type] || "📜";
+  const typeIcon = resolveCustomEmoji(rawTypeIcon, client);
   const typeLabel = TYPE_LABELS[mission.type] || "Миссия";
   const statusIcon = STATUS_ICONS[mission.status] || "ℹ️";
   const statusLabel = STATUS_LABELS[mission.status] || mission.status;
   const color = STATUS_COLORS[mission.status] || 0xb209d4;
+
+  const partyIcon = resolveCustomEmoji(MISSION_EMOJIS.party, client);
+  const objectiveIcon = resolveCustomEmoji(MISSION_EMOJIS.objective, client);
+  const rewardsIcon = resolveCustomEmoji(MISSION_EMOJIS.rewards, client);
 
   const orgDisplay = mission.organization_name
     ? mission.organization_name
@@ -87,13 +95,13 @@ export function createMissionCardEmbed(mission) {
         `**Тип:** ${typeLabel}`,
         `**Статус:** ${statusIcon} ${statusLabel}`,
         "",
-        "### 🎯 Краткая цель:",
+        `### ${objectiveIcon} Краткая цель:`,
         mission.description,
         "",
-        `### 👥 Состав пати: ${mission.participants?.length || 0} / ${mission.max_players}`,
+        `### ${partyIcon} Состав пати: ${mission.participants?.length || 0} / ${mission.max_players}`,
         partyLines.join("\n"),
         "",
-        "### 🎁 Награды каждому завершившему миссию:",
+        `### ${rewardsIcon} Награды каждому завершившему миссию:`,
         rewardLines.join("\n"),
         "",
         `**ГМ:** ${mission.created_by?.username || "Не указан"}`,
@@ -137,11 +145,15 @@ export function createMissionCardEmbed(mission) {
 /**
  * Creates Discord Action Rows for the mission card buttons.
  */
-export function createMissionActionRows(mission) {
+export function createMissionActionRows(mission, client = null) {
   const isRecruiting = mission.status === MISSION_STATUS.recruiting;
   const isCompleted = mission.status === MISSION_STATUS.completed;
   const isCancelled = mission.status === MISSION_STATUS.cancelled;
   const isFull = (mission.participants?.length || 0) >= mission.max_players;
+  const partyButtonEmoji = parseOptionEmoji(
+    resolveCustomEmoji(MISSION_EMOJIS.party, client),
+    "👥"
+  );
 
   // Row 1: Player Actions
   const row1 = new ActionRowBuilder().addComponents(
@@ -161,7 +173,7 @@ export function createMissionActionRows(mission) {
       .setCustomId(MISSION_BTN_PARTY)
       .setLabel("Состав пати")
       .setStyle(ButtonStyle.Primary)
-      .setEmoji("👥"),
+      .setEmoji(partyButtonEmoji),
     new ButtonBuilder()
       .setCustomId(MISSION_BTN_PROFILES)
       .setLabel("Профили участников")
@@ -198,7 +210,8 @@ export function createMissionActionRows(mission) {
 /**
  * Ephemeral embed showing detailed party members list.
  */
-export function createPartyListEmbed(mission) {
+export function createPartyListEmbed(mission, client = null) {
+  const partyIcon = resolveCustomEmoji(MISSION_EMOJIS.party, client);
   const participants = mission.participants || [];
   const lines = [];
 
@@ -221,7 +234,7 @@ export function createPartyListEmbed(mission) {
 
   return new EmbedBuilder()
     .setColor(0x3b82f6)
-    .setTitle(`👥 Состав пати: ${mission.title}`)
+    .setTitle(`${partyIcon} Состав пати: ${mission.title}`)
     .setDescription(
       `**ID миссии:** \`${mission.public_id}\`\n` +
       `**Участники:** ${participants.length} / ${mission.max_players}\n\n` +

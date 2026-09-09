@@ -1082,3 +1082,62 @@ test("интерактивные кнопки: старт с переиспол�
   assert.ok(startNotice.content.includes("успешно запущена"));
   assert.ok(!startNotice.content.includes("не удалось создать"), "не должно быть ложного предупреждения о правах на ветку");
 });
+
+test("кастомные эмодзи миссий: правильные теги, знак скважины, состав пати, цель и награды", () => {
+  const wellMission = {
+    public_id: "MSN-TEST01",
+    title: "Тестовая скважина",
+    type: "well",
+    status: "recruiting",
+    description: "Исследовать аномалию глубины",
+    participants: [],
+    max_players: 4,
+    reward: { ap: 100, sp: 20 },
+    created_by: { username: "GM_Master" },
+  };
+
+  const embed = createMissionCardEmbed(wellMission);
+  const desc = embed.data.description;
+  const title = embed.data.title;
+
+  // Проверяем знак скважины
+  assert.ok(title.includes(":63borehole:"), "Заголовок скважины должен содержать :63borehole:");
+
+  // Проверяем секцию цели
+  assert.ok(desc.includes(":19warning:"), "Секция цели должна содержать :19warning:");
+  assert.ok(desc.includes("Краткая цель:"), "Секция должна содержать 'Краткая цель:'");
+
+  // Проверяем секцию состава пати
+  assert.ok(desc.includes(":25user:"), "Секция пати должна содержать :25user:");
+  assert.ok(desc.includes("Состав пати:"), "Секция должна содержать 'Состав пати:'");
+
+  // Проверяем награды
+  assert.ok(desc.includes("<:45lootbox:1499585857995411576>"), "Секция наград должна содержать лутбокс");
+  assert.ok(desc.includes("Награды каждому завершившему миссию:"), "Секция должна содержать 'Награды каждому завершившему миссию:'");
+
+  // Проверяем набег с фиолетовой молнией
+  const raidMission = {
+    ...wellMission,
+    type: "raid",
+    title: "Ночной штурм",
+  };
+  const raidEmbed = createMissionCardEmbed(raidMission);
+  assert.ok(raidEmbed.data.title.includes("<:14LightningPurple:1494708639473074277>"), "Набег должен содержать <:14LightningPurple:1494708639473074277>");
+
+  // Проверяем динамическое разрешение через кэш Discord-клиента
+  const mockClient = {
+    emojis: {
+      cache: [
+        { name: "25user", toString: () => "<:25user:1494708705759989760>" },
+        { name: "19warning", toString: () => "<:19warning:1494708207300509887>" },
+        { name: "63borehole", toString: () => "<:63borehole:1494708149951660042>" },
+      ],
+    },
+  };
+
+  const dynamicEmbed = createMissionCardEmbed(wellMission, mockClient);
+  assert.ok(dynamicEmbed.data.title.includes("<:63borehole:1494708149951660042>"), "Должен подставить ID скважины из клиента");
+  assert.ok(dynamicEmbed.data.description.includes("<:25user:1494708705759989760>"), "Должен подставить ID пати из клиента");
+  assert.ok(dynamicEmbed.data.description.includes("<:19warning:1494708207300509887>"), "Должен подставить ID warning из клиента");
+});
+

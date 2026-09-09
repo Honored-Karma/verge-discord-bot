@@ -24,6 +24,7 @@ import {
   MISSION_ACCESS,
   MISSION_STATUS,
   MISSION_TYPES,
+  resolveCustomEmoji,
   setMissionMessageId,
   STATUS_ICONS,
   STATUS_LABELS,
@@ -454,11 +455,11 @@ async function handleMissionCreate(interaction, member) {
   });
 
   const orgs = await getAllOrganizations();
-  const embed = createMissionBuilderEmbed(draftState);
+  const embed = createMissionBuilderEmbed(draftState, interaction.client);
 
   await interaction.reply({
     embeds: [embed],
-    components: createMissionBuilderComponents(draftState, orgs),
+    components: createMissionBuilderComponents(draftState, orgs, null, false, interaction.client),
     flags: MessageFlags.Ephemeral,
   });
 
@@ -497,7 +498,7 @@ async function handleMissionList(interaction) {
   }
 
   const lines = missions.map((m, idx) => {
-    const icon = TYPE_ICONS[m.type] || "📜";
+    const icon = resolveCustomEmoji(TYPE_ICONS[m.type] || "📜", interaction.client);
     const statusIcon = STATUS_ICONS[m.status] || "ℹ️";
     const org = m.organization_name || "Открытая";
     const party = `${m.participants?.length || 0}/${m.max_players}`;
@@ -526,7 +527,7 @@ async function handleMissionInfo(interaction) {
     });
   }
 
-  const embed = createMissionCardEmbed(mission);
+  const embed = createMissionCardEmbed(mission, interaction.client);
   if (mission.message_id) {
     embed.addFields({
       name: "🔗 Ссылка",

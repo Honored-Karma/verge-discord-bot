@@ -93,8 +93,8 @@ async function updateMissionCardMessage(interaction, mission) {
   try {
     if (interaction.message?.id === mission.message_id && typeof interaction.message.edit === "function") {
       await interaction.message.edit({
-        embeds: [createMissionCardEmbed(mission)],
-        components: createMissionActionRows(mission),
+        embeds: [createMissionCardEmbed(mission, interaction.client)],
+        components: createMissionActionRows(mission, interaction.client),
       });
       return;
     }
@@ -109,8 +109,8 @@ async function updateMissionCardMessage(interaction, mission) {
         const publicMessage = await channel.messages.fetch(mission.message_id).catch(() => null);
         if (publicMessage && typeof publicMessage.edit === "function") {
           await publicMessage.edit({
-            embeds: [createMissionCardEmbed(mission)],
-            components: createMissionActionRows(mission),
+            embeds: [createMissionCardEmbed(mission, interaction.client)],
+            components: createMissionActionRows(mission, interaction.client),
           });
         }
       }
@@ -228,7 +228,7 @@ export const missionInteractionHandler = {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const fresh = (await getMissionByPublicId(mission.public_id)) || mission;
       return interaction.editReply({
-        embeds: [createPartyListEmbed(fresh)],
+        embeds: [createPartyListEmbed(fresh, interaction.client)],
       });
     }
 
