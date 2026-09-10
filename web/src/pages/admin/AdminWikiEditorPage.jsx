@@ -27,7 +27,11 @@ import {
   ShieldAlert,
   HelpCircle,
   X,
-  ExternalLink
+  ExternalLink,
+  Wand2,
+  Sliders,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { MarkdownReader } from '../../components/wiki/MarkdownReader';
 import { WIKI_CATEGORIES } from '../../constants/wikiCategories';
@@ -53,6 +57,9 @@ export function AdminWikiEditorPage() {
   const [sortOrder, setSortOrder] = useState(0);
   const [status, setStatus] = useState('draft');
 
+  // Collapsible metadata panel (open by default for new articles, collapsed for editing)
+  const [metaPanelOpen, setMetaPanelOpen] = useState(isNew);
+
   // Editor View Mode: 'write' | 'split' | 'preview'
   const [viewMode, setViewMode] = useState('split');
 
@@ -66,6 +73,26 @@ export function AdminWikiEditorPage() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
+
+  // Automatic transliteration slug generator
+  const generateSlugFromTitle = () => {
+    if (!title.trim()) {
+      showWarning('Сначала укажите название статьи');
+      return;
+    }
+    const cyrMap = {
+      'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh',
+      'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
+      'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'kh', 'ц': 'ts',
+      'ч': 'ch', 'ш': 'sh', 'щ': 'shch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+    };
+    const translit = title.toLowerCase().split('').map(c => cyrMap[c] !== undefined ? cyrMap[c] : c).join('');
+    const clean = translit.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    if (clean) {
+      setArticleSlug(clean);
+      showSuccess(`Сгенерирован слаг: ${clean}`);
+    }
+  };
 
   useEffect(() => {
     if (isNew) {
@@ -238,6 +265,21 @@ export function AdminWikiEditorPage() {
     }
   };
 
+  // Hotkey handler for Ctrl+S / Cmd+S instant saving
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [title, articleSlug, category, summary, content, bannerUrl, aliases, tags, sortOrder, originalArticle, isNew]);
+
+  const wordsCount = content.trim() ? content.trim().split(/\s+/).length : 0;
+  const charsCount = content.length;
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '80px 20px' }}>
@@ -250,33 +292,59 @@ export function AdminWikiEditorPage() {
   const isCanonLore = originalArticle?.source?.type === 'verge_lore_document' || originalArticle?.origin === 'lore_import';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       
-      {/* Top Header & Actions Bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      {/* Sticky Top Header & Actions Bar with Hotkey hint */}
+      <div className="editor-sticky-bar">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <Link to="/admin/wiki" className="btn btn-secondary btn-sm" style={{ padding: '6px 10px' }}>
-            <ArrowLeft size={14} /> В список
+            <ArrowLeft size={14} /> <span style={{ display: 'none', '@media (minWidth: 640px)': { display: 'inline' } }}>В список</span>
           </Link>
           <div>
-            <h1 style={{ fontSize: '1.35rem', fontWeight: 800, margin: 0 }}>
-              {isNew ? 'Создание новой статьи Wiki' : `Редактирование: ${originalArticle?.title || title}`}
-            </h1>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Статус: <strong style={{ color: status === 'published' ? '#6ee7b7' : status === 'archived' ? '#94a3b8' : '#fcd34d' }}>{status.toUpperCase()}</strong>
-              {originalArticle?.public_id && ` • ID: ${originalArticle.public_id}`}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h1 style={{ fontSize: '1.18rem', fontWeight: 800, margin: 0, letterSpacing: '-0.01em' }}>
+                {isNew ? 'Новая статья Wiki' : (originalArticle?.title || title || 'Без названия')}
+              </h1>
+              <span className={`badge ${status === 'published' ? 'badge-emerald' : status === 'archived' ? 'badge-default' : 'badge-amber'}`}>
+                {status.toUpperCase()}
+              </span>
+            </div>
+            <div style={{ fontSize: '0.74rem', color: 'var(--text-dim)', marginTop: '2px', display: 'flex', gap: '10px' }}>
+              <span>{wordsCount} слов</span>
+              <span>•</span>
+              <span>{charsCount} симв.</span>
+              {articleSlug && (
+                <>
+                  <span>•</span>
+                  <span>/{articleSlug}</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Toggle Parameters Button */}
+          <button
+            type="button"
+            onClick={() => setMetaPanelOpen(prev => !prev)}
+            className="btn btn-secondary btn-sm"
+            style={{ fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+            title="Показать или скрыть настройки, медиа и метаданные статьи"
+          >
+            <Sliders size={13} color="var(--accent-purple-light)" />
+            <span>Параметры</span>
+            {metaPanelOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          </button>
+
           {!isNew && (
             <a 
               href={`/wiki/articles/${originalArticle?.slug || slug}`} 
               target="_blank" 
               rel="noreferrer" 
               className="btn btn-secondary btn-sm"
-              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem' }}
+              title="Открыть статью на сайте в новой вкладке"
             >
               <ExternalLink size={13} />
               <span>На сайте</span>
@@ -289,9 +357,9 @@ export function AdminWikiEditorPage() {
               onClick={() => handleTransitionStatus('published')}
               disabled={saving}
               className="btn btn-emerald btn-sm"
-              style={{ background: '#10b981', color: '#ffffff' }}
+              style={{ fontSize: '0.78rem' }}
             >
-              <CheckCircle2 size={14} /> Опубликовать
+              <CheckCircle2 size={13} /> Опубликовать
             </button>
           )}
 
@@ -301,8 +369,9 @@ export function AdminWikiEditorPage() {
               onClick={() => handleTransitionStatus('archived')}
               disabled={saving}
               className="btn btn-secondary btn-sm"
+              style={{ fontSize: '0.78rem' }}
             >
-              <Archive size={14} /> В архив
+              <Archive size={13} /> В архив
             </button>
           )}
 
@@ -311,10 +380,14 @@ export function AdminWikiEditorPage() {
             onClick={handleSave}
             disabled={saving}
             className="btn btn-primary btn-sm"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '120px', justifyContent: 'center' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '130px', justifyContent: 'center', fontWeight: 700 }}
+            title="Сохранить статью (Ctrl+S)"
           >
             <Save size={14} />
             <span>{saving ? 'Сохранение...' : 'Сохранить'}</span>
+            <kbd style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.2)', padding: '1px 5px', borderRadius: '4px', marginLeft: '4px' }}>
+              Ctrl+S
+            </kbd>
           </button>
         </div>
       </div>
@@ -324,176 +397,195 @@ export function AdminWikiEditorPage() {
         <div 
           className="card" 
           style={{ 
-            padding: '12px 16px', 
+            padding: '10px 16px', 
             borderRadius: '8px', 
             background: 'rgba(245, 158, 11, 0.12)', 
             borderLeft: '4px solid var(--accent-amber)',
             display: 'flex', 
             alignItems: 'center', 
             gap: '12px',
-            fontSize: '0.84rem'
+            fontSize: '0.82rem'
           }}
         >
-          <Sparkles size={18} color="#fbbf24" style={{ flexShrink: 0 }} />
+          <Sparkles size={16} color="#fbbf24" style={{ flexShrink: 0 }} />
           <div>
-            <strong>Каноническая статья вселенной Verge.</strong> Любое ручное изменение зафиксирует локальную версию как модифицированную стаффом.
+            <strong>Каноническая статья вселенной Verge.</strong> Ручное изменение сохранит модификацию в базе данных.
           </div>
         </div>
       )}
 
-      {/* Media & Banner Customization Card */}
-      <div className="card-bezel card-bezel-purple">
-        <div className="card-inner" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+      {/* Collapsible Metadata & Media Card */}
+      {metaPanelOpen && (
+        <div className="editor-collapsible-panel" style={{ animation: 'modalFadeIn 0.25s var(--ease-spring)' }}>
+          <div className="editor-collapsible-header open" onClick={() => setMetaPanelOpen(false)}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <ImageIcon size={18} color="var(--accent-purple-light)" />
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0 }}>Медиа & Обложка статьи</h3>
+              <Sliders size={16} color="var(--accent-purple-light)" />
+              <span>Параметры статьи, медиа-обложка и метаданные</span>
             </div>
-
-            <button
-              type="button"
-              onClick={() => setShowPresetModal(true)}
-              className="btn btn-secondary btn-sm"
-              style={{ fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <Sparkles size={13} color="#c4b5fd" />
-              <span>Выбрать арт из пресетов Verge</span>
-            </button>
+            <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>Свернуть ▲</span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: bannerUrl ? 'minmax(0, 1fr) 280px' : '1fr', gap: '16px', alignItems: 'center' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>
-                URL широкоформатного баннера (баннер в шапке статьи)
-              </label>
-              <div style={{ display: 'flex', gap: '8px' }}>
+          <div className="editor-collapsible-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Row 1: Title, Slug, Auto-Generate, Category */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', alignItems: 'end' }}>
+              <div>
+                <label className="input-label">
+                  Название статьи <span style={{ color: '#ef4444' }}>*</span>
+                </label>
                 <input
-                  type="url"
+                  type="text"
+                  required
                   className="input-field"
-                  placeholder="https://... (Discord CDN, Unsplash, Imgur, iili.io)"
-                  value={bannerUrl}
-                  onChange={(e) => setBannerUrl(e.target.value)}
-                  style={{ flex: 1, fontSize: '0.86rem' }}
+                  placeholder="Например: Катастрофа на Цусиме"
+                  value={title}
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    if (isNew && !articleSlug) {
+                      const cyrMap = {
+                        'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh',
+                        'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
+                        'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'kh', 'ц': 'ts',
+                        'ч': 'ch', 'ш': 'sh', 'щ': 'shch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+                      };
+                      const translit = e.target.value.toLowerCase().split('').map(c => cyrMap[c] !== undefined ? cyrMap[c] : c).join('');
+                      setArticleSlug(translit.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''));
+                    }
+                  }}
                 />
-                {bannerUrl && (
-                  <button
-                    type="button"
-                    onClick={() => setBannerUrl('')}
-                    className="btn btn-secondary btn-sm"
-                    title="Очистить баннер"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
               </div>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '4px', display: 'block' }}>
-                Рекомендуемое разрешение: 1920×600 или 1200×400 (соотношение ~3:1 или 16:9).
-              </span>
-            </div>
 
-            {bannerUrl && (
-              <div style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-subtle)', height: '80px', background: '#000' }}>
-                <img 
-                  src={bannerUrl} 
-                  alt="Превью баннера" 
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                />
-                <div style={{ position: 'absolute', bottom: '4px', right: '6px', background: 'rgba(0,0,0,0.7)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem', color: '#fff' }}>
-                  Live Preview
+              <div>
+                <label className="input-label">
+                  URL-слаг (ID пути) <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <input
+                    type="text"
+                    required
+                    disabled={!isNew}
+                    className="input-field"
+                    placeholder="tsushima-genesis"
+                    value={articleSlug}
+                    onChange={(e) => setArticleSlug(e.target.value.toLowerCase().replace(/[^a-z0-9\-]/g, ''))}
+                    style={{ flex: 1, opacity: isNew ? 1 : 0.75 }}
+                  />
+                  {isNew && (
+                    <button
+                      type="button"
+                      onClick={generateSlugFromTitle}
+                      className="btn btn-secondary btn-sm"
+                      title="Сгенерировать слаг из названия"
+                      style={{ padding: '0 12px', flexShrink: 0 }}
+                    >
+                      <Wand2 size={13} color="var(--accent-purple-light)" />
+                      <span>Авто</span>
+                    </button>
+                  )}
                 </div>
               </div>
-            )}
+
+              <div>
+                <label className="input-label">
+                  Категория энциклопедии
+                </label>
+                <select
+                  className="input-field"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                >
+                  {WIKI_CATEGORIES.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name} ({cat.id})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="input-label">
+                  Теги статьи (через запятую)
+                </label>
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="катастрофа, цусима, 2020, генезис"
+                  value={tags}
+                  onChange={(e) => setTags(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Row 2: Banner & Presets */}
+            <div style={{ display: 'grid', gridTemplateColumns: bannerUrl ? 'minmax(0, 1fr) 240px' : '1fr', gap: '16px', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label className="input-label" style={{ margin: 0 }}>
+                    URL широкоформатного баннера (шапка статьи)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowPresetModal(true)}
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: '0.74rem', padding: '3px 8px' }}
+                  >
+                    <Sparkles size={12} color="#c4b5fd" />
+                    <span>Выбрать из пресетов Verge</span>
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="url"
+                    className="input-field"
+                    placeholder="https://... (Discord CDN, Unsplash, Imgur, iili.io)"
+                    value={bannerUrl}
+                    onChange={(e) => setBannerUrl(e.target.value)}
+                  />
+                  {bannerUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setBannerUrl('')}
+                      className="btn btn-secondary btn-sm"
+                      title="Очистить баннер"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                <div className="input-hint">
+                  Рекомендуемое разрешение: 1920×600 или 1200×400 (пропорции ~3:1 или 16:9).
+                </div>
+              </div>
+
+              {bannerUrl && (
+                <div style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-subtle)', height: '74px', background: '#000' }}>
+                  <img 
+                    src={bannerUrl} 
+                    alt="Превью баннера" 
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                  <div style={{ position: 'absolute', bottom: '4px', right: '6px', background: 'rgba(0,0,0,0.7)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem', color: '#fff' }}>
+                    Превью
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Row 3: Summary Lead Paragraph */}
+            <div>
+              <label className="input-label">
+                Краткая выжимка (Лид-параграф)
+              </label>
+              <textarea
+                rows={2}
+                className="input-field"
+                placeholder="Краткое описание сущности в 1-2 предложениях для поисковой выдачи и карточки..."
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+                style={{ resize: 'vertical' }}
+              />
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* Main Metadata Form */}
-      <div className="card" style={{ padding: '20px', borderRadius: '12px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-          
-          <div>
-            <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>
-              Название статьи <span style={{ color: '#ef4444' }}>*</span>
-            </label>
-            <input
-              type="text"
-              required
-              className="input-field"
-              placeholder="Например: Катастрофа на Цусиме"
-              value={title}
-              onChange={(e) => {
-                setTitle(e.target.value);
-                if (isNew && !articleSlug) {
-                  setArticleSlug(e.target.value.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '-').replace(/-+/g, '-'));
-                }
-              }}
-              style={{ width: '100%', fontSize: '0.92rem' }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>
-              URL-слаг (ID пути) <span style={{ color: '#ef4444' }}>*</span>
-            </label>
-            <input
-              type="text"
-              required
-              disabled={!isNew}
-              className="input-field"
-              placeholder="tsushima-genesis"
-              value={articleSlug}
-              onChange={(e) => setArticleSlug(e.target.value.toLowerCase().replace(/[^a-z0-9\-]/g, ''))}
-              style={{ width: '100%', fontSize: '0.92rem', opacity: isNew ? 1 : 0.7 }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>
-              Категория энциклопедии
-            </label>
-            <select
-              className="input-field"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              style={{ width: '100%', fontSize: '0.88rem', background: 'var(--bg-surface)' }}
-            >
-              {WIKI_CATEGORIES.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.name} ({cat.id})</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>
-              Теги статьи (через запятую)
-            </label>
-            <input
-              type="text"
-              className="input-field"
-              placeholder="катастрофа, цусима, 2020, генезис"
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              style={{ width: '100%', fontSize: '0.88rem' }}
-            />
-          </div>
-
-          <div style={{ gridColumn: '1 / -1' }}>
-            <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>
-              Краткая выжимка (Лид-параграф)
-            </label>
-            <textarea
-              rows={2}
-              className="input-field"
-              placeholder="Краткое описание сущности в 1-2 предложениях для поисковой выдачи и карточки..."
-              value={summary}
-              onChange={(e) => setSummary(e.target.value)}
-              style={{ width: '100%', resize: 'vertical', fontSize: '0.88rem' }}
-            />
-          </div>
-
-        </div>
-      </div>
+      )}
 
       {/* Editor & Preview Header Controls */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>

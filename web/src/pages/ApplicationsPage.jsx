@@ -11,12 +11,16 @@ import {
   Globe,
   Award,
   Sparkles,
-  User
+  User,
+  Edit3,
+  Plus
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import sampleApplications from '../data/sampleApplications.json';
 import { resolveAvatarUrl } from '../utils/imageHelper';
 
 export function ApplicationsPage() {
+  const { canManageApplications } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const page = parseInt(searchParams.get('page') || '1', 10);
   const search = searchParams.get('search') || '';
@@ -134,9 +138,21 @@ export function ApplicationsPage() {
             gap: '24px'
           }}>
             <div style={{ maxWidth: '640px' }}>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }} className="badge badge-purple">
-                <FileText size={14} />
-                РЕЕСТР ПРИНЯТЫХ АНКЕТ
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }} className="badge badge-purple">
+                  <FileText size={14} />
+                  РЕЕСТР ПРИНЯТЫХ АНКЕТ
+                </div>
+                {canManageApplications && (
+                  <Link 
+                    to="/admin/applications/new" 
+                    className="admin-edit-pill"
+                    style={{ background: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.4)', color: '#fca5a5' }}
+                  >
+                    <Plus size={13} />
+                    <span>Добавить анкету</span>
+                  </Link>
+                )}
               </div>
               <h1 style={{ fontSize: '2rem', fontFamily: 'var(--font-heading)', fontWeight: 800, marginBottom: '8px' }}>
                 Персонажи мира Verge TRP
@@ -290,9 +306,21 @@ export function ApplicationsPage() {
                           }}
                         />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {app.character_name}
-                          </h3>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                            <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {app.character_name}
+                            </h3>
+                            {canManageApplications && (
+                              <Link
+                                to={`/admin/applications/edit/${app.slug || app.public_id}`}
+                                className="admin-card-pencil"
+                                title="Редактировать анкету в Штабе"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Edit3 size={13} />
+                              </Link>
+                            )}
+                          </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                             <span>Автор:</span>
                             <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>@{app.author_username || 'Неизвестно'}</span>

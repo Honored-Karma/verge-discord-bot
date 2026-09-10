@@ -10,13 +10,17 @@ import {
   Flame, 
   AlertCircle,
   FileText,
-  ChevronRight
+  ChevronRight,
+  Edit3,
+  Plus
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { WikiCategoryIcon } from '../components/wiki/WikiCategoryIcon';
 import { WIKI_CATEGORIES } from '../constants/wikiCategories';
 import canonicalArticles from '../data/canonical_articles.json';
 
 export function WikiHomePage() {
+  const { canManageWiki } = useAuth();
   const [wikiData, setWikiData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -148,12 +152,25 @@ export function WikiHomePage() {
           }}>
             {/* Left Content */}
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-                <span className="badge badge-purple">
-                  <BookOpen size={12} style={{ marginRight: '4px' }} />
-                  АРХИВ ЛОРА VERGE TRP
-                </span>
-                <span className="badge badge-cyan">КАТАЛОГ КАНОНА</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span className="badge badge-purple">
+                    <BookOpen size={12} style={{ marginRight: '4px' }} />
+                    АРХИВ ЛОРА VERGE TRP
+                  </span>
+                  <span className="badge badge-cyan">КАТАЛОГ КАНОНА</span>
+                </div>
+
+                {canManageWiki && (
+                  <Link 
+                    to="/admin/wiki/new" 
+                    className="admin-edit-pill"
+                    title="Создать новую статью в Штабе"
+                  >
+                    <Plus size={13} />
+                    <span>Новая статья</span>
+                  </Link>
+                )}
               </div>
 
               <h1 style={{ fontSize: 'clamp(2rem, 3.8vw, 2.8rem)', fontWeight: 800, margin: '0 0 12px 0', lineHeight: 1.15, fontFamily: 'var(--font-heading)' }}>
@@ -321,7 +338,19 @@ export function WikiHomePage() {
                         <Clock size={12} /> {art.read_time_min || 3} мин
                       </span>
                     </div>
-                    <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '8px' }}>{art.title}</h3>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' }}>
+                      <h3 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0 }}>{art.title}</h3>
+                      {canManageWiki && (
+                        <Link
+                          to={`/admin/wiki/edit/${art.slug}`}
+                          className="admin-card-pencil"
+                          title={`Редактировать «${art.title}» в Штабе`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Edit3 size={13} />
+                        </Link>
+                      )}
+                    </div>
                     <p style={{ fontSize: '0.86rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
                       {art.summary || 'Ключевая хроника ролевой вселенной Verge TRP.'}
                     </p>

@@ -12,8 +12,10 @@ import {
   ListTree, 
   FileText,
   Shield,
-  Layers
+  Layers,
+  Edit3
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { MarkdownReader, headingToId } from '../components/wiki/MarkdownReader';
 import { WikiCategoryIcon } from '../components/wiki/WikiCategoryIcon';
 import { WIKI_CATEGORIES } from '../constants/wikiCategories';
@@ -22,6 +24,7 @@ import canonicalArticles from '../data/canonical_articles.json';
 export function WikiArticlePage() {
   const { category, slug } = useParams();
   const targetSlug = slug || category; // Support both /wiki/:category/:slug and /wiki/:slug
+  const { canManageWiki } = useAuth();
 
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -165,12 +168,25 @@ export function WikiArticlePage() {
                     backgroundPosition: 'center'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                    <span className="badge badge-purple">
-                      <WikiCategoryIcon category={article.category} size={13} style={{ marginRight: '4px' }} />
-                      {categoryInfo?.name || article.category}
-                    </span>
-                    {article.status && <span className="badge badge-emerald">КАНОН VERGE</span>}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span className="badge badge-purple">
+                        <WikiCategoryIcon category={article.category} size={13} style={{ marginRight: '4px' }} />
+                        {categoryInfo?.name || article.category}
+                      </span>
+                      {article.status && <span className="badge badge-emerald">КАНОН VERGE</span>}
+                    </div>
+
+                    {canManageWiki && (
+                      <Link 
+                        to={`/admin/wiki/edit/${article.slug}`} 
+                        className="admin-edit-pill"
+                        title="Редактировать статью в Штабе"
+                      >
+                        <Edit3 size={13} />
+                        <span>Редактировать статью</span>
+                      </Link>
+                    )}
                   </div>
 
                   <h1 style={{ fontSize: 'clamp(1.8rem, 3.2vw, 2.4rem)', fontWeight: 800, margin: '0 0 12px 0', lineHeight: 1.2, fontFamily: 'var(--font-heading)' }}>
@@ -300,6 +316,18 @@ export function WikiArticlePage() {
         </div>
 
       </div>
+
+      {/* Floating Quick Edit HUD button for Admins */}
+      {canManageWiki && (
+        <Link
+          to={`/admin/wiki/edit/${article.slug}`}
+          className="admin-floating-hud-btn"
+          title="Быстрое редактирование статьи (Штаб)"
+        >
+          <Edit3 size={15} color="var(--accent-purple-light)" />
+          <span>Редактировать статью</span>
+        </Link>
+      )}
 
     </div>
   );

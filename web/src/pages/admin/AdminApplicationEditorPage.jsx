@@ -22,7 +22,8 @@ import {
   X, 
   User, 
   Layers, 
-  Send 
+  Send,
+  Wand2
 } from 'lucide-react';
 import { VERGE_BANNER_PRESETS } from '../../constants/bannerPresets';
 import { useToast } from '../../context/ToastContext';
@@ -259,6 +260,38 @@ export function AdminApplicationEditorPage() {
     }
   };
 
+  // Auto-generate slug from character name
+  const generateSlugFromName = () => {
+    if (!characterName.trim()) {
+      showWarning('Сначала введите имя персонажа');
+      return;
+    }
+    const cyrMap = {
+      'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh',
+      'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
+      'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'kh', 'ц': 'ts',
+      'ч': 'ch', 'ш': 'sh', 'щ': 'shch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+    };
+    const translit = characterName.toLowerCase().split('').map(c => cyrMap[c] !== undefined ? cyrMap[c] : c).join('');
+    const clean = translit.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    if (clean) {
+      setApplicationSlug(clean);
+      showSuccess(`Сгенерирован слаг: ${clean}`);
+    }
+  };
+
+  // Hotkey handler for Ctrl+S / Cmd+S
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleSave(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [characterName, applicationSlug, slot, organization, rank, status, authorUsername, avatarUrl, bannerUrl, attributeName, physicalStats, sections, moderatorNotes, originalApp, isNew]);
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '80px 20px' }}>
@@ -269,23 +302,28 @@ export function AdminApplicationEditorPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
-      {/* Top Header Actions */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      {/* Top Header Actions (Sticky Bar) */}
+      <div className="editor-sticky-bar">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <Link to="/admin/applications" className="btn btn-secondary btn-sm" style={{ padding: '6px 10px' }}>
-            <ArrowLeft size={14} /> В реестр анкет
+            <ArrowLeft size={14} /> <span style={{ display: 'none', '@media (minWidth: 640px)': { display: 'inline' } }}>В реестр анкет</span>
           </Link>
           <div>
-            <h1 style={{ fontSize: '1.35rem', fontWeight: 800, margin: 0 }}>
-              {isNew ? 'Создание новой анкеты персонажа' : `Редактирование анкеты: ${originalApp?.character_name || characterName}`}
-            </h1>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Слот: <strong>{slot}</strong> • Статус модерации: <strong style={{ 
-                color: status === 'accepted' ? '#6ee7b7' : status === 'needs_revision' ? '#fcd34d' : status === 'rejected' ? '#fca5a5' : '#c4b5fd' 
-              }}>{status.toUpperCase()}</strong>
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h1 style={{ fontSize: '1.18rem', fontWeight: 800, margin: 0, letterSpacing: '-0.01em' }}>
+                {isNew ? 'Новая анкета персонажа' : (originalApp?.character_name || characterName || 'Без имени')}
+              </h1>
+              <span className={`badge ${
+                status === 'accepted' ? 'badge-emerald' : status === 'needs_revision' ? 'badge-amber' : status === 'rejected' ? 'badge-crimson' : 'badge-purple'
+              }`}>
+                {status.toUpperCase()}
+              </span>
+            </div>
+            <div style={{ fontSize: '0.74rem', color: 'var(--text-dim)', marginTop: '2px' }}>
+              Слот {slot} • {organization || 'Без организации'} • {rank || '—'}
+            </div>
           </div>
         </div>
 
@@ -296,7 +334,8 @@ export function AdminApplicationEditorPage() {
               target="_blank" 
               rel="noreferrer" 
               className="btn btn-secondary btn-sm"
-              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem' }}
+              title="Открыть публичную анкету на сайте"
             >
               <ExternalLink size={13} />
               <span>Публичный вид</span>
@@ -308,10 +347,10 @@ export function AdminApplicationEditorPage() {
             onClick={() => handleSave(true)}
             disabled={saving}
             className="btn btn-emerald btn-sm"
-            style={{ background: '#10b981', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '6px' }}
-            title="Сохранить и автоматически обновить характеристики и внешность в таблице игроков"
+            style={{ fontSize: '0.78rem' }}
+            title="Сохранить и синхронизировать характеристики с таблицей игроков"
           >
-            <ShieldCheck size={14} />
+            <ShieldCheck size={13} />
             <span>Одобрить & Синхронизировать</span>
           </button>
 
@@ -320,10 +359,14 @@ export function AdminApplicationEditorPage() {
             onClick={() => handleSave(false)}
             disabled={saving}
             className="btn btn-primary btn-sm"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '120px', justifyContent: 'center' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '120px', justifyContent: 'center', fontWeight: 700 }}
+            title="Сохранить анкету (Ctrl+S)"
           >
             <Save size={14} />
             <span>{saving ? 'Сохранение...' : 'Сохранить'}</span>
+            <kbd style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.2)', padding: '1px 5px', borderRadius: '4px', marginLeft: '4px' }}>
+              Ctrl+S
+            </kbd>
           </button>
         </div>
       </div>
@@ -491,15 +534,29 @@ export function AdminApplicationEditorPage() {
             <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>
               URL-слаг анкеты
             </label>
-            <input
-              type="text"
-              disabled={!isNew}
-              className="input-field"
-              placeholder="hana-kami"
-              value={applicationSlug}
-              onChange={(e) => setApplicationSlug(e.target.value.toLowerCase().replace(/[^a-z0-9\-]/g, ''))}
-              style={{ width: '100%', fontSize: '0.92rem', opacity: isNew ? 1 : 0.7 }}
-            />
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <input
+                type="text"
+                disabled={!isNew}
+                className="input-field"
+                placeholder="hana-kami"
+                value={applicationSlug}
+                onChange={(e) => setApplicationSlug(e.target.value.toLowerCase().replace(/[^a-z0-9\-]/g, ''))}
+                style={{ flex: 1, fontSize: '0.92rem', opacity: isNew ? 1 : 0.7 }}
+              />
+              {isNew && (
+                <button
+                  type="button"
+                  onClick={generateSlugFromName}
+                  className="btn btn-secondary btn-sm"
+                  title="Сгенерировать слаг из имени персонажа"
+                  style={{ padding: '0 12px', flexShrink: 0 }}
+                >
+                  <Wand2 size={13} color="var(--accent-crimson-light)" />
+                  <span>Авто</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <div>

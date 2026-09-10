@@ -1,4 +1,5 @@
 import { PermissionFlagsBits } from "discord.js";
+import { loadAdminConfigFile } from "../config/adminConfig.js";
 
 function getEnvRoleIds(...envNames) {
   return envNames.flatMap((envName) =>
@@ -47,11 +48,13 @@ export function isAdmin(member) {
   )
     return true;
 
-  // Check specific admin user IDs
-  const adminIds = process.env.ADMIN_IDS
+  // Check specific admin user IDs (ENV + config/admins.json)
+  const envAdminIds = process.env.ADMIN_IDS
     ? process.env.ADMIN_IDS.split(",").map((id) => id.trim()).filter(Boolean)
     : [];
-  if (adminIds.includes(member.id)) return true;
+  const fileConfig = loadAdminConfigFile();
+  const allAdminIds = Array.from(new Set([...envAdminIds, ...fileConfig.adminUserIds]));
+  if (allAdminIds.includes(member.id)) return true;
 
   // Check if has role with name "Game Master"
   if (
@@ -63,8 +66,9 @@ export function isAdmin(member) {
   }
 
   // Check ADMIN_ROLE_IDS (admin role without owner permissions)
-  const adminRoleIds = getEnvRoleIds("ADMIN_ROLE_IDS", "ADMIN_ROLE_ID");
-  if (memberHasAnyRole(member, adminRoleIds)) {
+  const envAdminRoleIds = getEnvRoleIds("ADMIN_ROLE_IDS", "ADMIN_ROLE_ID");
+  const allAdminRoleIds = Array.from(new Set([...envAdminRoleIds, ...fileConfig.adminRoleIds]));
+  if (memberHasAnyRole(member, allAdminRoleIds)) {
     return true;
   }
 

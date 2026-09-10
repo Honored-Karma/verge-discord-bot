@@ -616,24 +616,214 @@ input, select, textarea {
 }
 
 /* ==========================================================================
-   INPUTS, FORMS & SEARCH
+   INPUTS, FORMS & FORM CONTROLS (Tactical Obsidian & Cyberpunk Glow)
    ========================================================================== */
-.form-input {
+.form-input,
+.input-field {
   width: 100%;
   padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border-medium);
+  background: rgba(18, 22, 38, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-sm);
   color: var(--text-main);
-  font-size: 0.92rem;
+  font-family: inherit;
+  font-size: 0.90rem;
+  line-height: 1.5;
+  transition: all var(--transition-fast);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.form-input:focus,
+.input-field:focus {
+  outline: none;
+  background: rgba(24, 30, 52, 0.95);
+  border-color: var(--accent-purple-bright);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.22), 0 0 16px rgba(139, 92, 246, 0.25);
+  color: #ffffff;
+}
+
+.form-input::placeholder,
+.input-field::placeholder {
+  color: var(--text-dim);
+  opacity: 0.85;
+}
+
+/* Custom Styled Select with Tactical Chevron */
+select.form-input,
+select.input-field {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a78bfa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px 16px;
+  padding-right: 38px;
+  cursor: pointer;
+}
+
+select.form-input option,
+select.input-field option {
+  background: #0d101b;
+  color: #f8fafc;
+  padding: 8px 12px;
+}
+
+textarea.form-input,
+textarea.input-field {
+  min-height: 72px;
+  line-height: 1.6;
+}
+
+.input-label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  letter-spacing: 0.01em;
+}
+
+.input-hint {
+  font-size: 0.74rem;
+  color: var(--text-dim);
+  margin-top: 5px;
+  line-height: 1.4;
+}
+
+/* ==========================================================================
+   ADMIN QUICK-EDIT PENCIL (✏️) & TACTICAL IN-PLACE HUD CONTROLS
+   ========================================================================== */
+.admin-edit-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 0.82rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.28) 0%, rgba(239, 68, 68, 0.20) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.55);
+  color: #ffffff;
+  box-shadow: 0 4px 18px rgba(139, 92, 246, 0.35);
+  text-decoration: none;
+  user-select: none;
   transition: all var(--transition-fast);
 }
 
-.form-input:focus {
-  outline: none;
-  background: rgba(255, 255, 255, 0.07);
-  border-color: var(--accent-purple);
-  box-shadow: 0 0 12px rgba(139, 92, 246, 0.3);
+.admin-edit-pill:hover {
+  transform: translateY(-2px) scale(1.02);
+  border-color: var(--accent-purple-bright);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.45) 0%, rgba(239, 68, 68, 0.35) 100%);
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.55);
+  color: #ffffff;
+}
+
+.admin-card-pencil {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(139, 92, 246, 0.16);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  color: var(--accent-purple-light);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.admin-card-pencil:hover {
+  background: var(--accent-purple);
+  color: #ffffff;
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.6);
+  transform: scale(1.08);
+}
+
+.admin-floating-hud-btn {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  z-index: 95;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: var(--radius-pill);
+  background: rgba(15, 18, 29, 0.94);
+  border: 1px solid var(--accent-purple);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65), 0 0 20px rgba(139, 92, 246, 0.35);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.86rem;
+  text-decoration: none;
+  transition: all var(--transition-spring);
+}
+
+.admin-floating-hud-btn:hover {
+  transform: translateY(-3px) scale(1.04);
+  background: rgba(24, 28, 48, 0.98);
+  border-color: var(--accent-cyan-bright);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.75), 0 0 26px rgba(6, 182, 212, 0.45);
+}
+
+/* ==========================================================================
+   ADMIN STICKY EDITOR TOOLBAR & PANELS
+   ========================================================================== */
+.editor-sticky-bar {
+  position: sticky;
+  top: 86px;
+  z-index: 40;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(15, 18, 29, 0.92);
+  border: 1px solid var(--border-medium);
+  border-radius: 14px;
+  padding: 12px 18px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  transition: all var(--transition-fast);
+}
+
+.editor-collapsible-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: all var(--transition-normal);
+}
+
+.editor-collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.025);
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.90rem;
+  font-weight: 700;
+  color: var(--text-main);
+  border-bottom: 1px solid transparent;
+  transition: background var(--transition-fast);
+}
+
+.editor-collapsible-header:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.editor-collapsible-header.open {
+  border-bottom-color: var(--border-subtle);
+}
+
+.editor-collapsible-body {
+  padding: 18px;
 }
 
 /* ==========================================================================

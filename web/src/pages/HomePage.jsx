@@ -448,7 +448,7 @@ export function HomePage() {
               Текстовые ролевые ивенты, дуэли на аренах, закрытие Скважин в рейдовых группах, сюжетные ветки фракций и непрерывное развитие вашего героя в Discord.
             </p>
             <a 
-              href="https://discord.gg" 
+              href="https://discord.gg/vergetrp" 
               target="_blank" 
               rel="noopener noreferrer" 
               className="btn btn-discord btn-lg"

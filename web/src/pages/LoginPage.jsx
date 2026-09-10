@@ -159,6 +159,29 @@ export function LoginPage() {
                 <Lock size={13} />
                 <span>Безопасная аутентификация через официальный Discord OAuth2 API</span>
               </div>
+
+              <div style={{
+                marginTop: '16px',
+                paddingTop: '14px',
+                borderTop: '1px solid var(--border-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '8px',
+                fontSize: '0.82rem',
+                color: 'var(--text-muted)'
+              }}>
+                <span>Ещё не вступили в сообщество?</span>
+                <a 
+                  href="https://discord.gg/vergetrp" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  style={{ color: 'var(--accent-purple-light)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                >
+                  Присоединиться к Discord <ArrowRight size={13} />
+                </a>
+              </div>
             </div>
 
             {/* Right Column: Character Artwork & Perks */}

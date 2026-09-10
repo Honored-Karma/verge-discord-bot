@@ -124,18 +124,26 @@ export async function fetchGuildMember(userId) {
     }
 }
 
+import { loadAdminConfigFile } from '../config/adminConfig.js';
+
 /**
  * Resolve staff permissions based on user ID and guild roles
  */
 export function resolveUserPermissions(userId, guildMember) {
-    const adminIds = (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
-    const adminRoleIds = (process.env.ADMIN_ROLE_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+    const adminConfigFile = loadAdminConfigFile();
+    const envAdminIds = (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+    const adminIds = Array.from(new Set([...envAdminIds, ...adminConfigFile.adminUserIds]));
+
+    const envAdminRoleIds = (process.env.ADMIN_ROLE_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+    const adminRoleIds = Array.from(new Set([...envAdminRoleIds, ...adminConfigFile.adminRoleIds]));
+
     const gmRoleIds = (process.env.GM_ROLE_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
-    const anketologRoleIds = (process.env.ANKETOLOG_ROLE_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+    const envAnketologRoleIds = (process.env.ANKETOLOG_ROLE_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+    const anketologRoleIds = Array.from(new Set([...envAnketologRoleIds, ...adminConfigFile.anketologRoleIds]));
     const moderatorRoleIds = (process.env.MODERATOR_ROLE_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
     const limitedAdminRoleIds = (process.env.LIMITED_ADMIN_ROLE_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
 
-    const isExplicitAdminId = adminIds.includes(userId);
+    const isExplicitAdminId = adminIds.includes(String(userId));
     const memberRoles = Array.isArray(guildMember?.roles) ? guildMember.roles : [];
 
     const hasAdminRole = adminRoleIds.some(roleId => memberRoles.includes(roleId));

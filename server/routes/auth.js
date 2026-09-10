@@ -11,6 +11,7 @@ import {
 import { requireAuth } from '../middlewares/auth.js';
 import { csrfProtection } from '../middlewares/csrf.js';
 import { getUserCharacters, setUserActiveSlot, sanitizeCharacter } from '../../services/playerService.js';
+import { calculateUserCapabilities } from '../../services/permissionService.js';
 
 export function createAuthRouter() {
     const router = Router();
@@ -88,7 +89,10 @@ export function createAuthRouter() {
                     avatarUrl: discordUser.avatar
                         ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png?size=256`
                         : `https://cdn.discordapp.com/embed/avatars/${Number(discordUser.discriminator || 0) % 5}.png`,
-                    permissions: permissions
+                    permissions: permissions,
+                    roles: permissions?.roles || [],
+                    is_admin: Boolean(permissions?.isAdmin),
+                    is_staff: Boolean(permissions?.isStaff)
                 };
 
                 // Save session before redirect
@@ -120,8 +124,11 @@ export function createAuthRouter() {
                     avatarUrl: null,
                     is_admin: true,
                     is_staff: true,
-                    permissions: { isAdmin: true, isGM: true, isAnketolog: true, isStaff: true }
+                    permissions: { isAdmin: true, isGM: true, isAnketolog: true, isStaff: true },
+                    roles: []
                 };
+                const demoCapabilities = calculateUserCapabilities(demoUser);
+                demoUser.capabilities = demoCapabilities;
                 req.session.user = demoUser;
                 const characters = await getUserCharacters('demo_user');
                 return res.json({
@@ -147,11 +154,13 @@ export function createAuthRouter() {
 
         try {
             const characters = await getUserCharacters(req.session.user.id);
+            const capabilities = calculateUserCapabilities(req.session.user);
 
             res.json({
                 authenticated: true,
                 user: {
                     ...req.session.user,
+                    capabilities,
                     characters: {
                         activeSlot: characters.activeSlot,
                         hasCharacters: characters.hasCharacters,
@@ -163,10 +172,12 @@ export function createAuthRouter() {
             });
         } catch (error) {
             console.error('[Auth /me error]:', error);
+            const capabilities = calculateUserCapabilities(req.session.user);
             res.json({
                 authenticated: true,
                 user: {
                     ...req.session.user,
+                    capabilities,
                     characters: {
                         activeSlot: 1,
                         hasCharacters: false,

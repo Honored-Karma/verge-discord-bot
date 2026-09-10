@@ -6,14 +6,18 @@ import {
   ArrowRight, 
   Layers, 
   AlertCircle,
-  FileText
+  FileText,
+  Edit3,
+  Plus
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { WikiCategoryIcon } from '../components/wiki/WikiCategoryIcon';
 import { WIKI_CATEGORIES } from '../constants/wikiCategories';
 import canonicalArticles from '../data/canonical_articles.json';
 
 export function WikiCategoryPage() {
   const { category } = useParams();
+  const { canManageWiki } = useAuth();
   const [categoryData, setCategoryData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -125,24 +129,37 @@ export function WikiCategoryPage() {
       {/* Header Banner */}
       <div className="card-bezel card-bezel-cyan">
         <div className="card-inner hud-corner" style={{ padding: '32px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap' }}>
-            <div style={{
-              width: '64px',
-              height: '64px',
-              borderRadius: '16px',
-              background: 'rgba(139, 92, 246, 0.15)',
-              border: '1px solid rgba(139, 92, 246, 0.35)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <WikiCategoryIcon category={cat.id} size={32} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '18px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap' }}>
+              <div style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '16px',
+                background: 'rgba(139, 92, 246, 0.15)',
+                border: '1px solid rgba(139, 92, 246, 0.35)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <WikiCategoryIcon category={cat.id} size={32} />
+              </div>
+              <div>
+                <span className="badge badge-purple" style={{ marginBottom: '6px' }}>РАЗДЕЛ ЭНЦИКЛОПЕДИИ</span>
+                <h1 style={{ fontSize: '2rem', fontWeight: 800, margin: 0, fontFamily: 'var(--font-heading)' }}>{cat.name}</h1>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.94rem', margin: '4px 0 0 0' }}>{cat.description}</p>
+              </div>
             </div>
-            <div>
-              <span className="badge badge-purple" style={{ marginBottom: '6px' }}>РАЗДЕЛ ЭНЦИКЛОПЕДИИ</span>
-              <h1 style={{ fontSize: '2rem', fontWeight: 800, margin: 0, fontFamily: 'var(--font-heading)' }}>{cat.name}</h1>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.94rem', margin: '4px 0 0 0' }}>{cat.description}</p>
-            </div>
+
+            {canManageWiki && (
+              <Link 
+                to={`/admin/wiki/new?category=${cat.id}`} 
+                className="admin-edit-pill"
+                title={`Создать новую статью в разделе ${cat.name}`}
+              >
+                <Plus size={13} />
+                <span>Создать статью</span>
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -157,7 +174,19 @@ export function WikiCategoryPage() {
           <div key={art.slug} className="card-bezel">
             <div className="card-inner" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '22px' }}>
               <div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '8px' }}>{art.title}</h3>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', marginBottom: '8px' }}>
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0 }}>{art.title}</h3>
+                  {canManageWiki && (
+                    <Link
+                      to={`/admin/wiki/edit/${art.slug}`}
+                      className="admin-card-pencil"
+                      title={`Редактировать «${art.title}» в Штабе`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Edit3 size={13} />
+                    </Link>
+                  )}
+                </div>
                 <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
                   {art.summary || 'Материал ролевой вселенной Verge TRP.'}
                 </p>

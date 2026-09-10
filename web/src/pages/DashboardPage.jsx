@@ -399,6 +399,18 @@ export function DashboardPage() {
             }}>
               /register character_name:Имя slot:{activeSlot} attribute_name:Тема
             </div>
+            <div style={{ marginBottom: '20px' }}>
+              <a 
+                href="https://discord.gg/vergetrp" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="btn btn-discord btn-sm"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+              >
+                <ExternalLink size={14} />
+                <span>Перейти на Discord сервер</span>
+              </a>
+            </div>
             <p style={{ fontSize: '0.84rem', color: 'var(--text-dim)' }}>
               После одобрения квенты анкетологами персонаж мгновенно синхронизируется с вашим профилем.
             </p>

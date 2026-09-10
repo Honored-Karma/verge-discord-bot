@@ -13,13 +13,16 @@ import {
   ArrowLeft,
   Info,
   Globe,
-  UserCheck
+  UserCheck,
+  Edit3
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import sampleApplications from '../data/sampleApplications.json';
 import { resolveAvatarUrl } from '../utils/imageHelper';
 
 export function ApplicationDetailPage() {
   const { slug } = useParams();
+  const { canManageApplications } = useAuth();
   const [app, setApp] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -189,8 +192,20 @@ export function ApplicationDetailPage() {
                   </div>
                 </div>
 
-                <div style={{ fontSize: '0.84rem', color: 'var(--text-dim)' }}>
-                  Автор анкеты: <strong style={{ color: 'var(--text-main)' }}>@{app.author_username || 'Не указан'}</strong>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: '0.84rem', color: 'var(--text-dim)' }}>
+                    Автор анкеты: <strong style={{ color: 'var(--text-main)' }}>@{app.author_username || 'Не указан'}</strong>
+                  </div>
+                  {canManageApplications && (
+                    <Link 
+                      to={`/admin/applications/edit/${app.slug || app.public_id || slug}`} 
+                      className="admin-edit-pill"
+                      title="Редактировать анкету в Штабе"
+                    >
+                      <Edit3 size={13} />
+                      <span>Редактировать анкету</span>
+                    </Link>
+                  )}
                 </div>
               </div>
             </div>
@@ -283,6 +298,18 @@ export function ApplicationDetailPage() {
           </div>
         ))}
       </div>
+
+      {/* Floating Quick Edit HUD button for Admins / Anketologs */}
+      {canManageApplications && (
+        <Link
+          to={`/admin/applications/edit/${app.slug || app.public_id || slug}`}
+          className="admin-floating-hud-btn"
+          title="Быстрое редактирование анкеты (Штаб)"
+        >
+          <Edit3 size={15} color="var(--accent-crimson)" />
+          <span>Редактировать анкету</span>
+        </Link>
+      )}
     </div>
   );
 }

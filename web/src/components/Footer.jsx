@@ -59,7 +59,7 @@ export function Footer() {
               Анкеты
             </Link>
             <a 
-              href="https://discord.gg" 
+              href="https://discord.gg/vergetrp" 
               target="_blank" 
               rel="noopener noreferrer" 
               style={{ color: 'var(--accent-purple-light)', display: 'flex', alignItems: 'center', gap: '5px' }}

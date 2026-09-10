@@ -121,8 +121,20 @@ export function AuthProvider({ children }) {
       permissions: {
         isAdmin: true,
         isStaff: true,
-        isGM: false,
+        isGM: true,
         isAnketolog: true
+      },
+      is_admin: true,
+      is_staff: true,
+      capabilities: {
+        canAccessAdmin: true,
+        canManageWiki: true,
+        canManageApplications: true,
+        canViewPrivateCharacters: true,
+        canViewInventories: true,
+        canManageCharacters: true,
+        canManageEconomy: true,
+        canViewAuditLog: true
       },
       characters: { ...DEMO_CHARACTERS }
     };
@@ -189,8 +201,25 @@ export function AuthProvider({ children }) {
     fetchUser();
   }, []);
 
+  const canManageWiki = Boolean(user?.capabilities?.canManageWiki || user?.permissions?.isAdmin || user?.is_admin);
+  const canManageApplications = Boolean(user?.capabilities?.canManageApplications || user?.permissions?.isAnketolog || user?.permissions?.isAdmin || user?.is_admin);
+  const isAdmin = Boolean(user?.permissions?.isAdmin || user?.is_admin);
+  const isStaff = Boolean(user?.capabilities?.canAccessAdmin || user?.permissions?.isStaff || user?.is_staff || isAdmin);
+
   return (
-    <AuthContext.Provider value={{ user, loading, error, fetchUser, switchSlot, logout, loginAsDemoUser }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      error, 
+      fetchUser, 
+      switchSlot, 
+      logout, 
+      loginAsDemoUser,
+      canManageWiki,
+      canManageApplications,
+      isAdmin,
+      isStaff
+    }}>
       {children}
     </AuthContext.Provider>
   );

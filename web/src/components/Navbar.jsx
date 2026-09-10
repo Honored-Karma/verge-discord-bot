@@ -14,7 +14,8 @@ import {
   Search,
   Menu,
   X,
-  Sparkles
+  Sparkles,
+  MessageSquare
 } from 'lucide-react';
 
 export function Navbar({ onOpenSearch }) {
@@ -108,6 +109,28 @@ export function Navbar({ onOpenSearch }) {
               ⌘K
             </kbd>
           </button>
+
+          {/* Discord Server Link */}
+          <a
+            href="https://discord.gg/vergetrp"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-secondary btn-sm"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '32px',
+              height: '32px',
+              padding: 0,
+              borderRadius: 'var(--radius-pill)',
+              color: 'var(--accent-purple-light)'
+            }}
+            title="Присоединиться к Discord серверу"
+            aria-label="Discord Сервер"
+          >
+            <MessageSquare size={15} />
+          </a>
 
           {/* User Controls */}
           {user ? (
@@ -242,6 +265,17 @@ export function Navbar({ onOpenSearch }) {
             <Link to="/" className="nav-link-item" onClick={() => setMobileMenuOpen(false)}>Главная</Link>
             <Link to="/applications" className="nav-link-item" onClick={() => setMobileMenuOpen(false)}>Анкеты</Link>
             <Link to="/wiki" className="nav-link-item" onClick={() => setMobileMenuOpen(false)}>Wiki & Лор</Link>
+            <a 
+              href="https://discord.gg/vergetrp" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="nav-link-item" 
+              style={{ color: 'var(--accent-purple-light)', display: 'flex', alignItems: 'center', gap: '8px' }}
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <MessageSquare size={15} />
+              Discord Сервер
+            </a>
             {user && (
               <>
                 <Link to="/dashboard" className="nav-link-item" onClick={() => setMobileMenuOpen(false)}>Личный кабинет</Link>
