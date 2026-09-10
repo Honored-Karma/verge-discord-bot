@@ -28,11 +28,12 @@ export const data = new SlashCommandBuilder()
             .setMinValue(1))
     .addIntegerOption(option =>
         option.setName('slot')
-            .setDescription('Слот: 1 или 2')
+            .setDescription('Слот: 1, 2 или 3')
             .setRequired(false)
             .addChoices(
                 { name: 'Слот 1', value: 1 },
-                { name: 'Слот 2', value: 2 }
+                { name: 'Слот 2', value: 2 },
+                { name: 'Слот 3', value: 3 }
             )
     );
 
@@ -63,7 +64,7 @@ export async function execute(interaction) {
     if (!slot) {
         slot = await getActiveSlot(userId);
     }
-    if (slot !== 1 && slot !== 2) slot = 1;
+    if (![1, 2, 3].includes(slot)) slot = 1;
     const playerId = slot === 1 ? userId : `${userId}_${slot}`;
     const currency = interaction.options.getString('currency');
     const amount = interaction.options.getInteger('amount');

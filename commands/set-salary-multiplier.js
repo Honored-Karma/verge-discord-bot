@@ -22,11 +22,12 @@ export const data = new SlashCommandBuilder()
             .setMaxValue(200))
     .addIntegerOption(option =>
         option.setName('slot')
-            .setDescription('Слот персонажа (1 или 2). Если не указан — активный слот.')
+            .setDescription('Слот персонажа (1, 2 или 3). Если не указан — активный слот.')
             .setRequired(false)
             .addChoices(
                 { name: '1', value: 1 },
-                { name: '2', value: 2 }
+                { name: '2', value: 2 },
+                { name: '3', value: 3 }
             ));
 
 export async function execute(interaction) {
@@ -54,7 +55,7 @@ export async function execute(interaction) {
     const multiplier = interaction.options.getInteger('multiplier');
     const requestedSlot = interaction.options.getInteger('slot');
     let slot = requestedSlot ?? await getActiveSlot(targetUser.id);
-    if (slot < 1 || slot > 2) slot = 1;
+    if (![1, 2, 3].includes(slot)) slot = 1;
 
     const playerId = makePlayerKey(targetUser.id, slot);
     const player = await getPlayer(playerId);

@@ -493,22 +493,26 @@ export async function startMission({
   const target = collection(db);
   const now = new Date();
 
+  const updateFields = {
+    status: MISSION_STATUS.active,
+    started_at: now,
+    started_by: {
+      user_id: String(actorId),
+      username: String(actorUsername || "Unknown"),
+    },
+    updated_at: now,
+  };
+  if (threadId) {
+    updateFields.thread_id = String(threadId);
+  }
+
   const updated = await target.findOneAndUpdate(
     {
       public_id: String(publicId).trim(),
       status: MISSION_STATUS.recruiting,
     },
     {
-      $set: {
-        status: MISSION_STATUS.active,
-        started_at: now,
-        started_by: {
-          user_id: String(actorId),
-          username: String(actorUsername || "Unknown"),
-        },
-        thread_id: threadId ? String(threadId) : null,
-        updated_at: now,
-      },
+      $set: updateFields,
       $inc: { version: 1 },
     },
     { returnDocument: "after" }

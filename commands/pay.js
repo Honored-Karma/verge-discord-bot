@@ -47,6 +47,7 @@ export const data = new SlashCommandBuilder()
     .addChoices(
       { name: "Слот 1", value: 1 },
       { name: "Слот 2", value: 2 },
+      { name: "Слот 3", value: 3 },
     ));
 
 export async function execute(interaction) {

@@ -175,6 +175,22 @@ export function Navbar({ onOpenSearch }) {
                   >
                     2
                   </button>
+                  <button 
+                    style={{
+                      padding: '3px 9px',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      borderRadius: 'var(--radius-pill)',
+                      background: activeSlot === 3 ? 'var(--accent-purple)' : 'transparent',
+                      color: activeSlot === 3 ? '#ffffff' : 'var(--text-muted)',
+                      opacity: !characters?.slot3 ? 0.4 : 1
+                    }}
+                    onClick={() => switchSlot(3)}
+                    disabled={activeSlot === 3 || !characters?.slot3}
+                    title={!characters?.slot3 ? (characters?.slot3Unlocked ? 'Слот 3 не создан' : 'Слот 3 заблокирован (выдаётся администрацией)') : 'Слот 3'}
+                  >
+                    {!characters?.slot3 && !characters?.slot3Unlocked ? '3🔒' : '3'}
+                  </button>
                 </div>
               )}
 

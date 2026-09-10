@@ -2,6 +2,7 @@ import { getDB } from '../utils/db.js';
 import { getWeeklySalary, normalizeOrganization, normalizeRank } from '../utils/rankSystem.js';
 import { isValidSafeUrl } from '../utils/urlHelper.js';
 import { isDiscordCdnUrl } from '../utils/avatarStorage.js';
+import { isSlot3Unlocked } from '../utils/dataManager.js';
 import crypto from 'crypto';
 
 // Cyrillic transliteration map for clean slugs
@@ -337,7 +338,8 @@ export async function getPlayerByPublicIdentifier(publicIdOrSlug) {
 
         if (!demoKey) return null;
         const demoDoc = SAMPLE_DEMO_CHARACTERS[demoKey];
-        const slot = demoDoc.id.endsWith('_2') ? 2 : 1;
+        const slotMatch = String(demoDoc.id).match(/_(\d+)$/);
+        const slot = slotMatch ? Number(slotMatch[1]) : 1;
         const player = normalizePlayer(demoDoc, slot);
         player.total_sp = (player.styles || []).reduce((acc, curr) => acc + (curr.sp || 0), 0);
         return player;
@@ -352,13 +354,14 @@ export async function getPlayerByPublicIdentifier(publicIdOrSlug) {
     });
 
     // 2. Fallback for internal player_id lookups (e.g. staff or backwards compatibility)
-    if (!doc && /^\d+(_2)?$/.test(identifier)) {
+    if (!doc && /^\d+(_\d+)?$/.test(identifier)) {
         doc = await db.collection('players').findOne({ id: identifier });
     }
 
     if (!doc) return null;
 
-    const slot = String(doc.id).endsWith('_2') ? 2 : 1;
+    const slotMatch = String(doc.id).match(/_(\d+)$/);
+    const slot = slotMatch ? Number(slotMatch[1]) : 1;
     const player = normalizePlayer(doc, slot);
 
     const styles = await db.collection('player_sp').find({ player_id: String(doc.id) }).toArray();
@@ -409,13 +412,23 @@ export async function getUserCharacters(discordUserId) {
         const slot2 = normalizePlayer(SAMPLE_DEMO_CHARACTERS['demo_user_2'], 2);
         slot2.total_sp = (slot2.styles || []).reduce((acc, curr) => acc + (curr.sp || 0), 0);
 
-        const activeCharacter = localActiveSlot === 2 ? slot2 : slot1;
+        const slot3 = SAMPLE_DEMO_CHARACTERS['demo_user_3']
+            ? normalizePlayer(SAMPLE_DEMO_CHARACTERS['demo_user_3'], 3)
+            : null;
+        if (slot3) {
+            slot3.total_sp = (slot3.styles || []).reduce((acc, curr) => acc + (curr.sp || 0), 0);
+        }
+
+        const activeCharacter = localActiveSlot === 3 ? slot3 : (localActiveSlot === 2 ? slot2 : slot1);
+        const slot3Unlocked = await isSlot3Unlocked(discordUserId);
 
         return {
             activeSlot: localActiveSlot,
             hasCharacters: true,
             slot1,
             slot2,
+            slot3,
+            slot3Unlocked,
             activeCharacter
         };
     }
@@ -423,47 +436,50 @@ export async function getUserCharacters(discordUserId) {
     const userId = String(discordUserId);
 
     const settings = await db.collection('user_settings').findOne({ id: userId });
-    const activeSlot = Number(settings?.active_slot) === 2 ? 2 : 1;
+    const rawActive = Number(settings?.active_slot);
+    const activeSlot = [1, 2, 3].includes(rawActive) ? rawActive : 1;
 
     const slot1Id = userId;
     const slot2Id = `${userId}_2`;
+    const slot3Id = `${userId}_3`;
 
-    const [slot1Doc, slot2Doc] = await Promise.all([
+    const [slot1Doc, slot2Doc, slot3Doc] = await Promise.all([
         db.collection('players').findOne({ id: slot1Id }),
-        db.collection('players').findOne({ id: slot2Id })
+        db.collection('players').findOne({ id: slot2Id }),
+        db.collection('players').findOne({ id: slot3Id })
     ]);
 
     const slot1 = slot1Doc ? normalizePlayer(slot1Doc, 1) : null;
     const slot2 = slot2Doc ? normalizePlayer(slot2Doc, 2) : null;
+    const slot3 = slot3Doc ? normalizePlayer(slot3Doc, 3) : null;
 
-    const playerIds = [slot1 ? slot1Id : null, slot2 ? slot2Id : null].filter(Boolean);
+    const playerIds = [slot1 ? slot1Id : null, slot2 ? slot2Id : null, slot3 ? slot3Id : null].filter(Boolean);
     if (playerIds.length > 0) {
         const allStyles = await db.collection('player_sp').find({ player_id: { $in: playerIds } }).toArray();
-        if (slot1) {
-            slot1.styles = allStyles.filter(s => s.player_id === slot1Id).map(s => ({
+        const populateStyles = (char, pId) => {
+            if (!char) return;
+            char.styles = allStyles.filter(s => s.player_id === pId).map(s => ({
                 name: s.style_name || s.style_id,
                 sp: Number(s.sp || 0),
                 ...getStyleMastery(s.sp)
             }));
-            slot1.total_sp = slot1.styles.reduce((a, c) => a + c.sp, 0);
-        }
-        if (slot2) {
-            slot2.styles = allStyles.filter(s => s.player_id === slot2Id).map(s => ({
-                name: s.style_name || s.style_id,
-                sp: Number(s.sp || 0),
-                ...getStyleMastery(s.sp)
-            }));
-            slot2.total_sp = slot2.styles.reduce((a, c) => a + c.sp, 0);
-        }
+            char.total_sp = char.styles.reduce((a, c) => a + c.sp, 0);
+        };
+        populateStyles(slot1, slot1Id);
+        populateStyles(slot2, slot2Id);
+        populateStyles(slot3, slot3Id);
     }
 
-    const activeCharacter = activeSlot === 2 ? slot2 : slot1;
+    const activeCharacter = activeSlot === 3 ? slot3 : (activeSlot === 2 ? slot2 : slot1);
+    const slot3Unlocked = await isSlot3Unlocked(userId);
 
     return {
         activeSlot,
-        hasCharacters: Boolean(slot1 || slot2),
+        hasCharacters: Boolean(slot1 || slot2 || slot3),
         slot1,
         slot2,
+        slot3,
+        slot3Unlocked,
         activeCharacter
     };
 }
@@ -472,7 +488,16 @@ export async function getUserCharacters(discordUserId) {
  * Switch active slot for a user
  */
 export async function setUserActiveSlot(discordUserId, slot) {
-    const targetSlot = Number(slot) === 2 ? 2 : 1;
+    const rawSlot = Number(slot);
+    let targetSlot = [1, 2, 3].includes(rawSlot) ? rawSlot : 1;
+
+    if (targetSlot === 3) {
+        const unlocked = await isSlot3Unlocked(discordUserId);
+        if (!unlocked) {
+            targetSlot = 1;
+        }
+    }
+
     localActiveSlot = targetSlot;
 
     const db = getDB();

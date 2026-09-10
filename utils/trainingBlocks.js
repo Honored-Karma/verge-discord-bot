@@ -20,7 +20,7 @@ export function formatTrainingName(type) {
 
 function normalizeSlot(slot) {
   const num = Number(slot);
-  if (num === 1 || num === 2) return num;
+  if (num === 1 || num === 2 || num === 3) return num;
   return null;
 }
 

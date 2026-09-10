@@ -31,7 +31,11 @@ export const data = new SlashCommandBuilder()
       .setName("slot")
       .setDescription("Слот персонажа; по умолчанию — активный")
       .setRequired(false)
-      .addChoices({ name: "Слот 1", value: 1 }, { name: "Слот 2", value: 2 }),
+      .addChoices(
+        { name: "Слот 1", value: 1 },
+        { name: "Слот 2", value: 2 },
+        { name: "Слот 3", value: 3 },
+      ),
   );
 
 export async function execute(interaction) {

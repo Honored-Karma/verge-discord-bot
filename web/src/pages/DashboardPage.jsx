@@ -48,6 +48,7 @@ export function DashboardPage() {
   const activeChar = characters?.activeCharacter;
   const slot1Char = characters?.slot1;
   const slot2Char = characters?.slot2;
+  const slot3Char = characters?.slot3;
 
   const handleSlotSwitch = async (slot) => {
     if (slot === activeSlot || switching) return;
@@ -168,6 +169,23 @@ export function DashboardPage() {
                   title={!slot2Char ? 'Слот 2 ещё не создан в Discord' : ''}
                 >
                   Слот 2 {slot2Char ? `(${slot2Char.character_name})` : '(Пусто)'}
+                </button>
+                <button
+                  style={{
+                    padding: '6px 14px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    borderRadius: 'var(--radius-pill)',
+                    background: activeSlot === 3 ? 'var(--accent-purple)' : 'transparent',
+                    color: activeSlot === 3 ? '#ffffff' : 'var(--text-muted)',
+                    opacity: !slot3Char ? 0.4 : 1,
+                    transition: 'all var(--transition-fast)'
+                  }}
+                  onClick={() => handleSlotSwitch(3)}
+                  disabled={activeSlot === 3 || !slot3Char || switching}
+                  title={!slot3Char ? (characters?.slot3Unlocked ? 'Слот 3 ещё не создан в Discord' : 'Слот 3 заблокирован (выдаётся администрацией)') : ''}
+                >
+                  Слот 3 {slot3Char ? `(${slot3Char.character_name})` : (!characters?.slot3Unlocked ? '(🔒 Закрыт)' : '(Пусто)')}
                 </button>
               </div>
             </div>

@@ -1264,3 +1264,222 @@ test("кастомные эмодзи миссий: правильные тег�
   assert.ok(dynamicEmbed.data.description.includes("<:19warning:1494708207300509887>"), "Должен подставить ID warning из клиента");
 });
 
+test("вступление в лобби миссии (MISSION_BTN_JOIN): пинг участника в ветке, добавление в тред и ссылка на ветку", async () => {
+  const db = createMockDatabase();
+  setDB(db);
+
+  await db.collection("players").insertOne({
+    id: "lobby_user_1",
+    user_id: "lobby_user_1",
+    slot: 1,
+    character_name: "Инари",
+    organization: "Сопротивление",
+    rank: "Ветеран",
+    ap: 100,
+  });
+
+  const mission = await createMission(
+    {
+      guildId: "guild_lobby_1",
+      channelId: "chan_lobby_1",
+      title: "Рейд на склад",
+      type: MISSION_TYPES.raid,
+      description: "Освободить груз",
+      access: MISSION_ACCESS.open,
+      maxPlayers: 5,
+      createdBy: { user_id: "gm_host", username: "GM Host" },
+      reward: { ap: 20 },
+    },
+    db
+  );
+
+  const addedMembers = [];
+  const sentThreadMessages = [];
+  const mockThread = {
+    id: "thread_mission_lobby_999",
+    archived: false,
+    members: {
+      async add(uid) {
+        addedMembers.push(uid);
+      },
+    },
+    async send(content) {
+      sentThreadMessages.push(content);
+    },
+  };
+
+  let replyNotice = null;
+  const joinInteraction = {
+    customId: "mission_join",
+    user: { id: "lobby_user_1", username: "InariPlayer" },
+    guildId: "guild_lobby_1",
+    channelId: "chan_lobby_1",
+    message: {
+      id: "msg_mission_card_111",
+      thread: mockThread,
+      hasThread: true,
+      async edit() {},
+    },
+    deferred: true,
+    async deferReply() {},
+    async editReply(payload) {
+      replyNotice = payload;
+    },
+  };
+
+  const cardSession = {
+    message_id: "msg_mission_card_111",
+    state: { public_id: mission.public_id },
+  };
+
+  await missionInteractionHandler.handleComponent({
+    interaction: joinInteraction,
+    session: cardSession,
+  });
+
+  // 1. Проверяем добавление пользователя в ветку Discord
+  assert.ok(
+    addedMembers.includes("lobby_user_1"),
+    "участник должен быть добавлен в members ветки"
+  );
+
+  // 2. Проверяем пинг участника в ветке
+  assert.ok(
+    sentThreadMessages.some(
+      (msg) => msg.includes("<@lobby_user_1>") && msg.includes("Инари")
+    ),
+    "в ветку должно быть отправлено сообщение с пингом <@lobby_user_1> и именем персонажа"
+  );
+
+  // 3. Проверяем уведомление игроку со ссылкой на ветку
+  assert.ok(replyNotice, "игрок должен получить ответ");
+  assert.ok(replyNotice.content.includes("✅ Вы успешно вступили в миссию"));
+  assert.ok(replyNotice.content.includes("Ветка обсуждения: <#thread_mission_lobby_999>"));
+
+  // 4. Проверяем обновление участников в базе данных
+  const updatedMission = await getMissionByPublicId(mission.public_id, db);
+  assert.equal(updatedMission.participants.length, 1);
+  assert.equal(updatedMission.participants[0].user_id, "lobby_user_1");
+  assert.equal(updatedMission.participants[0].character_name, "Инари");
+});
+
+test("вступление в лобби без ветки: автоматическое создание ветки на сообщении карточки и сохранение thread_id", async () => {
+  const db = createMockDatabase();
+  setDB(db);
+
+  await db.collection("players").insertOne({
+    id: "lobby_user_2",
+    user_id: "lobby_user_2",
+    slot: 1,
+    character_name: "Самурай",
+    organization: "Сопротивление",
+    rank: "Новичок",
+    ap: 50,
+  });
+
+  const mission = await createMission(
+    {
+      guildId: "guild_lobby_2",
+      channelId: "chan_lobby_2",
+      title: "Патруль сектора",
+      type: MISSION_TYPES.investigation,
+      description: "Проверить сектор 4",
+      access: MISSION_ACCESS.open,
+      maxPlayers: 3,
+      createdBy: { user_id: "gm_host", username: "GM Host" },
+    },
+    db
+  );
+
+  let threadCreated = false;
+  const mockNewThread = {
+    id: "thread_auto_created_777",
+    archived: false,
+    members: {
+      async add() {},
+    },
+    async send() {},
+  };
+
+  const joinInteraction = {
+    customId: "mission_join",
+    user: { id: "lobby_user_2", username: "SamuraiPlayer" },
+    guildId: "guild_lobby_2",
+    channelId: "chan_lobby_2",
+    message: {
+      id: "msg_card_auto_create",
+      thread: null,
+      hasThread: false,
+      async startThread(opts) {
+        threadCreated = true;
+        return mockNewThread;
+      },
+      async edit() {},
+    },
+    deferred: true,
+    async deferReply() {},
+    async editReply() {},
+  };
+
+  const cardSession = {
+    message_id: "msg_card_auto_create",
+    state: { public_id: mission.public_id },
+  };
+
+  await missionInteractionHandler.handleComponent({
+    interaction: joinInteraction,
+    session: cardSession,
+  });
+
+  assert.ok(threadCreated, "должна быть вызвана функция startThread");
+  const updatedMission = await getMissionByPublicId(mission.public_id, db);
+  assert.equal(
+    updatedMission.thread_id,
+    "thread_auto_created_777",
+    "созданный ID ветки должен быть сохранён в базе данных миссии"
+  );
+});
+
+test("startMission сохраняет существующий thread_id, если threadId не передан", async () => {
+  const db = createMockDatabase();
+  setDB(db);
+
+  const mission = await createMission(
+    {
+      guildId: "guild_start_test",
+      channelId: "chan_start_test",
+      title: "Миссия с существующим тредом",
+      type: MISSION_TYPES.social,
+      description: "Переговоры",
+      access: MISSION_ACCESS.open,
+      maxPlayers: 2,
+      createdBy: { user_id: "gm_start", username: "GM Start" },
+    },
+    db
+  );
+
+  // Сохраняем существующий thread_id
+  await db.collection("missions").updateOne(
+    { public_id: mission.public_id },
+    { $set: { thread_id: "existing_thread_persistent_999" } }
+  );
+
+  // Запуск миссии без явной передачи threadId
+  const result = await startMission(
+    {
+      publicId: mission.public_id,
+      actorId: "gm_start",
+      actorUsername: "GM Start",
+    },
+    db
+  );
+
+  assert.ok(result.success);
+  assert.equal(
+    result.mission.thread_id,
+    "existing_thread_persistent_999",
+    "старт миссии не должен обнулять ранее созданный thread_id"
+  );
+});
+
+

@@ -69,9 +69,10 @@ function normalizePlayerDocument(player) {
   };
 }
 
-function normalizeSlot(slot) {
+export function normalizeSlot(slot) {
   const s = Number(slot);
   if (s === 2) return 2;
+  if (s === 3) return 3;
   return 1;
 }
 
@@ -162,12 +163,18 @@ export async function getActiveSlot(userId) {
       return slot;
     }
 
-    // Legacy edge case: user may historically have only slot 2 character
+    // Legacy edge case: user may historically have only slot 2 or 3 character
     const playerSlot2 = await db
       .collection("players")
       .findOne({ id: `${userId}_2` });
     if (playerSlot2) {
       return 2;
+    }
+    const playerSlot3 = await db
+      .collection("players")
+      .findOne({ id: `${userId}_3` });
+    if (playerSlot3) {
+      return 3;
     }
 
     return 1;
@@ -198,6 +205,73 @@ export async function setActiveSlot(userId, slot) {
     console.error("Error setting active slot:", error);
     return false;
   }
+}
+
+// Хранилище в оперативной памяти для симуляции или тестов без MongoDB
+const localSlot3UnlockedUsers = new Set();
+
+/**
+ * Проверить, разблокирован ли доступ к 3-му слоту персонажа для пользователя.
+ * 3-й слот считается доступным, если:
+ * 1) Администратор выдал доступ через /grant-slot (user_settings.slot_3_unlocked === true);
+ * 2) У пользователя уже создан персонаж в слоте 3 (обратная совместимость).
+ */
+export async function isSlot3Unlocked(userId) {
+  if (!userId) return false;
+  const uid = String(userId);
+  try {
+    const db = getDB();
+    if (!db) {
+      return localSlot3UnlockedUsers.has(uid);
+    }
+
+    const settings = await db.collection("user_settings").findOne({ id: uid });
+    if (settings && (settings.slot_3_unlocked === true || settings.max_slots >= 3)) {
+      return true;
+    }
+
+    // Обратная совместимость: если персонаж в 3-м слоте уже существует
+    const slot3Player = await db.collection("players").findOne({ id: `${uid}_3` });
+    if (slot3Player) {
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.error("Error checking slot 3 unlocked status:", error);
+    return false;
+  }
+}
+
+/**
+ * Выдать или отозвать доступ к 3-му слоту персонажа
+ */
+export async function setSlot3Unlocked(userId, unlocked = true) {
+  if (!userId) return false;
+  const uid = String(userId);
+  const isUnlocked = Boolean(unlocked);
+  try {
+    const db = getDB();
+    if (!db) {
+      if (isUnlocked) localSlot3UnlockedUsers.add(uid);
+      else localSlot3UnlockedUsers.delete(uid);
+      return true;
+    }
+
+    const res = await db.collection("user_settings").updateOne(
+      { id: uid },
+      { $set: { id: uid, slot_3_unlocked: isUnlocked } },
+      { upsert: true }
+    );
+    return res.matchedCount > 0 || res.upsertedCount > 0 || res.modifiedCount > 0;
+  } catch (error) {
+    console.error("Error setting slot 3 unlocked status:", error);
+    return false;
+  }
+}
+
+export function _clearSlot3UnlockedSimulationForTesting() {
+  localSlot3UnlockedUsers.clear();
 }
 
 export function logAdminAction(adminId, action, details) {
@@ -1645,6 +1719,7 @@ export async function deletePlayer(playerId, adminId) {
     const baseUserId = String(playerId).split("_")[0];
     const slot1Id = baseUserId;
     const slot2Id = `${baseUserId}_2`;
+    const slot3Id = `${baseUserId}_3`;
 
     const slot1Exists = !!(await db
       .collection("players")
@@ -1652,6 +1727,9 @@ export async function deletePlayer(playerId, adminId) {
     const slot2Exists = !!(await db
       .collection("players")
       .findOne({ id: slot2Id }, { projection: { id: 1 } }));
+    const slot3Exists = !!(await db
+      .collection("players")
+      .findOne({ id: slot3Id }, { projection: { id: 1 } }));
 
     const settings = await db
       .collection("user_settings")
@@ -1661,25 +1739,24 @@ export async function deletePlayer(playerId, adminId) {
         ? normalizeSlot(settings.active_slot)
         : 1;
 
-    if (!slot1Exists && !slot2Exists) {
+    if (!slot1Exists && !slot2Exists && !slot3Exists) {
       // No characters left -> clear active slot state
       await db.collection("user_settings").deleteOne({ id: baseUserId });
-    } else if (currentActive === 1 && !slot1Exists && slot2Exists) {
-      await db
-        .collection("user_settings")
-        .updateOne(
-          { id: baseUserId },
-          { $set: { active_slot: 2 } },
-          { upsert: true },
-        );
-    } else if (currentActive === 2 && !slot2Exists && slot1Exists) {
-      await db
-        .collection("user_settings")
-        .updateOne(
-          { id: baseUserId },
-          { $set: { active_slot: 1 } },
-          { upsert: true },
-        );
+    } else {
+      const activeStillExists =
+        (currentActive === 1 && slot1Exists) ||
+        (currentActive === 2 && slot2Exists) ||
+        (currentActive === 3 && slot3Exists);
+      if (!activeStillExists) {
+        const nextActive = slot1Exists ? 1 : (slot2Exists ? 2 : (slot3Exists ? 3 : 1));
+        await db
+          .collection("user_settings")
+          .updateOne(
+            { id: baseUserId },
+            { $set: { active_slot: nextActive } },
+            { upsert: true },
+          );
+      }
     }
 
     logAdminAction(

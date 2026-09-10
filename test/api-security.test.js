@@ -94,7 +94,7 @@ test('POST /api/auth/active-slot returns 400 on invalid slot numbers', async () 
         user: { id: '123456789', username: 'tester' }
     });
 
-    const res1 = await makeRequest(app, 'POST', '/api/auth/active-slot', { slot: 3 });
+    const res1 = await makeRequest(app, 'POST', '/api/auth/active-slot', { slot: 4 });
     assert.equal(res1.status, 400);
     assert.equal(res1.data.error, 'InvalidSlot');
 

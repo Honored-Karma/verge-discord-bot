@@ -22,7 +22,8 @@ export function createCharactersRouter() {
                     activeSlot: userChars.activeSlot,
                     hasCharacters: userChars.hasCharacters,
                     slot1: userChars.slot1 ? sanitizeCharacter(userChars.slot1, true, true) : null,
-                    slot2: userChars.slot2 ? sanitizeCharacter(userChars.slot2, true, true) : null
+                    slot2: userChars.slot2 ? sanitizeCharacter(userChars.slot2, true, true) : null,
+                    slot3: userChars.slot3 ? sanitizeCharacter(userChars.slot3, true, true) : null
                 });
             }
 
@@ -30,7 +31,8 @@ export function createCharactersRouter() {
                 activeSlot: userChars.activeSlot,
                 character: sanitizeCharacter(userChars.activeCharacter, true, true),
                 slot1: userChars.slot1 ? sanitizeCharacter(userChars.slot1, true, true) : null,
-                slot2: userChars.slot2 ? sanitizeCharacter(userChars.slot2, true, true) : null
+                slot2: userChars.slot2 ? sanitizeCharacter(userChars.slot2, true, true) : null,
+                slot3: userChars.slot3 ? sanitizeCharacter(userChars.slot3, true, true) : null
             });
         } catch (error) {
             next(error);

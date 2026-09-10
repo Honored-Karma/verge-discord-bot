@@ -170,7 +170,7 @@ export async function unsetOrgRole(name, adminId) {
  */
 export async function resolveWantedOrg(userId, registry) {
   const slot = await getActiveSlot(userId);
-  const player = await getPlayer(makePlayerKey(userId, slot === 2 ? 2 : 1));
+  const player = await getPlayer(makePlayerKey(userId, slot));
   const orgName = playerOrgName(player);
   if (!orgName) return { orgName: null, row: null, slot };
 

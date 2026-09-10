@@ -33,6 +33,7 @@ const SLOT_CHOICES = [
   { name: "Все слоты (аккаунт)", value: 0 },
   { name: "Слот 1", value: 1 },
   { name: "Слот 2", value: 2 },
+  { name: "Слот 3", value: 3 },
 ];
 
 export const data = new SlashCommandBuilder()
@@ -143,7 +144,7 @@ export async function execute(interaction) {
   const subcommand = interaction.options.getSubcommand();
   const targetUser = interaction.options.getUser("user");
   const slotOption = interaction.options.getInteger("slot");
-  const slot = slotOption === 1 || slotOption === 2 ? slotOption : null;
+  const slot = [1, 2, 3].includes(slotOption) ? slotOption : null;
 
   if (subcommand === "block") {
     const training = interaction.options.getString("training");

@@ -176,7 +176,7 @@ export async function handleModalSubmit(interaction) {
   const styleId = Number(idParts[1]);
   await interaction.deferReply();
 
-  if ((slot !== 1 && slot !== 2) || !Number.isSafeInteger(styleId)) {
+  if (![1, 2, 3].includes(slot) || !Number.isSafeInteger(styleId)) {
     const msg = await editComponentsReply(
       interaction,
       createSPTrainingErrorComponents(

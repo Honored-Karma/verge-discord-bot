@@ -12,6 +12,7 @@ import {
   joinMission,
   leaveMission,
   MISSION_STATUS,
+  setMissionThreadId,
   startMission,
 } from "../utils/missionStore.js";
 import {
@@ -121,6 +122,80 @@ async function updateMissionCardMessage(interaction, mission) {
   }
 }
 
+/**
+ * Resolves an existing mission thread or creates a new public thread for the mission card.
+ */
+export async function resolveOrCreateMissionThread(
+  interaction,
+  mission,
+  { createIfMissing = true } = {}
+) {
+  let thread = interaction.message?.thread || null;
+
+  if (!thread && interaction.message?.hasThread && typeof interaction.message.fetchThread === "function") {
+    thread = await interaction.message.fetchThread().catch(() => null);
+  }
+
+  // Check if thread ID is stored on mission document
+  if (!thread && mission?.thread_id) {
+    const channel = interaction.guild?.channels || interaction.client?.channels;
+    if (channel && typeof channel.fetch === "function") {
+      thread = await channel.fetch(mission.thread_id).catch(() => null);
+    }
+  }
+
+  // If interaction.message is not the original public card, fetch the card message
+  let cardMessage = interaction.message;
+  if (
+    !thread &&
+    (!cardMessage || cardMessage.id !== mission.message_id) &&
+    mission.channel_id &&
+    mission.message_id
+  ) {
+    const channel = interaction.guild?.channels
+      ? await interaction.guild.channels.fetch(mission.channel_id).catch(() => null)
+      : (interaction.client?.channels
+        ? await interaction.client.channels.fetch(mission.channel_id).catch(() => null)
+        : null);
+    if (channel && typeof channel.messages?.fetch === "function") {
+      cardMessage = await channel.messages.fetch(mission.message_id).catch(() => null);
+      if (cardMessage?.thread) {
+        thread = cardMessage.thread;
+      } else if (cardMessage?.hasThread && typeof cardMessage.fetchThread === "function") {
+        thread = await cardMessage.fetchThread().catch(() => null);
+      }
+    }
+  }
+
+  // Create thread if missing and requested
+  if (!thread && createIfMissing && cardMessage && typeof cardMessage.startThread === "function") {
+    try {
+      thread = await cardMessage.startThread({
+        name: `Обсуждение: ${mission.title.slice(0, 80)}`,
+        autoArchiveDuration: 1440,
+        reason: `Ветка обсуждения для миссии ${mission.public_id}`,
+      });
+      if (thread?.id) {
+        await setMissionThreadId(mission.public_id, thread.id).catch(() => {});
+        mission.thread_id = thread.id;
+      }
+    } catch (err) {
+      if (cardMessage?.hasThread && typeof cardMessage.fetchThread === "function") {
+        thread = await cardMessage.fetchThread().catch(() => null);
+      } else {
+        console.warn("Could not create thread for mission:", err?.message);
+      }
+    }
+  }
+
+  // Unarchive if thread was archived
+  if (thread?.archived && typeof thread.setArchived === "function") {
+    await thread.setArchived(false).catch(() => {});
+  }
+
+  return thread;
+}
+
 export const missionInteractionHandler = {
   /**
    * Public buttons (Join, Leave, Party, Profiles) are usable by any player.
@@ -191,9 +266,29 @@ export const missionInteractionHandler = {
       }
 
       await updateMissionCardMessage(interaction, result.mission);
+
+      // Resolve thread, add participant to thread, and ping them
+      let threadNotice = "";
+      try {
+        const thread = await resolveOrCreateMissionThread(interaction, result.mission);
+        if (thread) {
+          if (typeof thread.members?.add === "function") {
+            await thread.members.add(interaction.user.id).catch(() => {});
+          }
+          if (typeof thread.send === "function") {
+            await thread.send(
+              `⚔️ <@${interaction.user.id}> (**${characterName}**) вступил(а) в лобби миссии!`
+            ).catch(() => {});
+          }
+          threadNotice = `\n💬 Ветка обсуждения: <#${thread.id}>`;
+        }
+      } catch (threadErr) {
+        console.warn(`Failed to ping member in mission thread:`, threadErr?.message);
+      }
+
       return sendNotice(
         interaction,
-        `✅ Вы успешно вступили в миссию **【${mission.title}】** персонажем **${characterName}**!`
+        `✅ Вы успешно вступили в миссию **【${mission.title}】** персонажем **${characterName}**!${threadNotice}`
       );
     }
 
@@ -327,37 +422,22 @@ export const missionInteractionHandler = {
         );
       }
 
-      let threadId = null;
       let threadNotice = "";
+      const thread = await resolveOrCreateMissionThread(interaction, mission);
+      const threadId = thread?.id || mission.thread_id || null;
 
-      // Attempt reusing existing thread or creating a new public thread for RP
-      let thread = interaction.message?.thread || null;
-      if (!thread && interaction.message?.hasThread && typeof interaction.message.fetchThread === "function") {
-        thread = await interaction.message.fetchThread().catch(() => null);
-      }
-      if (!thread && typeof interaction.message?.startThread === "function") {
-        try {
-          thread = await interaction.message.startThread({
-            name: `Миссия: ${mission.title}`.slice(0, 95),
-            autoArchiveDuration: 1440,
-            reason: `RP ветка для миссии ${mission.public_id}`,
-          });
-        } catch (err) {
-          if (interaction.message?.hasThread && typeof interaction.message.fetchThread === "function") {
-            thread = await interaction.message.fetchThread().catch(() => null);
-          } else {
-            console.warn("Could not create public thread for mission:", err.message);
-            threadNotice =
-              "\n⚠️ *Боту не удалось создать новую ветку. Миссия всё равно запущена.*";
-          }
-        }
-      }
-
-      if (thread) {
-        threadId = thread.id;
+      if (thread && typeof thread.send === "function") {
+        const mentions = (mission.participants || [])
+          .map((p) => `<@${p.user_id}>`)
+          .filter(Boolean)
+          .join(" ");
+        const pingLine = mentions ? `\nУчастники: ${mentions}` : "";
         await thread
-          .send(`⚔️ **Миссия запущена!** Организатор зафиксировал состав участников. Удачи!`)
+          .send(`⚔️ **Миссия запущена!** Организатор зафиксировал состав участников. Удачи!${pingLine}`)
           .catch(() => {});
+      } else if (!thread) {
+        threadNotice =
+          "\n⚠️ *Боту не удалось найти или создать ветку. Миссия всё равно запущена.*";
       }
 
       const result = await startMission({

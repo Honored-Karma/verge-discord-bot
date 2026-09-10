@@ -87,6 +87,7 @@ export const data = new SlashCommandBuilder()
     .addChoices(
       { name: "Слот 1", value: 1 },
       { name: "Слот 2", value: 2 },
+      { name: "Слот 3", value: 3 },
     ));
 
 function resolveAvatar(player, user) {
@@ -106,7 +107,7 @@ function decodeContext(value) {
   const quantity = Number(rawQuantity);
   const styleId = rawStyleId === undefined ? null : Number(rawStyleId);
   if (!/^\d{15,25}$/.test(userId)
-    || ![1, 2].includes(slot)
+    || ![1, 2, 3].includes(slot)
     || !Number.isSafeInteger(quantity)
     || quantity < 1
     || quantity > 1_000_000

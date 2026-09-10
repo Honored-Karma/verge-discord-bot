@@ -105,7 +105,7 @@ export async function handleModalSubmit(interaction) {
   const slot = Number(interaction.customId.slice(TRAINING_MODAL_PREFIX.length));
   await interaction.deferReply();
 
-  if (slot !== 1 && slot !== 2) {
+  if (![1, 2, 3].includes(slot)) {
     const msg = await editComponentsReply(
       interaction,
       createAPActivityErrorComponents(

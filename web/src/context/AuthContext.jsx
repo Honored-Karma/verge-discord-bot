@@ -67,7 +67,8 @@ const DEMO_CHARACTERS = {
     styles: [
       { id: "style_3", name: "Теневой Шаг Кабукичо", rank_name: "Эксперт", sp: 1100 }
     ]
-  }
+  },
+  slot3: null
 };
 
 DEMO_CHARACTERS.activeCharacter = DEMO_CHARACTERS.slot1;
@@ -145,7 +146,9 @@ export function AuthProvider({ children }) {
   const switchSlot = async (slotNumber) => {
     // If in demo mode
     if (user?.id === "demo_operative_01") {
-      const newActiveChar = slotNumber === 2 ? user.characters.slot2 : user.characters.slot1;
+      const newActiveChar = slotNumber === 3
+        ? user.characters.slot3
+        : (slotNumber === 2 ? user.characters.slot2 : user.characters.slot1);
       const updatedUser = {
         ...user,
         characters: {

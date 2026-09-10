@@ -19,6 +19,7 @@ import {
   parseOptionEmoji,
   resolveCustomEmoji,
   setMissionMessageId,
+  setMissionThreadId,
   TYPE_FALLBACK_ICONS,
   TYPE_ICONS,
   TYPE_LABELS,
@@ -655,9 +656,17 @@ async function publishMission({ interaction, session }) {
         name: `Обсуждение: ${mission.title.slice(0, 80)}`,
         autoArchiveDuration: 1440,
       });
+      if (thread?.id) {
+        await setMissionThreadId(mission.public_id, thread.id).catch(() => {});
+        mission.thread_id = thread.id;
+      }
+      if (mission.created_by?.user_id && typeof thread.members?.add === "function") {
+        await thread.members.add(mission.created_by.user_id).catch(() => {});
+      }
+      const gmLine = mission.created_by?.user_id ? `\nОрганизатор (ГМ): <@${mission.created_by.user_id}>` : "";
       await thread.send(
-        `⚔️ Ветка обсуждения миссии **${mission.title}** открыта.\n` +
-        `Участники могут координировать действия здесь.`
+        `⚔️ Ветка обсуждения миссии **${mission.title}** открыта.${gmLine}\n` +
+        `Участники лобби будут автоматически добавляться сюда для обсуждения деталей с ГМ.`
       );
     } catch (threadErr) {
       console.warn("Could not create mission thread:", threadErr?.message);

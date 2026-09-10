@@ -22,11 +22,12 @@ export const data = new SlashCommandBuilder()
             .setMaxValue(500))
     .addIntegerOption(option =>
         option.setName('slot')
-            .setDescription('Слот персонажа (1 или 2). Если не указан — используется активный слот игрока.')
+            .setDescription('Слот персонажа (1, 2 или 3). Если не указан — используется активный слот игрока.')
             .setRequired(false)
             .addChoices(
                 { name: '1', value: 1 },
-                { name: '2', value: 2 }
+                { name: '2', value: 2 },
+                { name: '3', value: 3 }
             ))
     .addStringOption(option =>
         option.setName('duration')
@@ -68,7 +69,7 @@ if (!hasCommandPermission(member, 'set-sp-multiplier')) {
     const multiplier = interaction.options.getInteger('multiplier');
     const requestedSlot = interaction.options.getInteger('slot');
     let slot = requestedSlot && requestedSlot >= 1 ? requestedSlot : await getActiveSlot(targetUser.id);
-    if (slot > 2) slot = 2;
+    if (![1, 2, 3].includes(slot)) slot = 1;
 
     const playerId = makePlayerKey(targetUser.id, slot);
     const player = await getPlayer(playerId);

@@ -31,6 +31,7 @@ import {
 } from '../../services/applicationService.js';
 import { isValidSafeUrl } from '../../utils/urlHelper.js';
 import { isDiscordCdnUrl, saveCharacterAvatar } from '../../utils/avatarStorage.js';
+import { isSlot3Unlocked, setSlot3Unlocked } from '../../utils/dataManager.js';
 
 // Mutex lock for batch sync operations
 let isSyncRunning = false;
@@ -818,6 +819,41 @@ export function createAdminRouter(discordClient) {
         } catch (error) {
             console.error('Error fetching audit logs:', error);
             res.status(500).json({ error: 'InternalServerError', message: 'Не удалось загрузить журнал аудита' });
+        }
+    });
+
+    // ==========================================
+    // 7. Slot 3 Access Management
+    // ==========================================
+    router.get('/users/:userId/slot3', requireCapability('canManageRoles'), async (req, res) => {
+        try {
+            const { userId } = req.params;
+            const unlocked = await isSlot3Unlocked(userId);
+            res.json({ userId, slot3Unlocked: unlocked });
+        } catch (error) {
+            console.error('Error fetching slot 3 status:', error);
+            res.status(500).json({ error: 'InternalServerError', message: 'Не удалось получить статус слота' });
+        }
+    });
+
+    router.post('/users/:userId/slot3', requireCapability('canManageRoles'), adminMutationLimiter, csrfProtection, async (req, res) => {
+        try {
+            const { userId } = req.params;
+            const unlocked = Boolean(req.body.unlocked);
+            await setSlot3Unlocked(userId, unlocked);
+
+            await logAdminAction({
+                actor: req.session.user,
+                action: unlocked ? 'grant_slot_3' : 'revoke_slot_3',
+                entity_type: 'user',
+                entity_id: userId,
+                details: `${unlocked ? 'Выдан' : 'Отозван'} доступ к 3-му слоту персонажа`
+            });
+
+            res.json({ success: true, userId, slot3Unlocked: unlocked });
+        } catch (error) {
+            console.error('Error setting slot 3 status:', error);
+            res.status(500).json({ error: 'InternalServerError', message: 'Не удалось обновить статус слота' });
         }
     });
 

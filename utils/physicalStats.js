@@ -28,7 +28,8 @@ export function isValidCharacterUrl(value) {
 }
 
 export function makeTargetPlayerId(userId, slot) {
-  return slot === 2 ? `${userId}_2` : userId;
+  if (slot && slot !== 1) return `${userId}_${slot}`;
+  return userId;
 }
 
 export function physicalStatsSummary(stats) {

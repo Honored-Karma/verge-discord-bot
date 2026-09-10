@@ -56,9 +56,9 @@ export const data = new SlashCommandBuilder()
                     .setRequired(true))
             .addIntegerOption(opt =>
                 opt.setName('slot')
-                    .setDescription('Слот (1 или 2, по умолчанию активный)')
+                    .setDescription('Слот (1, 2 или 3, по умолчанию активный)')
                     .setRequired(false)
-                    .addChoices({ name: '1', value: 1 }, { name: '2', value: 2 })))
+                    .addChoices({ name: '1', value: 1 }, { name: '2', value: 2 }, { name: '3', value: 3 })))
     .addSubcommand(sub =>
         sub.setName('remove')
             .setDescription('[АДМИН] Убрать кастомную организацию у игрока')
@@ -68,9 +68,9 @@ export const data = new SlashCommandBuilder()
                     .setRequired(true))
             .addIntegerOption(opt =>
                 opt.setName('slot')
-                    .setDescription('Слот (1 или 2, по умолчанию активный)')
+                    .setDescription('Слот (1, 2 или 3, по умолчанию активный)')
                     .setRequired(false)
-                    .addChoices({ name: '1', value: 1 }, { name: '2', value: 2 })))
+                    .addChoices({ name: '1', value: 1 }, { name: '2', value: 2 }, { name: '3', value: 3 })))
     .addSubcommandGroup(group =>
         group.setName('role')
             .setDescription('[АДМИН] Роли Discord для организаций')
@@ -200,7 +200,7 @@ export async function execute(interaction) {
         const name = interaction.options.getString('name').trim();
         const requestedSlot = interaction.options.getInteger('slot');
         let slot = requestedSlot ?? await getActiveSlot(targetUser.id);
-        if (slot < 1 || slot > 2) slot = 1;
+        if (slot < 1 || slot > 3) slot = 1;
         const playerId = makePlayerKey(targetUser.id, slot);
 
         const player = await getPlayer(playerId);
@@ -250,7 +250,7 @@ export async function execute(interaction) {
         const targetUser = interaction.options.getUser('user');
         const requestedSlot = interaction.options.getInteger('slot');
         let slot = requestedSlot ?? await getActiveSlot(targetUser.id);
-        if (slot < 1 || slot > 2) slot = 1;
+        if (slot < 1 || slot > 3) slot = 1;
         const playerId = makePlayerKey(targetUser.id, slot);
 
         const player = await getPlayer(playerId);

@@ -140,6 +140,8 @@ export function createAuthRouter() {
                             hasCharacters: characters.hasCharacters,
                             slot1: characters.slot1 ? sanitizeCharacter(characters.slot1, true, true) : null,
                             slot2: characters.slot2 ? sanitizeCharacter(characters.slot2, true, true) : null,
+                            slot3: characters.slot3 ? sanitizeCharacter(characters.slot3, true, true) : null,
+                            slot3Unlocked: Boolean(characters.slot3Unlocked),
                             activeCharacter: characters.activeCharacter ? sanitizeCharacter(characters.activeCharacter, true, true) : null
                         }
                     }
@@ -166,6 +168,8 @@ export function createAuthRouter() {
                         hasCharacters: characters.hasCharacters,
                         slot1: characters.slot1 ? sanitizeCharacter(characters.slot1, true, true) : null,
                         slot2: characters.slot2 ? sanitizeCharacter(characters.slot2, true, true) : null,
+                        slot3: characters.slot3 ? sanitizeCharacter(characters.slot3, true, true) : null,
+                        slot3Unlocked: Boolean(characters.slot3Unlocked),
                         activeCharacter: characters.activeCharacter ? sanitizeCharacter(characters.activeCharacter, true, true) : null
                     }
                 }
@@ -183,6 +187,7 @@ export function createAuthRouter() {
                         hasCharacters: false,
                         slot1: null,
                         slot2: null,
+                        slot3: null,
                         activeCharacter: null
                     }
                 }
@@ -198,8 +203,8 @@ export function createAuthRouter() {
         }
 
         const slot = Number(req.body.slot);
-        if (slot !== 1 && slot !== 2) {
-            return res.status(400).json({ error: 'InvalidSlot', message: 'Номер слота должен быть 1 или 2' });
+        if (slot !== 1 && slot !== 2 && slot !== 3) {
+            return res.status(400).json({ error: 'InvalidSlot', message: 'Номер слота должен быть 1, 2 или 3' });
         }
 
         try {
@@ -214,6 +219,8 @@ export function createAuthRouter() {
                     hasCharacters: characters.hasCharacters,
                     slot1: characters.slot1 ? sanitizeCharacter(characters.slot1, true, true) : null,
                     slot2: characters.slot2 ? sanitizeCharacter(characters.slot2, true, true) : null,
+                    slot3: characters.slot3 ? sanitizeCharacter(characters.slot3, true, true) : null,
+                    slot3Unlocked: Boolean(characters.slot3Unlocked),
                     activeCharacter: characters.activeCharacter ? sanitizeCharacter(characters.activeCharacter, true, true) : null
                 }
             });

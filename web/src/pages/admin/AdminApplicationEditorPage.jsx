@@ -104,7 +104,8 @@ export function AdminApplicationEditorPage() {
           setOriginalApp(app);
           setCharacterName(app.character_name || '');
           setApplicationSlug(app.slug || '');
-          setSlot(Number(app.slot) === 2 ? 2 : 1);
+          const s = Number(app.slot);
+          setSlot([1, 2, 3].includes(s) ? s : 1);
           setOrganization(app.organization || 'Не состоит');
           setRank(app.rank || '—');
           setStatus(app.status || 'accepted');
@@ -571,6 +572,7 @@ export function AdminApplicationEditorPage() {
             >
               <option value={1}>Слот 1 (Основной персонаж)</option>
               <option value={2}>Слот 2 (Второй персонаж)</option>
+              <option value={3}>Слот 3 (Третий персонаж)</option>
             </select>
           </div>
 
