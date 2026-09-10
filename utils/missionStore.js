@@ -10,6 +10,7 @@ import {
   logAdminAction,
 } from "./dataManager.js";
 import { orgRoleKey } from "./orgRoles.js";
+import { isRankSufficient, normalizeRank } from "./rankSystem.js";
 
 export const MISSIONS_COLLECTION = "missions";
 
@@ -174,6 +175,7 @@ export async function createMission({
   description,
   access = MISSION_ACCESS.open,
   maxPlayers = 5,
+  minRank = null,
   createdBy,
   reward = {},
   imageUrl = null,
@@ -223,6 +225,7 @@ export async function createMission({
     access: MISSION_ACCESS[access] || MISSION_ACCESS.open,
     status: MISSION_STATUS.recruiting,
     max_players: Math.max(1, Math.min(50, Number(maxPlayers) || 5)),
+    min_rank: minRank && String(minRank).toLowerCase() !== "none" ? normalizeRank(minRank) : null,
 
     image_url: imageUrl ? String(imageUrl).trim() : null,
     thumbnail_url: thumbnailUrl ? String(thumbnailUrl).trim() : null,
@@ -354,6 +357,27 @@ export async function joinMission({
       mission.created_by.user_id === String(userId);
     if (!isInvited) {
       return { success: false, reason: "not_invited" };
+    }
+  }
+
+  // Access validation: minimum rank requirement
+  if (mission.min_rank) {
+    if (!rank) {
+      return {
+        success: false,
+        reason: "rank_required",
+        requiredRank: mission.min_rank,
+        playerRank: null,
+      };
+    }
+
+    if (!isRankSufficient(rank, mission.min_rank)) {
+      return {
+        success: false,
+        reason: "rank_too_low",
+        requiredRank: mission.min_rank,
+        playerRank: rank,
+      };
     }
   }
 
@@ -836,6 +860,7 @@ export async function listMissions({
   guildId,
   organizationKey = null,
   status = null,
+  minRank = null,
   limit = 20,
   db = null,
 }) {
@@ -847,6 +872,10 @@ export async function listMissions({
 
   if (status) {
     query.status = status;
+  }
+
+  if (minRank && String(minRank).toLowerCase() !== "none") {
+    query.min_rank = normalizeRank(minRank);
   }
 
   return await collection(db)

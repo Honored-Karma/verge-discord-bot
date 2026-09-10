@@ -3,6 +3,7 @@ import { isAdmin, hasCommandPermission } from "../utils/adminCheck.js";
 import { resolveMember } from "../utils/memberHelper.js";
 import { getActiveSlot, getAllPlayerSP, getPlayer } from "../utils/dataManager.js";
 import { makePlayerKey } from "../utils/playerKey.js";
+import { formatRankRequirement } from "../utils/rankSystem.js";
 import {
   cancelMission,
   deliverMissionRewards,
@@ -177,6 +178,10 @@ export const missionInteractionHandler = {
           msg = "❌ Пати уже заполнена! Все доступные места заняты.";
         } else if (result.reason === "organization_mismatch") {
           msg = `❌ Эта миссия доступна только для участников организации **${result.requiredOrg}**.\nВаша организация: **${result.playerOrg}**.`;
+        } else if (result.reason === "rank_required") {
+          msg = `❌ Для участия в этой миссии требуется ранг **${formatRankRequirement(result.requiredRank)}**.\nУ вашего персонажа ещё нет установленного ранга.`;
+        } else if (result.reason === "rank_too_low") {
+          msg = `❌ Ваш ранг (**${result.playerRank}**) недостаточен для этой миссии.\nТребуется ранг: **${formatRankRequirement(result.requiredRank)}**.`;
         } else if (result.reason === "not_recruiting") {
           msg = "Набор в эту миссию уже закрыт.";
         } else if (result.reason === "not_invited") {

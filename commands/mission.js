@@ -56,6 +56,13 @@ export const data = new SlashCommandBuilder()
     sub
       .setName("create")
       .setDescription("[ГМ/АДМИН] Открыть интерактивный мастер создания миссии")
+      .addChannelOption((opt) =>
+        opt
+          .setName("channel")
+          .setDescription("Канал для публикации (по умолчанию текущий или канал организации)")
+          .setRequired(false)
+          .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+      )
   )
   // ── /mission list ────────────────────────────────────────────────────────────
   .addSubcommand((sub) =>
@@ -80,6 +87,12 @@ export const data = new SlashCommandBuilder()
             { name: "🏆 Завершена", value: MISSION_STATUS.completed },
             { name: "❌ Отменена", value: MISSION_STATUS.cancelled }
           )
+      )
+      .addStringOption((opt) =>
+        opt
+          .setName("min_rank")
+          .setDescription("Фильтр по минимальному требуемому рангу")
+          .setRequired(false)
       )
   )
   // ── /mission info ────────────────────────────────────────────────────────────
@@ -447,6 +460,11 @@ async function handleMissionCreate(interaction, member) {
     }
   }
 
+  const explicitChannel = interaction.options.getChannel("channel");
+  if (explicitChannel?.id) {
+    defaultChannelId = explicitChannel.id;
+  }
+
   const draftState = createDraftState({
     channel_id: defaultChannelId,
     organization_key: defaultOrgKey,
@@ -482,11 +500,13 @@ async function handleMissionCreate(interaction, member) {
 async function handleMissionList(interaction) {
   const rawOrg = interaction.options.getString("organization");
   const status = interaction.options.getString("status");
+  const rawRank = interaction.options.getString("min_rank");
 
   const missions = await listMissions({
     guildId: interaction.guildId,
     organizationKey: rawOrg ? orgRoleKey(rawOrg) : null,
     status,
+    minRank: rawRank,
     limit: 20,
   });
 
@@ -502,8 +522,9 @@ async function handleMissionList(interaction) {
     const statusIcon = STATUS_ICONS[m.status] || "ℹ️";
     const org = m.organization_name || "Открытая";
     const party = `${m.participants?.length || 0}/${m.max_players}`;
+    const rankReq = m.min_rank ? ` | Треб. ранг: ${m.min_rank}` : "";
     return `**${idx + 1}.** ${icon} **${m.title}** [\`${m.public_id}\`]\n` +
-      `• Организация: ${org} | Статус: ${statusIcon} ${STATUS_LABELS[m.status] || m.status} | Пати: ${party}\n` +
+      `• Организация: ${org} | Статус: ${statusIcon} ${STATUS_LABELS[m.status] || m.status}${rankReq} | Пати: ${party}\n` +
       `• Канал: <#${m.channel_id}>`;
   });
 

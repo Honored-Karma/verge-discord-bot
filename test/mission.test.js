@@ -503,6 +503,129 @@ test("организационный доступ пропускает толь�
   assert.equal(openGuardianJoin.success, true);
 });
 
+test("проверка минимального ранга для входа в миссию (корейские и японские ранги)", async () => {
+  const db = createMockDatabase();
+
+  // 1. Миссия с требованием корейского ранга IV
+  const koreanMission = await createMission({
+    guildId: "guild_123",
+    channelId: "chan_1",
+    title: "Операция в Сеуле",
+    access: MISSION_ACCESS.open,
+    minRank: "IV",
+    maxPlayers: 5,
+    createdBy: { user_id: "gm_1", username: "GM" },
+    db,
+  });
+  assert.equal(koreanMission.min_rank, "IV");
+
+  // Персонаж без ранга не может зайти
+  const noRankJoin = await joinMission({
+    publicId: koreanMission.public_id,
+    playerId: "player_no_rank",
+    userId: "user_no_rank",
+    characterName: "Новичок Без Ранга",
+    rank: null,
+    db,
+  });
+  assert.equal(noRankJoin.success, false);
+  assert.equal(noRankJoin.reason, "rank_required");
+
+  // Персонаж с корейским рангом VI (новобранец < IV) не может зайти
+  const lowRankJoin = await joinMission({
+    publicId: koreanMission.public_id,
+    playerId: "player_vi",
+    userId: "user_vi",
+    characterName: "Сержант VI",
+    rank: "VI",
+    db,
+  });
+  assert.equal(lowRankJoin.success, false);
+  assert.equal(lowRankJoin.reason, "rank_too_low");
+
+  // Персонаж с корейским рангом IV (точное совпадение) может зайти
+  const exactRankJoin = await joinMission({
+    publicId: koreanMission.public_id,
+    playerId: "player_iv",
+    userId: "user_iv",
+    characterName: "Командир IV",
+    rank: "IV",
+    db,
+  });
+  assert.equal(exactRankJoin.success, true);
+
+  // Персонаж с корейским рангом II (выше IV) может зайти
+  const highRankJoin = await joinMission({
+    publicId: koreanMission.public_id,
+    playerId: "player_ii",
+    userId: "user_ii",
+    characterName: "Спецназ II",
+    rank: "II",
+    db,
+  });
+  assert.equal(highRankJoin.success, true);
+
+  // 2. Миссия с требованием японского ранга B
+  const japaneseMission = await createMission({
+    guildId: "guild_123",
+    channelId: "chan_1",
+    title: "Вылазка на Цусиму",
+    access: MISSION_ACCESS.open,
+    minRank: "B",
+    maxPlayers: 5,
+    createdBy: { user_id: "gm_1", username: "GM" },
+    db,
+  });
+  assert.equal(japaneseMission.min_rank, "B");
+
+  // Персонаж с японским рангом D (< B) не может зайти
+  const lowJpJoin = await joinMission({
+    publicId: japaneseMission.public_id,
+    playerId: "player_jp_d",
+    userId: "user_jp_d",
+    characterName: "Герой D",
+    rank: "D",
+    db,
+  });
+  assert.equal(lowJpJoin.success, false);
+  assert.equal(lowJpJoin.reason, "rank_too_low");
+
+  // Персонаж с японским рангом S (> B) может зайти
+  const highJpJoin = await joinMission({
+    publicId: japaneseMission.public_id,
+    playerId: "player_jp_s",
+    userId: "user_jp_s",
+    characterName: "Хана Ками S",
+    rank: "S",
+    db,
+  });
+  assert.equal(highJpJoin.success, true);
+
+  // 3. Кросс-ранговая проверка (эквивалентные ранговые тиры)
+  // Японская миссия с порогом B (тир 5) - корейский ранг I (тир 7) может зайти
+  const crossJoinPass = await joinMission({
+    publicId: japaneseMission.public_id,
+    playerId: "player_kr_i",
+    userId: "user_kr_i",
+    characterName: "Ми Бом Сок I",
+    rank: "I",
+    db,
+  });
+  assert.equal(crossJoinPass.success, true);
+
+  // Корейская миссия с порогом IV (тир 3) - японский ранг F (тир 1 < 3) не может зайти
+  const crossJoinFail = await joinMission({
+    publicId: koreanMission.public_id,
+    playerId: "player_jp_f",
+    userId: "user_jp_f",
+    characterName: "Новичок F",
+    rank: "F",
+    db,
+  });
+  assert.equal(crossJoinFail.success, false);
+  assert.equal(crossJoinFail.reason, "rank_too_low");
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 4. ВЫХОД ДО СТАРТА И ЗАПРЕТ ВЫХОДА ПОСЛЕ СТАРТА
 // ─────────────────────────────────────────────────────────────────────────────

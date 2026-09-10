@@ -16,6 +16,7 @@ import {
   TYPE_LABELS,
 } from "./missionStore.js";
 import { safeAvatarUrl } from "./avatarUrl.js";
+import { formatRankRequirement } from "./rankSystem.js";
 
 const STATUS_COLORS = {
   [MISSION_STATUS.recruiting]: 0x22c55e, // Green
@@ -94,6 +95,7 @@ export function createMissionCardEmbed(mission, client = null) {
         `**Организация:** ${orgDisplay}`,
         `**Тип:** ${typeLabel}`,
         `**Статус:** ${statusIcon} ${statusLabel}`,
+        mission.min_rank ? `**Требуемый ранг:** ${formatRankRequirement(mission.min_rank)}` : null,
         "",
         `### ${objectiveIcon} Краткая цель:`,
         mission.description,
@@ -105,7 +107,7 @@ export function createMissionCardEmbed(mission, client = null) {
         rewardLines.join("\n"),
         "",
         `**ГМ:** ${mission.created_by?.username || "Не указан"}`,
-      ].join("\n")
+      ].filter((line) => line !== null).join("\n")
     );
 
   if (mission.status === MISSION_STATUS.completed) {

@@ -17,6 +17,7 @@ import {
   MB_INPUT_IMAGE,
   MB_INPUT_ITEM,
   MB_INPUT_PLAYERS,
+  MB_INPUT_CHANNEL,
   MB_INPUT_QTY,
   MB_INPUT_REP,
   MB_INPUT_SP,
@@ -25,6 +26,7 @@ import {
   MB_SELECT_ACCESS,
   MB_SELECT_CHANNEL,
   MB_SELECT_ORG,
+  MB_SELECT_RANK,
   MB_SELECT_TYPE,
   MISSION_BUILDER_NAMESPACE,
   missionBuilderInteractionHandler,
@@ -210,10 +212,17 @@ test("createMissionBuilderEmbed and createMissionBuilderComponents generate vali
   // Ровно 5 Action Rows
   assert.equal(components.length, 5);
 
-  const [typeRow, accessRow, orgRow, channelRow, btnRow] = components;
+  const [typeRow, rankRow, accessRow, orgRow, btnRow] = components;
   const typeMenu = typeRow.components[0].toJSON();
   assert.equal(typeMenu.custom_id, MB_SELECT_TYPE);
   assert.ok(typeMenu.options.length >= 6);
+
+  const rankMenu = rankRow.components[0].toJSON();
+  assert.equal(rankMenu.custom_id, MB_SELECT_RANK);
+  assert.equal(rankMenu.options.length, 14);
+  assert.equal(rankMenu.options[0].value, "none");
+  assert.equal(rankMenu.options[1].value, "VI"); // Korean ranks first
+  assert.equal(rankMenu.options[7].value, "F");  // Then Japanese ranks
 
   const accessMenu = accessRow.components[0].toJSON();
   assert.equal(accessMenu.custom_id, MB_SELECT_ACCESS);
@@ -222,9 +231,6 @@ test("createMissionBuilderEmbed and createMissionBuilderComponents generate vali
   const orgMenu = orgRow.components[0].toJSON();
   assert.equal(orgMenu.custom_id, MB_SELECT_ORG);
   assert.ok(orgMenu.options.some((opt) => opt.value === "tenryu"));
-
-  const channelMenu = channelRow.components[0].toJSON();
-  assert.equal(channelMenu.custom_id, MB_SELECT_CHANNEL);
 
   const buttons = btnRow.components.map((b) => b.toJSON().custom_id);
   assert.deepEqual(buttons, [
@@ -617,3 +623,101 @@ test("publishMission validates required fields, permissions and publishes missio
   assert.ok(finalEditReplyPayload.embeds[0].data.title.includes("Миссия успешно создана"));
   assert.ok(finalEditReplyPayload.components[0].components[0].data.url.includes("msg_mission_published_789"));
 });
+
+test("mission builder allows selecting Korean and Japanese minimum ranks and persists to mission", async () => {
+  const db = createMockDatabase();
+  setDB(db);
+
+  const draftState = createDraftState({
+    title: "Миссия с ранговым ограничением",
+    description: "Требуются опытные бойцы",
+    min_rank: "none",
+  });
+  assert.equal(draftState.min_rank, null);
+
+  const sessionDoc = {
+    message_id: "msg_rank_session",
+    owner_id: "user_gm_rank",
+    guild_id: "guild_rank",
+    channel_id: "chan_rank",
+    status: "active",
+    expires_at: new Date(Date.now() + 600000),
+    state: draftState,
+  };
+  await db.collection("interaction_sessions").insertOne(sessionDoc);
+
+  // 1. Выбираем корейский ранг IV
+  const selectKoreanRankInteraction = {
+    customId: MB_SELECT_RANK,
+    isStringSelectMenu: () => true,
+    values: ["IV"],
+    guildId: "guild_rank",
+    channelId: "chan_rank",
+    user: { id: "user_gm_rank" },
+    client: {},
+    update: async () => {},
+  };
+
+  await missionBuilderInteractionHandler.handleComponent({
+    interaction: selectKoreanRankInteraction,
+    session: sessionDoc,
+  });
+
+  const updatedSession1 = await db.collection("interaction_sessions").findOne({ message_id: "msg_rank_session" });
+  assert.equal(updatedSession1.state.min_rank, "IV");
+
+  // 2. Меняем на японский ранг B
+  const selectJapaneseRankInteraction = {
+    customId: MB_SELECT_RANK,
+    isStringSelectMenu: () => true,
+    values: ["B"],
+    guildId: "guild_rank",
+    channelId: "chan_rank",
+    user: { id: "user_gm_rank" },
+    client: {},
+    update: async () => {},
+  };
+
+  await missionBuilderInteractionHandler.handleComponent({
+    interaction: selectJapaneseRankInteraction,
+    session: updatedSession1,
+  });
+
+  const updatedSession2 = await db.collection("interaction_sessions").findOne({ message_id: "msg_rank_session" });
+  assert.equal(updatedSession2.state.min_rank, "B");
+
+  // 3. Публикуем миссию и проверяем, что в созданной миссии сохранён min_rank: "B"
+  const mockChannel = {
+    id: "chan_rank",
+    guildId: "guild_rank",
+    permissionsFor: () => ({ has: () => true }),
+    send: async () => ({
+      id: "msg_card_rank",
+      url: "https://discord.com/channels/guild_rank/chan_rank/msg_card_rank",
+    }),
+  };
+
+  const publishInteraction = {
+    customId: MB_BTN_PUBLISH,
+    guildId: "guild_rank",
+    channelId: "chan_rank",
+    user: { id: "user_gm_rank", username: "GM_Rank" },
+    guild: {
+      id: "guild_rank",
+      members: { me: { id: "bot_rank" } },
+      channels: { fetch: async () => mockChannel },
+    },
+    deferUpdate: async () => {},
+    editReply: async () => {},
+  };
+
+  await missionBuilderInteractionHandler.handleComponent({
+    interaction: publishInteraction,
+    session: updatedSession2,
+  });
+
+  const createdMission = db._store.missions.find((m) => m.title === "Миссия с ранговым ограничением");
+  assert.ok(createdMission);
+  assert.equal(createdMission.min_rank, "B");
+});
+

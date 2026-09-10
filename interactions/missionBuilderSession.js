@@ -45,12 +45,18 @@ import {
   releaseInteractionSession,
 } from "../utils/interactionSessions.js";
 import { buildModalCustomId } from "../utils/interactionRouter.js";
+import {
+  formatRankRequirement,
+  normalizeRank,
+  RANK_REQUIREMENT_OPTIONS,
+} from "../utils/rankSystem.js";
 
 export const MISSION_BUILDER_NAMESPACE = "mission_builder";
 export const MISSION_BUILDER_TTL_MS = 2 * 60 * 60 * 1000; // 2 часа
 
 // Custom IDs компонентов
 export const MB_SELECT_TYPE = "mb_select_type";
+export const MB_SELECT_RANK = "mb_select_rank";
 export const MB_SELECT_ACCESS = "mb_select_access";
 export const MB_SELECT_ORG = "mb_select_org";
 export const MB_SELECT_CHANNEL = "mb_select_channel";
@@ -64,6 +70,7 @@ export const MB_BTN_CANCEL = "mb_btn_cancel";
 // Custom IDs полей ввода модалок
 export const MB_INPUT_TITLE = "mb_input_title";
 export const MB_INPUT_PLAYERS = "mb_input_players";
+export const MB_INPUT_CHANNEL = "mb_input_channel";
 export const MB_INPUT_DESC = "mb_input_desc";
 
 export const MB_INPUT_AP = "mb_input_ap";
@@ -93,6 +100,7 @@ export function createDraftState({
   description = "",
   type = MISSION_TYPES.well,
   access = MISSION_ACCESS.open,
+  min_rank = null,
   max_players = 5,
   organization_key = null,
   organization_name = null,
@@ -106,6 +114,7 @@ export function createDraftState({
     description: String(description || "").slice(0, 1000),
     type: Object.values(MISSION_TYPES).includes(type) ? type : MISSION_TYPES.well,
     access: Object.values(MISSION_ACCESS).includes(access) ? access : MISSION_ACCESS.open,
+    min_rank: min_rank && String(min_rank).toLowerCase() !== "none" ? normalizeRank(min_rank) : null,
     max_players: Math.max(1, Math.min(50, Number(max_players) || 5)),
     organization_key: organization_key ? String(organization_key) : null,
     organization_name: organization_name ? String(organization_name) : null,
@@ -157,6 +166,8 @@ export function createMissionBuilderEmbed(state, client = null) {
   if (state.thumbnail_url) mediaLines.push(`• Значок: [Открыть лого](${state.thumbnail_url})`);
   const mediaText = mediaLines.length > 0 ? mediaLines.join("\n") : "*Не заданы (кнопка 【🖼️ Обложка】)*";
 
+  const rankRequirementText = formatRankRequirement(state.min_rank);
+
   const embed = new EmbedBuilder()
     .setColor(0x8b5cf6)
     .setTitle("🛠️ Мастер создания миссии · Черновик")
@@ -164,6 +175,7 @@ export function createMissionBuilderEmbed(state, client = null) {
       `Заполните параметры миссии с помощью выпадающих списков и модальных окон ввода, затем нажмите **【🚀 Опубликовать】**.\n\n` +
       `**📌 Название:** ${state.title ? `**${state.title}**` : "*(не указано — заполните через 【📝 Основное】)*"}\n` +
       `**Тип миссии:** ${typeIcon} ${typeLabel}\n` +
+      `**🎖️ Требуемый ранг:** **${rankRequirementText}**\n` +
       `**🌐 Доступ:** ${formatAccess(state.access)}\n` +
       `**🏢 Организация:** ${orgText}\n` +
       `**📢 Канал публикации:** ${channelText}\n` +
@@ -211,7 +223,23 @@ export function createMissionBuilderComponents(state, orgs = [], messageId = nul
       }))
     );
 
-  // Row 2: Выбор доступа
+  // Row 2: Выбор минимального ранга для входа (сначала корейские, затем японские)
+  const currentRank = state.min_rank ? normalizeRank(state.min_rank) : "none";
+  const rankMenu = new StringSelectMenuBuilder()
+    .setCustomId(MB_SELECT_RANK)
+    .setPlaceholder("Минимальный ранг для входа")
+    .setDisabled(disabled)
+    .addOptions(
+      RANK_REQUIREMENT_OPTIONS.map((opt) => ({
+        label: opt.label,
+        value: opt.value,
+        emoji: opt.emoji,
+        description: opt.description,
+        default: opt.value === currentRank,
+      }))
+    );
+
+  // Row 3: Выбор доступа
   const accessMenu = new StringSelectMenuBuilder()
     .setCustomId(MB_SELECT_ACCESS)
     .setPlaceholder("Доступ к миссии")
@@ -240,7 +268,7 @@ export function createMissionBuilderComponents(state, orgs = [], messageId = nul
       },
     ]);
 
-  // Row 3: Выбор организации
+  // Row 4: Выбор организации
   const orgOptions = [
     {
       label: "Без организации",
@@ -265,17 +293,6 @@ export function createMissionBuilderComponents(state, orgs = [], messageId = nul
     .setPlaceholder("Привязка к организации")
     .setDisabled(disabled)
     .addOptions(orgOptions);
-
-  // Row 4: Выбор канала публикации
-  const channelMenu = new ChannelSelectMenuBuilder()
-    .setCustomId(MB_SELECT_CHANNEL)
-    .setPlaceholder("Канал для публикации (по умолчанию текущий)")
-    .setChannelTypes([ChannelType.GuildText, ChannelType.GuildAnnouncement])
-    .setDisabled(disabled);
-
-  if (state.channel_id && /^\d{17,20}$/.test(state.channel_id)) {
-    channelMenu.setDefaultChannels(state.channel_id);
-  }
 
   // Row 5: Кнопки действий
   const buttonsRow = new ActionRowBuilder().addComponents(
@@ -313,9 +330,9 @@ export function createMissionBuilderComponents(state, orgs = [], messageId = nul
 
   return [
     new ActionRowBuilder().addComponents(typeMenu),
+    new ActionRowBuilder().addComponents(rankMenu),
     new ActionRowBuilder().addComponents(accessMenu),
     new ActionRowBuilder().addComponents(orgMenu),
-    new ActionRowBuilder().addComponents(channelMenu),
     buttonsRow,
   ];
 }
@@ -351,6 +368,17 @@ export function createMainInfoModal(state, messageId) {
     .setPlaceholder("5")
     .setValue(String(state.max_players || 5));
 
+  const channelInput = new TextInputBuilder()
+    .setCustomId(MB_INPUT_CHANNEL)
+    .setLabel("Канал публикации (#канал, ID или пусто)")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setPlaceholder("Оставьте пустым для публикации в текущем канале");
+
+  if (state.channel_id && /^\d{17,20}$/.test(state.channel_id)) {
+    channelInput.setValue(String(state.channel_id));
+  }
+
   const descInput = new TextInputBuilder()
     .setCustomId(MB_INPUT_DESC)
     .setLabel("Описание / Цель миссии")
@@ -367,6 +395,7 @@ export function createMainInfoModal(state, messageId) {
   modal.addComponents(
     new ActionRowBuilder().addComponents(titleInput),
     new ActionRowBuilder().addComponents(playersInput),
+    new ActionRowBuilder().addComponents(channelInput),
     new ActionRowBuilder().addComponents(descInput)
   );
 
@@ -576,6 +605,7 @@ async function publishMission({ interaction, session }) {
     type: state.type || MISSION_TYPES.well,
     description: state.description.trim(),
     access: state.access || MISSION_ACCESS.open,
+    minRank: state.min_rank,
     maxPlayers: state.max_players || 5,
     imageUrl: state.image_url?.trim() || null,
     thumbnailUrl: state.thumbnail_url?.trim() || null,
@@ -718,12 +748,18 @@ async function handleComponent({ interaction, session }) {
     state.type = interaction.values[0];
   }
 
-  // 7. Выбор доступа
+  // 7. Выбор минимального ранга для входа
+  if (customId === MB_SELECT_RANK && interaction.isStringSelectMenu()) {
+    const selectedRank = interaction.values[0];
+    state.min_rank = !selectedRank || selectedRank === "none" ? null : normalizeRank(selectedRank);
+  }
+
+  // 8. Выбор доступа
   if (customId === MB_SELECT_ACCESS && interaction.isStringSelectMenu()) {
     state.access = interaction.values[0];
   }
 
-  // 8. Выбор организации
+  // 9. Выбор организации
   if (customId === MB_SELECT_ORG && interaction.isStringSelectMenu()) {
     const selectedOrg = interaction.values[0];
     if (selectedOrg === "none") {
@@ -746,7 +782,7 @@ async function handleComponent({ interaction, session }) {
     }
   }
 
-  // 9. Выбор канала
+  // 10. Выбор канала
   if (customId === MB_SELECT_CHANNEL && interaction.isChannelSelectMenu()) {
     state.channel_id = interaction.values?.[0] || null;
   }
@@ -774,11 +810,19 @@ async function handleModal({ interaction, session, action }) {
   if (action === "main") {
     const title = interaction.fields.getTextInputValue(MB_INPUT_TITLE)?.trim() || "";
     const rawPlayers = interaction.fields.getTextInputValue(MB_INPUT_PLAYERS)?.trim() || "5";
+    const rawChannel = interaction.fields.getTextInputValue(MB_INPUT_CHANNEL)?.trim() || "";
     const desc = interaction.fields.getTextInputValue(MB_INPUT_DESC)?.trim() || "";
 
     let maxPlayers = parseInt(rawPlayers, 10);
     if (isNaN(maxPlayers) || maxPlayers < 1) maxPlayers = 1;
     if (maxPlayers > 50) maxPlayers = 50;
+
+    if (rawChannel) {
+      const channelMatch = rawChannel.match(/^(?:<#)?(\d{17,20})>?$/);
+      if (channelMatch) {
+        state.channel_id = channelMatch[1];
+      }
+    }
 
     state.title = title.slice(0, 100);
     state.max_players = maxPlayers;
