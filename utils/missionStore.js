@@ -195,17 +195,39 @@ export async function createMission({
     attempts++;
   }
 
+  let normalizedItems = [];
+  const defaultDist = reward.item_distribution === "random" ? "random" : "all";
+
+  if (Array.isArray(reward.items) && reward.items.length > 0) {
+    normalizedItems = reward.items
+      .map((it) => ({
+        item_id: String(it.item_id || it.item_name || "").trim(),
+        item_name: String(it.item_name || "").trim(),
+        quantity: Math.max(1, Number(it.quantity || it.qty || 1)),
+        distribution: it.distribution === "random" ? "random" : (it.distribution === "all" ? "all" : defaultDist),
+      }))
+      .filter((it) => it.item_name);
+  } else if (reward.item?.item_name) {
+    const itName = String(reward.item.item_name).trim();
+    const itQty = Math.max(1, Number(reward.item.quantity || 1));
+    const itDist = reward.item.distribution === "random" ? "random" : defaultDist;
+    normalizedItems = [
+      {
+        item_id: String(reward.item.item_id || itName).trim(),
+        item_name: itName,
+        quantity: itQty,
+        distribution: itDist,
+      },
+    ];
+  }
+
   const safeReward = {
     ap: Math.max(0, Number(reward.ap || 0)),
     sp: Math.max(0, Number(reward.sp || 0)),
     reputation: Math.max(0, Number(reward.reputation || 0)),
-    item: reward.item?.item_name
-      ? {
-          item_id: reward.item.item_id || reward.item.item_name,
-          item_name: String(reward.item.item_name).trim(),
-          quantity: Math.max(1, Number(reward.item.quantity || 1)),
-        }
-      : null,
+    items: normalizedItems,
+    item_distribution: defaultDist,
+    item: normalizedItems[0] || null,
   };
 
   const missionDoc = {
@@ -624,6 +646,30 @@ export async function deliverMissionRewards({
   let allDelivered = true;
   let hasFailures = false;
 
+  // Resolve items array
+  const items = Array.isArray(mission.reward?.items) && mission.reward.items.length > 0
+    ? mission.reward.items
+    : (mission.reward?.item?.item_name ? [mission.reward.item] : []);
+
+  // Pre-resolve or preserve random winners for items with distribution: 'random'
+  const participants = mission.participants || [];
+  if (participants.length > 0) {
+    items.forEach((item, itemIdx) => {
+      if (item.distribution === "random") {
+        const winnerKey = `mission:${mission.public_id}:item:${itemIdx}:winner`;
+        if (!deliveries[winnerKey]?.winner_player_id) {
+          const chosen = participants[Math.floor(Math.random() * participants.length)];
+          deliveries[winnerKey] = {
+            winner_player_id: chosen.player_id,
+            winner_character_name: chosen.character_name,
+            winner_user_id: chosen.user_id,
+            chosen_at: new Date(),
+          };
+        }
+      }
+    });
+  }
+
   for (const participant of mission.participants) {
     const playerId = participant.player_id;
     const participantReport = {
@@ -764,45 +810,123 @@ export async function deliverMissionRewards({
       }
     }
 
-    // 4. Item Delivery
-    if (mission.reward.item?.item_name) {
-      const itemKey = `mission:${mission.public_id}:${playerId}:item`;
-      if (deliveries[itemKey]?.status === "delivered") {
-        participantReport.rewards.item = {
+    // 4. Items Delivery
+    participantReport.rewards.items = [];
+
+    for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
+      const item = items[itemIdx];
+      const isRandom = item.distribution === "random";
+      const winnerKey = `mission:${mission.public_id}:item:${itemIdx}:winner`;
+      const winnerPlayerId = deliveries[winnerKey]?.winner_player_id;
+
+      // If random and this participant is not the winner, skip awarding
+      if (isRandom && winnerPlayerId !== playerId) {
+        continue;
+      }
+
+      // Keys for delivery idempotency:
+      // Primary: mission:<pubId>:<playerId>:item:<itemIdx>
+      // Legacy compatibility for itemIdx === 0: mission:<pubId>:<playerId>:item
+      const itemKey = `mission:${mission.public_id}:${playerId}:item:${itemIdx}`;
+      const legacyItemKey = itemIdx === 0 ? `mission:${mission.public_id}:${playerId}:item` : null;
+
+      const isAlreadyDelivered =
+        deliveries[itemKey]?.status === "delivered" ||
+        (legacyItemKey && deliveries[legacyItemKey]?.status === "delivered");
+
+      if (isAlreadyDelivered) {
+        const repItem = {
           status: "already_delivered",
-          itemName: mission.reward.item.item_name,
-          qty: mission.reward.item.quantity,
+          itemName: item.item_name,
+          qty: item.quantity,
+          distribution: item.distribution || "all",
+          isWinner: isRandom,
         };
+        participantReport.rewards.items.push(repItem);
+        if (itemIdx === 0) {
+          participantReport.rewards.item = repItem;
+        }
       } else {
         try {
           const res = await giveItem(
             playerId,
-            mission.reward.item.item_name,
-            mission.reward.item.quantity,
+            item.item_name,
+            item.quantity,
             actorId
           );
           if (res && res.success) {
-            deliveries[itemKey] = {
+            const deliveredData = {
               status: "delivered",
-              itemName: mission.reward.item.item_name,
-              quantity: mission.reward.item.quantity,
+              itemName: item.item_name,
+              quantity: item.quantity,
+              distribution: item.distribution || "all",
               delivered_at: new Date(),
             };
-            participantReport.rewards.item = {
+            deliveries[itemKey] = deliveredData;
+            if (legacyItemKey) {
+              deliveries[legacyItemKey] = deliveredData;
+            }
+
+            const repItem = {
               status: "delivered",
-              itemName: mission.reward.item.item_name,
-              qty: mission.reward.item.quantity,
+              itemName: item.item_name,
+              qty: item.quantity,
+              distribution: item.distribution || "all",
+              isWinner: isRandom,
             };
+            participantReport.rewards.items.push(repItem);
+            if (itemIdx === 0) {
+              participantReport.rewards.item = repItem;
+            }
           } else {
             const errorMsg = res?.reason || "Ошибка выдачи предмета в инвентарь";
-            deliveries[itemKey] = { status: "failed", error: errorMsg };
-            participantReport.rewards.item = { status: "failed", error: errorMsg };
+            const failedData = {
+              status: "failed",
+              error: errorMsg,
+              distribution: item.distribution || "all",
+            };
+            deliveries[itemKey] = failedData;
+            if (legacyItemKey) {
+              deliveries[legacyItemKey] = failedData;
+            }
+            const repItem = {
+              status: "failed",
+              itemName: item.item_name,
+              qty: item.quantity,
+              error: errorMsg,
+              distribution: item.distribution || "all",
+              isWinner: isRandom,
+            };
+            participantReport.rewards.items.push(repItem);
+            if (itemIdx === 0) {
+              participantReport.rewards.item = repItem;
+            }
             allDelivered = false;
             hasFailures = true;
           }
         } catch (err) {
-          deliveries[itemKey] = { status: "failed", error: err.message };
-          participantReport.rewards.item = { status: "failed", error: err.message };
+          const failedData = {
+            status: "failed",
+            error: err.message,
+            distribution: item.distribution || "all",
+          };
+          deliveries[itemKey] = failedData;
+          if (legacyItemKey) {
+            deliveries[legacyItemKey] = failedData;
+          }
+
+          const repItem = {
+            status: "failed",
+            itemName: item.item_name,
+            qty: item.quantity,
+            error: err.message,
+            distribution: item.distribution || "all",
+            isWinner: isRandom,
+          };
+          participantReport.rewards.items.push(repItem);
+          if (itemIdx === 0) {
+            participantReport.rewards.item = repItem;
+          }
           allDelivered = false;
           hasFailures = true;
         }

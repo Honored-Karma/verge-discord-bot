@@ -70,19 +70,25 @@ export function createMissionCardEmbed(mission, client = null) {
   // Format rewards
   const rewardLines = [];
   if (mission.reward?.ap > 0) {
-    rewardLines.push(`• +${mission.reward.ap} AP`);
+    rewardLines.push(`• +${mission.reward.ap} AP каждому`);
   }
   if (mission.reward?.sp > 0) {
-    rewardLines.push(`• +${mission.reward.sp} SP`);
+    rewardLines.push(`• +${mission.reward.sp} SP каждому`);
   }
   if (mission.reward?.reputation > 0) {
-    rewardLines.push(`• +${mission.reward.reputation} Rtg`);
+    rewardLines.push(`• +${mission.reward.reputation} Rtg каждому`);
   }
-  if (mission.reward?.item?.item_name) {
-    rewardLines.push(
-      `• Предмет: **${mission.reward.item.item_name}** ×${mission.reward.item.quantity || 1}`
-    );
+
+  const items = Array.isArray(mission.reward?.items) && mission.reward.items.length > 0
+    ? mission.reward.items
+    : (mission.reward?.item?.item_name ? [mission.reward.item] : []);
+
+  for (const item of items) {
+    const isRandom = item.distribution === "random";
+    const distBadge = isRandom ? " 🎲 *(случайному участнику)*" : " *(каждому)*";
+    rewardLines.push(`• Предмет: **${item.item_name}** ×${item.quantity || 1}${distBadge}`);
   }
+
   if (rewardLines.length === 0) {
     rewardLines.push("• Без автоматических наград");
   }
@@ -111,9 +117,30 @@ export function createMissionCardEmbed(mission, client = null) {
     );
 
   if (mission.status === MISSION_STATUS.completed) {
+    const completedLines = [
+      "Награды автоматически выданы участникам.",
+      `Завершил: **${mission.completed_by?.username || "ГМ"}**`,
+    ];
+
+    const deliveries = mission.reward_delivery || {};
+    const randomWinnerLines = [];
+    items.forEach((it, idx) => {
+      if (it.distribution === "random") {
+        const winnerKey = `mission:${mission.public_id}:item:${idx}:winner`;
+        const winner = deliveries[winnerKey];
+        if (winner?.winner_character_name) {
+          randomWinnerLines.push(`• 🎲 **${it.item_name}** ×${it.quantity || 1} достался: **${winner.winner_character_name}**`);
+        }
+      }
+    });
+
+    if (randomWinnerLines.length > 0) {
+      completedLines.push("", "**Победители случайных наград:**", ...randomWinnerLines);
+    }
+
     embed.addFields({
       name: "🏆 Завершение",
-      value: `Награды автоматически выданы всем участникам.\nЗавершил: **${mission.completed_by?.username || "ГМ"}**`,
+      value: completedLines.join("\n"),
       inline: false,
     });
   } else if (mission.status === MISSION_STATUS.cancelled) {
@@ -328,10 +355,15 @@ export function createCompletionConfirmationEmbed(mission) {
   if (mission.reward.ap > 0) rewards.push(`• +${mission.reward.ap} AP каждому`);
   if (mission.reward.sp > 0) rewards.push(`• +${mission.reward.sp} SP каждому (в основной стиль)`);
   if (mission.reward.reputation > 0) rewards.push(`• +${mission.reward.reputation} Rtg каждому`);
-  if (mission.reward.item?.item_name) {
-    rewards.push(
-      `• Предмет: **${mission.reward.item.item_name}** ×${mission.reward.item.quantity || 1} каждому`
-    );
+
+  const items = Array.isArray(mission.reward?.items) && mission.reward.items.length > 0
+    ? mission.reward.items
+    : (mission.reward?.item?.item_name ? [mission.reward.item] : []);
+
+  for (const it of items) {
+    const isRandom = it.distribution === "random";
+    const distBadge = isRandom ? " 🎲 *(1 случайному участнику)*" : " *(каждому)*";
+    rewards.push(`• Предмет: **${it.item_name}** ×${it.quantity || 1}${distBadge}`);
   }
 
   const memberNames = participants.map((p) => `• ${p.character_name}`).join("\n");
@@ -347,10 +379,10 @@ export function createCompletionConfirmationEmbed(mission) {
         "### Получатели наград:",
         memberNames || "*Нет участников в пати*",
         "",
-        "### Награды каждому участнику:",
+        "### Награды за миссию:",
         rewards.join("\n") || "• Без наград",
         "",
-        "⚠️ **Внимание:** После подтверждения бот автоматически начислит награды всем участникам. Действие необратимо.",
+        "⚠️ **Внимание:** После подтверждения бот автоматически начислит награды участникам. Случайные предметы будут разыграны среди участников пати. Действие необратимо.",
       ].join("\n")
     )
     .setFooter({ text: "Подтверждение ГМа" });
@@ -397,7 +429,14 @@ export function createRewardReportEmbed(mission, result) {
         `Rtg: ${r.reputation.status === "failed" ? "❌ " + r.reputation.error : "✅ +" + r.reputation.amount}`
       );
     }
-    if (r.item) {
+    if (Array.isArray(r.items) && r.items.length > 0) {
+      for (const it of r.items) {
+        const icon = it.status === "failed" ? "❌ " : "✅ ";
+        const randomIcon = it.isWinner ? "🎲 " : "";
+        const errorPart = it.status === "failed" ? ` (${it.error})` : ` ×${it.qty}`;
+        items.push(`Предмет: ${icon}${randomIcon}${it.itemName}${errorPart}`);
+      }
+    } else if (r.item) {
       items.push(
         `Предмет: ${r.item.status === "failed" ? "❌ " + r.item.error : "✅ " + r.item.itemName + " ×" + r.item.qty}`
       );

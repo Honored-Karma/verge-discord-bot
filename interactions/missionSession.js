@@ -554,6 +554,41 @@ export const missionInteractionHandler = {
           await closeInteractionSession(session.message_id);
         }
         await updateMissionCardMessage(interaction, fresh);
+
+        // Notify mission thread if available
+        try {
+          const thread = await resolveOrCreateMissionThread(interaction, fresh, { createIfMissing: false });
+          if (thread && typeof thread.send === "function") {
+            const deliveries = fresh.reward_delivery || {};
+            const items = Array.isArray(fresh.reward?.items) && fresh.reward.items.length > 0
+              ? fresh.reward.items
+              : (fresh.reward?.item?.item_name ? [fresh.reward.item] : []);
+
+            const randomWinnerLines = [];
+            items.forEach((it, idx) => {
+              if (it.distribution === "random") {
+                const winnerKey = `mission:${fresh.public_id}:item:${idx}:winner`;
+                const winner = deliveries[winnerKey];
+                if (winner?.winner_character_name) {
+                  randomWinnerLines.push(
+                    `• 🎲 **${it.item_name}** ×${it.quantity || 1} достался: **${winner.winner_character_name}** (<@${winner.winner_user_id}>)`
+                  );
+                }
+              }
+            });
+
+            const winnerText = randomWinnerLines.length > 0
+              ? `\n\n**Результаты розыгрыша случайного лута:**\n${randomWinnerLines.join("\n")}`
+              : "";
+
+            await thread.send(
+              `🏆 **Миссия «${fresh.title}» успешно завершена!**\nВсе награды начислены участникам.${winnerText}`
+            ).catch(() => {});
+          }
+        } catch (threadErr) {
+          console.warn("Could not post mission completion notice in thread:", threadErr?.message);
+        }
+
         return interaction.editReply({
           content: null,
           embeds: [createRewardReportEmbed(fresh, result)],

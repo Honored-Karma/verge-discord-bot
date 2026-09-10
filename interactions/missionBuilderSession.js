@@ -79,6 +79,7 @@ export const MB_INPUT_SP = "mb_input_sp";
 export const MB_INPUT_REP = "mb_input_rep";
 export const MB_INPUT_ITEM = "mb_input_item";
 export const MB_INPUT_QTY = "mb_input_qty";
+export const MB_INPUT_DISTRIBUTION = "mb_input_distribution";
 
 export const MB_INPUT_IMAGE = "mb_input_image";
 export const MB_INPUT_THUMBNAIL = "mb_input_thumbnail";
@@ -91,6 +92,95 @@ export const ACCESS_LABELS = {
 
 export function formatAccess(access) {
   return ACCESS_LABELS[access] || ACCESS_LABELS[MISSION_ACCESS.open];
+}
+
+/**
+ * Парсит режим распределения предметов: 'all' (каждому) или 'random' (рандомно)
+ */
+export function parseDistributionMode(rawStr) {
+  if (!rawStr) return "all";
+  const s = String(rawStr).trim().toLowerCase();
+  if (/рандом|случайн|random|1\b/.test(s)) {
+    return "random";
+  }
+  return "all";
+}
+
+/**
+ * Парсит список предметов из многострочного или разделенного запятыми текста.
+ * Поддерживает форматы:
+ * - "Зелье x2" / "Зелье х2" (рус/англ x)
+ * - "Свиток * 3" / "Свиток 3 шт" / "Свиток (3 шт)"
+ * - "Меч x1 (рандомно)" / "Меч [рандом]"
+ * - "Зелье (каждому)" / "Зелье [all]"
+ */
+export function parseRewardItems(rawText, defaultDistribution = "all", fallbackQty = null) {
+  if (!rawText || !String(rawText).trim()) return [];
+
+  const text = String(rawText).trim();
+  let rawLines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (rawLines.length === 1 && rawLines[0].includes(",")) {
+    rawLines = rawLines[0].split(",").map((l) => l.trim()).filter(Boolean);
+  }
+
+  const items = [];
+
+  for (const line of rawLines) {
+    let current = line;
+
+    // 1. Проверяем индивидуальную метку распределения
+    let itemDist = defaultDistribution === "random" ? "random" : "all";
+    if (/(?:\(|\[)(?:рандом(?:но)?|случайн(?:о|ому)?|random)(?:\)|\])/i.test(current)) {
+      itemDist = "random";
+      current = current.replace(/(?:\(|\[)(?:рандом(?:но)?|случайн(?:о|ому)?|random)(?:\)|\])/gi, "").trim();
+    } else if (/(?:\(|\[)(?:каждому|всем|all|everyone)(?:\)|\])/i.test(current)) {
+      itemDist = "all";
+      current = current.replace(/(?:\(|\[)(?:каждому|всем|all|everyone)(?:\)|\])/gi, "").trim();
+    }
+
+    // 2. Проверяем количество
+    let quantity = 1;
+    const qtyMatchParens = current.match(/\((\d+)\s*(?:шт|ед)?\.?\)$/i);
+    const qtyMatchUnits = current.match(/(?:^|\s+)(\d+)\s*(?:шт|ед)\.?$/i);
+    const qtyMatchX = current.match(/(?:^|\s+)[xх*×]\s*(\d+)$/i);
+
+    if (qtyMatchParens) {
+      quantity = parseInt(qtyMatchParens[1], 10) || 1;
+      current = current.replace(/\((\d+)\s*(?:шт|ед)?\.?\)$/i, "").trim();
+    } else if (qtyMatchUnits) {
+      quantity = parseInt(qtyMatchUnits[1], 10) || 1;
+      current = current.replace(/(?:^|\s+)(\d+)\s*(?:шт|ед)\.?$/i, "").trim();
+    } else if (qtyMatchX) {
+      quantity = parseInt(qtyMatchX[1], 10) || 1;
+      current = current.replace(/(?:^|\s+)[xх*×]\s*(\d+)$/i, "").trim();
+    } else if (rawLines.length === 1 && fallbackQty !== null && fallbackQty !== undefined) {
+      quantity = Math.max(1, Number(fallbackQty) || 1);
+    }
+
+    current = current.replace(/^[-•*–—\s]+/, "").replace(/[-•*–—\s]+$/, "").trim();
+
+    if (current) {
+      items.push({
+        item_id: current.slice(0, 100),
+        item_name: current.slice(0, 100),
+        quantity: Math.max(1, quantity),
+        distribution: itemDist,
+      });
+    }
+  }
+
+  return items;
+}
+
+export function formatRewardItemsForModal(items = []) {
+  if (!items || items.length === 0) return "";
+  return items
+    .map((it) => {
+      const qtyStr = it.quantity > 1 ? ` x${it.quantity}` : "";
+      const distStr = it.distribution === "random" ? " (рандомно)" : "";
+      return `${it.item_name}${qtyStr}${distStr}`;
+    })
+    .join("\n");
 }
 
 /**
@@ -110,6 +200,34 @@ export function createDraftState({
   image_url = null,
   thumbnail_url = null,
 } = {}) {
+  let items = [];
+  const defaultDist = parseDistributionMode(reward?.item_distribution);
+
+  if (Array.isArray(reward?.items) && reward.items.length > 0) {
+    items = reward.items
+      .map((it) => ({
+        item_id: String(it.item_id || it.item_name || "").trim(),
+        item_name: String(it.item_name || "").trim(),
+        quantity: Math.max(1, Number(it.quantity || it.qty || 1)),
+        distribution: it.distribution === "random" ? "random" : (it.distribution === "all" ? "all" : defaultDist),
+      }))
+      .filter((it) => it.item_name);
+  } else if (reward?.item_name || reward?.item?.item_name) {
+    const itName = String(reward.item_name || reward.item?.item_name || "").trim();
+    const itQty = Math.max(1, Number(reward.item_qty || reward.item?.quantity || 1));
+    const itDist = reward.item?.distribution === "random" ? "random" : defaultDist;
+    if (itName) {
+      items = [
+        {
+          item_id: itName,
+          item_name: itName,
+          quantity: itQty,
+          distribution: itDist,
+        },
+      ];
+    }
+  }
+
   return {
     title: String(title || "").slice(0, 100),
     description: String(description || "").slice(0, 1000),
@@ -126,8 +244,10 @@ export function createDraftState({
       ap: Math.max(0, Number(reward?.ap) || 0),
       sp: Math.max(0, Number(reward?.sp) || 0),
       reputation: Math.max(0, Number(reward?.reputation) || 0),
-      item_name: String(reward?.item_name || "").slice(0, 100),
-      item_qty: Math.max(1, Number(reward?.item_qty) || 1),
+      items,
+      item_distribution: defaultDist,
+      item_name: items[0]?.item_name || String(reward?.item_name || "").slice(0, 100),
+      item_qty: items[0]?.quantity || Math.max(1, Number(reward?.item_qty) || 1),
     },
   };
 }
@@ -153,8 +273,16 @@ export function createMissionBuilderEmbed(state, client = null) {
   if (state.reward?.ap > 0) rewards.push(`⚡ AP: **+${state.reward.ap}**`);
   if (state.reward?.sp > 0) rewards.push(`💠 SP: **+${state.reward.sp}**`);
   if (state.reward?.reputation > 0) rewards.push(`🎖️ Репутация: **+${state.reward.reputation}**`);
-  if (state.reward?.item_name) {
-    rewards.push(`📦 Предмет: **${state.reward.item_name}** × ${state.reward.item_qty || 1} шт.`);
+
+  const displayItems = state.reward?.items?.length > 0
+    ? state.reward.items
+    : (state.reward?.item_name
+      ? [{ item_name: state.reward.item_name, quantity: state.reward.item_qty || 1, distribution: state.reward.item_distribution || "all" }]
+      : []);
+
+  for (const it of displayItems) {
+    const distText = it.distribution === "random" ? " *(🎲 случайному)*" : " *(каждому)*";
+    rewards.push(`📦 Предмет: **${it.item_name}** × ${it.quantity || 1} шт.${distText}`);
   }
   const rewardText = rewards.length > 0 ? rewards.join("\n") : "*Награды не назначены*";
 
@@ -404,7 +532,7 @@ export function createMainInfoModal(state, messageId) {
 }
 
 /**
- * Создаёт модалку ввода наград (AP, SP, Rtg, Предмет, Количество)
+ * Создаёт модалку ввода наград (AP, SP, Rtg, Предметы, Распределение)
  */
 export function createRewardsModal(state, messageId) {
   const modal = new ModalBuilder()
@@ -446,32 +574,37 @@ export function createRewardsModal(state, messageId) {
 
   const itemInput = new TextInputBuilder()
     .setCustomId(MB_INPUT_ITEM)
-    .setLabel("Предмет (название из каталога/кастом)")
-    .setStyle(TextInputStyle.Short)
+    .setLabel("Предметы (по 1 на строку: Предмет [xКол-во])")
+    .setStyle(TextInputStyle.Paragraph)
     .setRequired(false)
-    .setPlaceholder("Например: Зелье восстановления");
+    .setPlaceholder("Например:\nЗелье восстановления x2\nСвиток молнии x1 (рандомно)\nСундук сокровищ");
 
-  if (state.reward?.item_name && state.reward.item_name.trim()) {
-    itemInput.setValue(state.reward.item_name.trim());
+  const existingItems = state.reward?.items?.length > 0
+    ? state.reward.items
+    : (state.reward?.item_name
+      ? [{ item_name: state.reward.item_name, quantity: state.reward.item_qty || 1, distribution: state.reward.item_distribution || "all" }]
+      : []);
+
+  if (existingItems.length > 0) {
+    itemInput.setValue(formatRewardItemsForModal(existingItems));
   }
 
-  const qtyInput = new TextInputBuilder()
-    .setCustomId(MB_INPUT_QTY)
-    .setLabel("Количество предмета")
+  const distInput = new TextInputBuilder()
+    .setCustomId(MB_INPUT_DISTRIBUTION)
+    .setLabel("Кому выдавать предметы (каждому / рандомно)")
     .setStyle(TextInputStyle.Short)
     .setRequired(false)
-    .setPlaceholder("1");
+    .setPlaceholder("каждому (по умолчанию) или рандомно");
 
-  if (state.reward?.item_qty !== undefined && state.reward?.item_qty !== null && Number(state.reward.item_qty) > 0) {
-    qtyInput.setValue(String(state.reward.item_qty));
-  }
+  const currentDist = state.reward?.item_distribution === "random" ? "рандомно" : "каждому";
+  distInput.setValue(currentDist);
 
   modal.addComponents(
     new ActionRowBuilder().addComponents(apInput),
     new ActionRowBuilder().addComponents(spInput),
     new ActionRowBuilder().addComponents(repInput),
     new ActionRowBuilder().addComponents(itemInput),
-    new ActionRowBuilder().addComponents(qtyInput)
+    new ActionRowBuilder().addComponents(distInput)
   );
 
   return modal;
@@ -582,15 +715,30 @@ async function publishMission({ interaction, session }) {
   await interaction.deferUpdate();
 
   // 4. Формирование наград
+  const items = (state.reward?.items?.length > 0
+    ? state.reward.items
+    : (state.reward?.item_name
+      ? [{ item_name: state.reward.item_name, quantity: state.reward.item_qty || 1, distribution: state.reward.item_distribution || "all" }]
+      : [])
+  ).map((it) => ({
+    item_id: it.item_name,
+    item_name: it.item_name,
+    quantity: Math.max(1, Number(it.quantity) || 1),
+    distribution: it.distribution === "random" ? "random" : "all",
+  }));
+
   const reward = {
     ap: Math.max(0, Number(state.reward?.ap) || 0),
     sp: Math.max(0, Number(state.reward?.sp) || 0),
     reputation: Math.max(0, Number(state.reward?.reputation) || 0),
-    item: state.reward?.item_name?.trim()
+    items,
+    item_distribution: state.reward?.item_distribution || "all",
+    item: items[0]
       ? {
-          item_id: state.reward.item_name.trim(),
-          item_name: state.reward.item_name.trim(),
-          quantity: Math.max(1, Number(state.reward.item_qty) || 1),
+          item_id: items[0].item_name,
+          item_name: items[0].item_name,
+          quantity: items[0].quantity,
+          distribution: items[0].distribution || "all",
         }
       : null,
   };
@@ -840,20 +988,34 @@ async function handleModal({ interaction, session, action }) {
     const rawAp = interaction.fields.getTextInputValue(MB_INPUT_AP)?.trim() || "0";
     const rawSp = interaction.fields.getTextInputValue(MB_INPUT_SP)?.trim() || "0";
     const rawRep = interaction.fields.getTextInputValue(MB_INPUT_REP)?.trim() || "0";
-    const itemName = interaction.fields.getTextInputValue(MB_INPUT_ITEM)?.trim() || "";
-    const rawQty = interaction.fields.getTextInputValue(MB_INPUT_QTY)?.trim() || "1";
+    const rawItemsText = interaction.fields.getTextInputValue(MB_INPUT_ITEM)?.trim() || "";
+
+    let rawDist = "";
+    try {
+      rawDist = interaction.fields.getTextInputValue(MB_INPUT_DISTRIBUTION)?.trim() || "";
+    } catch {}
+
+    let fallbackQty = null;
+    try {
+      const q = interaction.fields.getTextInputValue(MB_INPUT_QTY)?.trim();
+      if (q) fallbackQty = parseInt(q, 10);
+    } catch {}
 
     const ap = Math.max(0, parseInt(rawAp, 10) || 0);
     const sp = Math.max(0, parseInt(rawSp, 10) || 0);
     const rep = Math.max(0, parseInt(rawRep, 10) || 0);
-    const qty = Math.max(1, parseInt(rawQty, 10) || 1);
+
+    const distribution = parseDistributionMode(rawDist);
+    const parsedItems = parseRewardItems(rawItemsText, distribution, fallbackQty);
 
     state.reward = {
       ap,
       sp,
       reputation: rep,
-      item_name: itemName.slice(0, 100),
-      item_qty: qty,
+      items: parsedItems,
+      item_distribution: distribution,
+      item_name: parsedItems[0]?.item_name || "",
+      item_qty: parsedItems[0]?.quantity || 1,
     };
   } else if (action === "media") {
     const rawImage = interaction.fields.getTextInputValue(MB_INPUT_IMAGE)?.trim() || "";
