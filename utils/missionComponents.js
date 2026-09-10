@@ -32,10 +32,13 @@ export const MISSION_BTN_PROFILES = "mission_profiles";
 export const MISSION_BTN_START = "mission_start";
 export const MISSION_BTN_FINISH = "mission_finish";
 export const MISSION_BTN_CANCEL = "mission_cancel";
+export const MISSION_BTN_KICK = "mission_kick";
 export const MISSION_BTN_CONFIRM_FINISH = "mission_finish_confirm";
 export const MISSION_BTN_ABORT_FINISH = "mission_cancel_finish";
 export const MISSION_BTN_RETRY_REWARDS = "mission_retry_rewards";
 export const MISSION_SELECT_MEMBER = "mission_member_select";
+export const MISSION_SELECT_KICK = "mission_select_kick";
+export const MISSION_SELECT_UNKICK = "mission_select_unkick";
 
 /**
  * Creates the main interactive mission card embed.
@@ -212,6 +215,7 @@ export function createMissionActionRows(mission, client = null) {
   );
 
   // Row 2: GM / Admin Actions
+  const hasParticipants = Array.isArray(mission.participants) && mission.participants.length > 0;
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(MISSION_BTN_START)
@@ -225,6 +229,12 @@ export function createMissionActionRows(mission, client = null) {
       .setStyle(ButtonStyle.Primary)
       .setEmoji("🏁")
       .setDisabled(isCompleted || isCancelled),
+    new ButtonBuilder()
+      .setCustomId(MISSION_BTN_KICK)
+      .setLabel("Исключить")
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji("👢")
+      .setDisabled(!isRecruiting || !hasParticipants),
     new ButtonBuilder()
       .setCustomId(MISSION_BTN_CANCEL)
       .setLabel("Отменить")
@@ -290,6 +300,50 @@ export function createMemberProfileSelectRow(mission) {
     new StringSelectMenuBuilder()
       .setCustomId(MISSION_SELECT_MEMBER)
       .setPlaceholder("Выберите участника для просмотра профиля...")
+      .addOptions(options)
+  );
+}
+
+/**
+ * Creates select menu to choose a participant to kick from the party.
+ */
+export function createKickMemberSelectRow(mission) {
+  const participants = mission.participants || [];
+  if (participants.length === 0) return null;
+
+  const options = participants.slice(0, 25).map((p, idx) => ({
+    label: `${idx + 1}. ${p.character_name}`.slice(0, 100),
+    description: `Игрок: @${p.user_id} · ${p.organization_name || "Без орг."}`.slice(0, 100),
+    value: p.player_id,
+    emoji: "👢",
+  }));
+
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(MISSION_SELECT_KICK)
+      .setPlaceholder("Выберите участника для исключения из пати...")
+      .addOptions(options)
+  );
+}
+
+/**
+ * Creates select menu to unban a previously kicked participant.
+ */
+export function createUnkickMemberSelectRow(mission) {
+  const kickedUserIds = mission.kicked_user_ids || [];
+  if (kickedUserIds.length === 0) return null;
+
+  const options = kickedUserIds.slice(0, 25).map((uid, idx) => ({
+    label: `${idx + 1}. Разблокировать ID: ${uid}`.slice(0, 100),
+    description: `Разрешить пользователю вновь вступать в миссию`.slice(0, 100),
+    value: uid,
+    emoji: "🔓",
+  }));
+
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(MISSION_SELECT_UNKICK)
+      .setPlaceholder("Разблокировать ранее исключенного игрока...")
       .addOptions(options)
   );
 }

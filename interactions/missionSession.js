@@ -10,14 +10,17 @@ import {
   getMissionByMessageId,
   getMissionByPublicId,
   joinMission,
+  kickParticipantFromMission,
   leaveMission,
   MISSION_STATUS,
   setMissionThreadId,
   startMission,
+  unkickParticipantFromMission,
 } from "../utils/missionStore.js";
 import {
   createCompletionActionRows,
   createCompletionConfirmationEmbed,
+  createKickMemberSelectRow,
   createMemberProfileSelectRow,
   createMissionActionRows,
   createMissionCardEmbed,
@@ -25,17 +28,21 @@ import {
   createPublicProfileEmbed,
   createRetryDeliveryActionRow,
   createRewardReportEmbed,
+  createUnkickMemberSelectRow,
   MISSION_BTN_ABORT_FINISH,
   MISSION_BTN_CANCEL,
   MISSION_BTN_CONFIRM_FINISH,
   MISSION_BTN_FINISH,
   MISSION_BTN_JOIN,
+  MISSION_BTN_KICK,
   MISSION_BTN_LEAVE,
   MISSION_BTN_PARTY,
   MISSION_BTN_PROFILES,
   MISSION_BTN_RETRY_REWARDS,
   MISSION_BTN_START,
+  MISSION_SELECT_KICK,
   MISSION_SELECT_MEMBER,
+  MISSION_SELECT_UNKICK,
 } from "../utils/missionComponents.js";
 
 import {
@@ -249,6 +256,8 @@ export const missionInteractionHandler = {
         let msg = "Не удалось вступить в миссию.";
         if (result.reason === "already_joined") {
           msg = "Вы уже состоите в пати этой миссии.";
+        } else if (result.reason === "kicked") {
+          msg = "⛔ Организатор миссии исключил вас из состава участников. Повторный вход заблокирован.";
         } else if (result.reason === "party_full") {
           msg = "❌ Пати уже заполнена! Все доступные места заняты.";
         } else if (result.reason === "organization_mismatch") {
@@ -398,6 +407,179 @@ export const missionInteractionHandler = {
         content: "📋 Профиль участника:",
         embeds: [profileEmbed],
         components: selectRow ? [selectRow] : [],
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 5.1 ИСКЛЮЧЕНИЕ УЧАСТНИКА ИЗ ПАТИ (ТОЛЬКО ГМ / СОЗДАТЕЛЬ / АДМИН)
+    // ──────────────────────────────────────────────────────────────────────────
+    if (customId === MISSION_BTN_KICK) {
+      const isCreator = mission.created_by?.user_id === interaction.user.id;
+      if (!isCreator && !isGMOrAdmin(member)) {
+        return sendNotice(
+          interaction,
+          "⛔ Исключать участников может только организатор миссии (ГМ) или администратор."
+        );
+      }
+
+      const fresh = (await getMissionByPublicId(mission.public_id)) || mission;
+      if (fresh.status !== MISSION_STATUS.recruiting) {
+        return sendNotice(
+          interaction,
+          "Исключать участников из пати можно только на этапе набора."
+        );
+      }
+
+      const kickRow = createKickMemberSelectRow(fresh);
+      if (!kickRow) {
+        return sendNotice(
+          interaction,
+          "В пати пока нет участников для исключения."
+        );
+      }
+
+      const components = [kickRow];
+      const unkickRow = createUnkickMemberSelectRow(fresh);
+      if (unkickRow) {
+        components.push(unkickRow);
+      }
+
+      const reply = await interaction.reply({
+        content:
+          "👢 **Управление составом пати:**\n" +
+          "• Выберите участника из верхнего списка, чтобы исключить его из пати (повторный вход будет заблокирован).\n" +
+          (unkickRow ? "• Выберите игрока из нижнего списка, если хотите снять с него блокировку." : ""),
+        components,
+        flags: MessageFlags.Ephemeral,
+        withResponse: true,
+      });
+
+      const message = reply?.resource?.message || (await interaction.fetchReply().catch(() => null));
+      if (message?.id) {
+        await createInteractionSession({
+          messageId: message.id,
+          namespace: MISSION_NAMESPACE,
+          ownerId: interaction.user.id,
+          guildId: interaction.guildId,
+          channelId: interaction.channelId,
+          state: {
+            public_id: fresh.public_id,
+            mission_id: fresh._id?.toString?.() || fresh.public_id,
+          },
+          ttlMs: MISSION_SESSION_TTL_MS,
+        });
+      }
+
+      return reply;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 5.2 ПОДТВЕРЖДЕНИЕ ИСКЛЮЧЕНИЯ УЧАСТНИКА
+    // ──────────────────────────────────────────────────────────────────────────
+    if (customId === MISSION_SELECT_KICK) {
+      const isCreator = mission.created_by?.user_id === interaction.user.id;
+      if (!isCreator && !isGMOrAdmin(member)) {
+        return sendNotice(
+          interaction,
+          "⛔ Исключать участников может только организатор миссии (ГМ) или администратор."
+        );
+      }
+
+      const targetPlayerId = interaction.values?.[0];
+      if (!targetPlayerId) {
+        return sendNotice(interaction, "Участник не выбран.");
+      }
+
+      await interaction.deferUpdate();
+
+      const result = await kickParticipantFromMission({
+        publicId: mission.public_id,
+        targetPlayerId,
+        actorId: interaction.user.id,
+        actorUsername: interaction.user.username,
+      });
+
+      if (!result.success) {
+        let msg = "Не удалось исключить участника.";
+        if (result.reason === "not_in_party") {
+          msg = "Этот персонаж уже не состоит в пати.";
+        } else if (result.reason === "invalid_status") {
+          msg = "Исключать участников можно только на этапе набора.";
+        }
+        return interaction.editReply({
+          content: `❌ ${msg}`,
+          components: [],
+        });
+      }
+
+      await updateMissionCardMessage(interaction, result.mission);
+
+      // Notify thread if available
+      try {
+        const thread = await resolveOrCreateMissionThread(interaction, result.mission, { createIfMissing: false });
+        if (thread && typeof thread.send === "function") {
+          await thread.send(
+            `👢 Участник **${result.kickedParticipant.character_name}** (<@${result.kickedParticipant.user_id}>) был исключён из состава миссии организатором.`
+          ).catch(() => {});
+        }
+      } catch (threadErr) {
+        console.warn("Could not post kick notice in thread:", threadErr?.message);
+      }
+
+      const updatedKickRow = createKickMemberSelectRow(result.mission);
+      const updatedUnkickRow = createUnkickMemberSelectRow(result.mission);
+      const newComponents = [];
+      if (updatedKickRow) newComponents.push(updatedKickRow);
+      if (updatedUnkickRow) newComponents.push(updatedUnkickRow);
+
+      return interaction.editReply({
+        content: `👢 Персонаж **${result.kickedParticipant.character_name}** (<@${result.kickedParticipant.user_id}>) успешно исключён из пати. Повторный вход для него заблокирован.`,
+        components: newComponents,
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 5.3 СНЯТИЕ БЛОКИРОВКИ С ИСКЛЮЧЕННОГО ИГРОКА
+    // ──────────────────────────────────────────────────────────────────────────
+    if (customId === MISSION_SELECT_UNKICK) {
+      const isCreator = mission.created_by?.user_id === interaction.user.id;
+      if (!isCreator && !isGMOrAdmin(member)) {
+        return sendNotice(
+          interaction,
+          "⛔ Управлять доступом может только организатор миссии (ГМ) или администратор."
+        );
+      }
+
+      const targetUserId = interaction.values?.[0];
+      if (!targetUserId) {
+        return sendNotice(interaction, "Игрок не выбран.");
+      }
+
+      await interaction.deferUpdate();
+
+      const result = await unkickParticipantFromMission({
+        publicId: mission.public_id,
+        targetUserId,
+        actorId: interaction.user.id,
+        actorUsername: interaction.user.username,
+      });
+
+      if (!result.success) {
+        return interaction.editReply({
+          content: "❌ Не удалось снять блокировку.",
+          components: [],
+        });
+      }
+
+      const updatedKickRow = createKickMemberSelectRow(result.mission);
+      const updatedUnkickRow = createUnkickMemberSelectRow(result.mission);
+      const newComponents = [];
+      if (updatedKickRow) newComponents.push(updatedKickRow);
+      if (updatedUnkickRow) newComponents.push(updatedUnkickRow);
+
+      return interaction.editReply({
+        content: `🔓 Блокировка с пользователя <@${targetUserId}> успешно снята. Он снова может вступить в пати.`,
+        components: newComponents,
       });
     }
 

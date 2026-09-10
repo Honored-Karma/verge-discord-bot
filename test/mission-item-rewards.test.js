@@ -203,6 +203,11 @@ function createMockDatabase() {
                 continue;
               }
 
+              if (k === "kicked_user_ids" && v && typeof v === "object" && v.$ne) {
+                if (doc.kicked_user_ids?.includes(v.$ne)) return false;
+                continue;
+              }
+
               if (k === "$expr" && v?.$lt) {
                 const [left, right] = v.$lt;
                 const size = left?.$size === "$participants" ? (doc.participants?.length || 0) : 0;

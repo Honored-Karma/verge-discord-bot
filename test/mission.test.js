@@ -7,17 +7,24 @@ import {
   getMissionByMessageId,
   getMissionByPublicId,
   joinMission,
+  kickParticipantFromMission,
   leaveMission,
   MISSION_ACCESS,
   MISSION_STATUS,
   MISSION_TYPES,
   setMissionMessageId,
   startMission,
+  unkickParticipantFromMission,
 } from "../utils/missionStore.js";
 import {
+  createKickMemberSelectRow,
   createMissionActionRows,
   createMissionCardEmbed,
   createPublicProfileEmbed,
+  createUnkickMemberSelectRow,
+  MISSION_BTN_KICK,
+  MISSION_SELECT_KICK,
+  MISSION_SELECT_UNKICK,
 } from "../utils/missionComponents.js";
 import {
   getOrganizationMissionChannel,
@@ -207,6 +214,11 @@ function createMockDatabase() {
                 continue;
               }
 
+              if (k === "kicked_user_ids" && v && typeof v === "object" && v.$ne) {
+                if (doc.kicked_user_ids?.includes(v.$ne)) return false;
+                continue;
+              }
+
               if (k === "$expr" && v?.$lt) {
                 const [left, right] = v.$lt;
                 const size = left?.$size === "$participants" ? (doc.participants?.length || 0) : 0;
@@ -226,6 +238,13 @@ function createMockDatabase() {
           const before = JSON.parse(JSON.stringify(doc));
 
           // Apply updates
+          if (update.$addToSet) {
+            for (const [ak, av] of Object.entries(update.$addToSet)) {
+              if (!Array.isArray(doc[ak])) doc[ak] = [];
+              if (!doc[ak].includes(av)) doc[ak].push(av);
+            }
+          }
+
           if (update.$push) {
             for (const [pk, pv] of Object.entries(update.$push)) {
               if (!Array.isArray(doc[pk])) doc[pk] = [];
@@ -236,7 +255,9 @@ function createMockDatabase() {
           if (update.$pull) {
             for (const [pk, pv] of Object.entries(update.$pull)) {
               if (Array.isArray(doc[pk])) {
-                if (pv.$or) {
+                if (typeof pv === "string") {
+                  doc[pk] = doc[pk].filter((item) => item !== pv);
+                } else if (pv.$or) {
                   doc[pk] = doc[pk].filter((item) => {
                     return !pv.$or.some((cond) => {
                       if (cond.user_id && item.user_id === cond.user_id) return true;
@@ -954,7 +975,7 @@ test("компоненты карточки миссии и сессия вос�
 
   const [row1, row2] = createMissionActionRows(loadedMission);
   assert.equal(row1.components.length, 4, "первый ряд содержит 4 кнопки игрока");
-  assert.equal(row2.components.length, 3, "второй ряд содержит 3 кнопки управления");
+  assert.equal(row2.components.length, 4, "второй ряд содержит 4 кнопки управления");
 });
 
 test("диалог завершения миссии (CONFIRM_FINISH и ABORT_FINISH) корректно работает даже при 0 участников", async () => {
@@ -1481,5 +1502,171 @@ test("startMission сохраняет существующий thread_id, есл
     "старт миссии не должен обнулять ранее созданный thread_id"
   );
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 12. ИСКЛЮЧЕНИЕ УЧАСТНИКОВ (КИК) И ЗАЩИТА ОТ ПОВТОРНОГО ВХОДА
+// ─────────────────────────────────────────────────────────────────────────────
+test("kickParticipantFromMission: исключение участника, занесение в kicked_user_ids и блокировка повторного входа", async () => {
+  const db = createMockDatabase();
+
+  const mission = await createMission(
+    {
+      guildId: "guild_kick_1",
+      channelId: "chan_kick_1",
+      title: "Миссия с исключением",
+      type: MISSION_TYPES.investigation,
+      description: "Тест кика",
+      access: MISSION_ACCESS.open,
+      maxPlayers: 3,
+      createdBy: { user_id: "gm_lead", username: "GM Lead" },
+    },
+    db
+  );
+
+  // Игроки вступают в пати
+  const join1 = await joinMission({
+    publicId: mission.public_id,
+    playerId: "p_good",
+    userId: "u_good",
+    characterName: "Хороший боец",
+    db,
+  });
+  assert.ok(join1.success);
+
+  const join2 = await joinMission({
+    publicId: mission.public_id,
+    playerId: "p_bad",
+    userId: "u_bad",
+    characterName: "Нежелательный игрок",
+    db,
+  });
+  assert.ok(join2.success);
+
+  let fresh = await getMissionByPublicId(mission.public_id, db);
+  assert.equal(fresh.participants.length, 2);
+
+  // Проверка кнопок карточки: кнопка "Исключить" должна присутствовать и быть активной
+  const rows = createMissionActionRows(fresh);
+  const row2 = rows[1];
+  const kickBtn = row2.components.find((c) => c.data.custom_id === MISSION_BTN_KICK);
+  assert.ok(kickBtn, "Кнопка 'Исключить' должна присутствовать во 2-й строке");
+  assert.equal(kickBtn.data.disabled, false, "Кнопка 'Исключить' должна быть активной при наличии участников");
+
+  // Проверка генерации меню выбора для кика
+  const kickSelectRow = createKickMemberSelectRow(fresh);
+  assert.ok(kickSelectRow);
+  const selectMenu = kickSelectRow.components[0];
+  assert.equal(selectMenu.data.custom_id, MISSION_SELECT_KICK);
+  assert.equal(selectMenu.options.length, 2);
+  assert.equal(selectMenu.options[1].data.value, "p_bad");
+
+  // Организатор исключает игрока p_bad
+  const kickResult = await kickParticipantFromMission({
+    publicId: mission.public_id,
+    targetPlayerId: "p_bad",
+    actorId: "gm_lead",
+    actorUsername: "GM Lead",
+    db,
+  });
+
+  assert.ok(kickResult.success);
+  assert.equal(kickResult.kickedParticipant.player_id, "p_bad");
+  assert.equal(kickResult.mission.participants.length, 1);
+  assert.equal(kickResult.mission.participants[0].player_id, "p_good");
+  assert.ok(kickResult.mission.kicked_user_ids.includes("u_bad"));
+
+  // Попытка исключенного игрока вступить повторно отклоняется
+  const rejoinAttempt = await joinMission({
+    publicId: mission.public_id,
+    playerId: "p_bad",
+    userId: "u_bad",
+    characterName: "Нежелательный игрок",
+    db,
+  });
+  assert.equal(rejoinAttempt.success, false);
+  assert.equal(rejoinAttempt.reason, "kicked");
+
+  // Другой игрок может спокойно вступить
+  const join3 = await joinMission({
+    publicId: mission.public_id,
+    playerId: "p_another",
+    userId: "u_another",
+    characterName: "Другой боец",
+    db,
+  });
+  assert.ok(join3.success);
+
+  // Проверка меню разблокировки (unkick)
+  fresh = await getMissionByPublicId(mission.public_id, db);
+  const unkickSelectRow = createUnkickMemberSelectRow(fresh);
+  assert.ok(unkickSelectRow);
+  assert.equal(unkickSelectRow.components[0].data.custom_id, MISSION_SELECT_UNKICK);
+
+  // Организатор снимает блокировку с u_bad
+  const unkickResult = await unkickParticipantFromMission({
+    publicId: mission.public_id,
+    targetUserId: "u_bad",
+    actorId: "gm_lead",
+    actorUsername: "GM Lead",
+    db,
+  });
+  assert.ok(unkickResult.success);
+  assert.ok(!unkickResult.mission.kicked_user_ids.includes("u_bad"));
+
+  // Теперь u_bad снова может вступить
+  const joinAgain = await joinMission({
+    publicId: mission.public_id,
+    playerId: "p_bad",
+    userId: "u_bad",
+    characterName: "Нежелательный игрок",
+    db,
+  });
+  assert.ok(joinAgain.success);
+});
+
+test("kickParticipantFromMission: нельзя исключать участников после старта или завершения", async () => {
+  const db = createMockDatabase();
+
+  const mission = await createMission(
+    {
+      guildId: "guild_kick_2",
+      channelId: "chan_kick_2",
+      title: "Миссия после старта",
+      type: MISSION_TYPES.combat,
+      description: "Тест запрета кика",
+      access: MISSION_ACCESS.open,
+      maxPlayers: 2,
+      createdBy: { user_id: "gm_lead", username: "GM Lead" },
+    },
+    db
+  );
+
+  await joinMission({
+    publicId: mission.public_id,
+    playerId: "p1",
+    userId: "u1",
+    characterName: "Боец",
+    db,
+  });
+
+  await startMission({
+    publicId: mission.public_id,
+    actorId: "gm_lead",
+    actorUsername: "GM Lead",
+    db,
+  });
+
+  const kickAttempt = await kickParticipantFromMission({
+    publicId: mission.public_id,
+    targetPlayerId: "p1",
+    actorId: "gm_lead",
+    actorUsername: "GM Lead",
+    db,
+  });
+
+  assert.equal(kickAttempt.success, false);
+  assert.equal(kickAttempt.reason, "invalid_status");
+});
+
 
 

@@ -259,6 +259,7 @@ export async function createMission({
 
     participants: [],
     invited_user_ids: [],
+    kicked_user_ids: [],
 
     reward: safeReward,
     reward_delivery: {},
@@ -403,6 +404,15 @@ export async function joinMission({
     }
   }
 
+  // Access validation: kicked users cannot rejoin
+  if (Array.isArray(mission.kicked_user_ids) && mission.kicked_user_ids.includes(String(userId))) {
+    return {
+      success: false,
+      reason: "kicked",
+      message: "Организатор миссии исключил вас из состава участников.",
+    };
+  }
+
   const participant = {
     player_id: String(playerId),
     user_id: String(userId),
@@ -417,6 +427,7 @@ export async function joinMission({
     {
       public_id: String(publicId).trim(),
       status: MISSION_STATUS.recruiting,
+      kicked_user_ids: { $ne: String(userId) },
       "participants.user_id": { $ne: String(userId) },
       "participants.player_id": { $ne: String(playerId) },
       $expr: { $lt: [{ $size: "$participants" }, "$max_players"] },
@@ -434,6 +445,9 @@ export async function joinMission({
     const fresh = await target.findOne({ public_id: String(publicId).trim() });
     if (!fresh || fresh.status !== MISSION_STATUS.recruiting) {
       return { success: false, reason: "not_recruiting" };
+    }
+    if (Array.isArray(fresh.kicked_user_ids) && fresh.kicked_user_ids.includes(String(userId))) {
+      return { success: false, reason: "kicked" };
     }
     if (fresh.participants.some((p) => p.user_id === String(userId) || p.player_id === String(playerId))) {
       return { success: false, reason: "already_joined" };
@@ -500,6 +514,121 @@ export async function leaveMission({ publicId, playerId, userId, db = null }) {
   );
 
   return { success: true, mission: updated };
+}
+
+/**
+ * Removes a participant from a mission by GM / creator / admin, and prevents rejoining.
+ * Only allowed while status is 'recruiting'.
+ */
+export async function kickParticipantFromMission({
+  publicId,
+  targetPlayerId,
+  actorId,
+  actorUsername,
+  db = null,
+}) {
+  const target = collection(db);
+  const mission = await target.findOne({ public_id: String(publicId).trim() });
+
+  if (!mission) {
+    return { success: false, reason: "mission_not_found" };
+  }
+
+  if (mission.status !== MISSION_STATUS.recruiting) {
+    return {
+      success: false,
+      reason: "invalid_status",
+      message: "Исключать участников можно только на этапе набора.",
+    };
+  }
+
+  const participant = (mission.participants || []).find(
+    (p) => p.player_id === String(targetPlayerId) || p.user_id === String(targetPlayerId)
+  );
+
+  if (!participant) {
+    return { success: false, reason: "not_in_party" };
+  }
+
+  const updated = await target.findOneAndUpdate(
+    {
+      public_id: String(publicId).trim(),
+      status: MISSION_STATUS.recruiting,
+    },
+    {
+      $pull: {
+        participants: {
+          $or: [
+            { player_id: participant.player_id },
+            { user_id: participant.user_id },
+          ],
+        },
+      },
+      $addToSet: {
+        kicked_user_ids: String(participant.user_id),
+      },
+      $set: { updated_at: new Date() },
+      $inc: { version: 1 },
+    },
+    { returnDocument: "after" }
+  );
+
+  if (!updated) {
+    return { success: false, reason: "update_failed" };
+  }
+
+  logAdminAction(
+    actorId,
+    "KICK_MISSION_PARTICIPANT",
+    `Исключил игрока ${participant.character_name} (<@${participant.user_id}>) из миссии "${mission.title}" [${publicId}]`
+  );
+
+  return { success: true, mission: updated, kickedParticipant: participant };
+}
+
+/**
+ * Removes a user from the mission's kicked list (unban), allowing them to rejoin.
+ */
+export async function unkickParticipantFromMission({
+  publicId,
+  targetUserId,
+  actorId,
+  actorUsername,
+  db = null,
+}) {
+  const target = collection(db);
+  const mission = await target.findOne({ public_id: String(publicId).trim() });
+
+  if (!mission) {
+    return { success: false, reason: "mission_not_found" };
+  }
+
+  const updated = await target.findOneAndUpdate(
+    {
+      public_id: String(publicId).trim(),
+      status: MISSION_STATUS.recruiting,
+    },
+    {
+      $pull: {
+        kicked_user_ids: String(targetUserId),
+      },
+      $set: { updated_at: new Date() },
+      $inc: { version: 1 },
+    },
+    { returnDocument: "after" }
+  );
+
+  if (!updated) {
+    return { success: false, reason: "update_failed" };
+  }
+
+  logAdminAction(
+    actorId,
+    "UNKICK_MISSION_PARTICIPANT",
+    `Снял блокировку с пользователя <@${targetUserId}> в миссии "${mission.title}" [${publicId}]`
+  );
+
+  return { success: true, mission: updated, targetUserId: String(targetUserId) };
 }
 
 /**
