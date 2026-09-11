@@ -1,7 +1,7 @@
 import { MessageFlags } from "discord.js";
 import { isAdmin, hasCommandPermission } from "../utils/adminCheck.js";
 import { resolveMember } from "../utils/memberHelper.js";
-import { getActiveSlot, getAllPlayerSP, getPlayer } from "../utils/dataManager.js";
+import { getActiveSlot, getAllPlayerSP, getPlayer, getPlayers } from "../utils/dataManager.js";
 import { makePlayerKey } from "../utils/playerKey.js";
 import { formatRankRequirement } from "../utils/rankSystem.js";
 import {
@@ -60,6 +60,46 @@ export function isGMOrAdmin(member) {
   if (!member) return false;
   if (isAdmin(member)) return true;
   return hasCommandPermission(member, "add-ap");
+}
+
+/**
+ * Enriches mission participants with the latest data from database (reputation, rank, org).
+ * Falls back safely to existing participant fields if database is unavailable.
+ */
+export async function enrichMissionParticipants(mission) {
+  if (!mission || !Array.isArray(mission.participants) || mission.participants.length === 0) {
+    return mission;
+  }
+  const playerIds = mission.participants.map((p) => p.player_id).filter(Boolean);
+  if (playerIds.length === 0) return mission;
+
+  let players = [];
+  try {
+    players = await getPlayers(playerIds);
+  } catch {
+    players = [];
+  }
+  const playerMap = new Map((players || []).map((pl) => [pl.id, pl]));
+
+  const enrichedParticipants = mission.participants.map((p) => {
+    const pl = playerMap.get(p.player_id);
+    const rep =
+      pl && typeof pl.reputation === "number"
+        ? pl.reputation
+        : (typeof p.reputation === "number" ? p.reputation : 20);
+    return {
+      ...p,
+      reputation: rep,
+      character_name: pl?.character_name || p.character_name,
+      organization_name: pl?.organization || pl?.custom_org || p.organization_name,
+      rank: pl?.rank || p.rank,
+    };
+  });
+
+  return {
+    ...mission,
+    participants: enrichedParticipants,
+  };
 }
 
 /**
@@ -250,6 +290,7 @@ export const missionInteractionHandler = {
         characterName,
         organizationName: orgName,
         rank,
+        reputation: typeof player.reputation === "number" ? player.reputation : 20,
       });
 
       if (!result.success) {
@@ -336,8 +377,9 @@ export const missionInteractionHandler = {
     if (customId === MISSION_BTN_PARTY) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const fresh = (await getMissionByPublicId(mission.public_id)) || mission;
+      const enriched = await enrichMissionParticipants(fresh);
       return interaction.editReply({
-        embeds: [createPartyListEmbed(fresh, interaction.client)],
+        embeds: [createPartyListEmbed(enriched, interaction.client)],
       });
     }
 
@@ -346,7 +388,8 @@ export const missionInteractionHandler = {
     // ──────────────────────────────────────────────────────────────────────────
     if (customId === MISSION_BTN_PROFILES) {
       const fresh = (await getMissionByPublicId(mission.public_id)) || mission;
-      const selectRow = createMemberProfileSelectRow(fresh);
+      const enriched = await enrichMissionParticipants(fresh);
+      const selectRow = createMemberProfileSelectRow(enriched);
       if (!selectRow) {
         return sendNotice(interaction, "В пати пока нет участников для просмотра.");
       }
@@ -401,7 +444,8 @@ export const missionInteractionHandler = {
       const profileEmbed = createPublicProfileEmbed(player, styles);
 
       const fresh = (await getMissionByPublicId(mission.public_id)) || mission;
-      const selectRow = createMemberProfileSelectRow(fresh);
+      const enriched = await enrichMissionParticipants(fresh);
+      const selectRow = createMemberProfileSelectRow(enriched);
 
       return interaction.editReply({
         content: "📋 Профиль участника:",
@@ -430,7 +474,8 @@ export const missionInteractionHandler = {
         );
       }
 
-      const kickRow = createKickMemberSelectRow(fresh);
+      const enriched = await enrichMissionParticipants(fresh);
+      const kickRow = createKickMemberSelectRow(enriched);
       if (!kickRow) {
         return sendNotice(
           interaction,

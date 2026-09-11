@@ -339,6 +339,7 @@ export async function joinMission({
   characterName,
   organizationName = null,
   rank = null,
+  reputation = 20,
   db = null,
 }) {
   const target = collection(db);
@@ -419,6 +420,7 @@ export async function joinMission({
     character_name: String(characterName || "Безымянный").trim(),
     organization_name: organizationName ? String(organizationName).trim() : null,
     rank: rank ? String(rank).trim() : null,
+    reputation: typeof reputation === "number" ? reputation : 20,
     joined_at: new Date(),
   };
 

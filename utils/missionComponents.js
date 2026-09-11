@@ -17,6 +17,7 @@ import {
 } from "./missionStore.js";
 import { safeAvatarUrl } from "./avatarUrl.js";
 import { formatRankRequirement } from "./rankSystem.js";
+import { getReputationTier } from "./dataManager.js";
 
 const STATUS_COLORS = {
   [MISSION_STATUS.recruiting]: 0x22c55e, // Green
@@ -260,12 +261,15 @@ export function createPartyListEmbed(mission, client = null) {
     participants.forEach((p, index) => {
       const org = p.organization_name || "Без организации";
       const rank = p.rank ? ` (${p.rank})` : "";
+      const rep = Number(p.reputation ?? 20);
+      const repTier = getReputationTier(rep);
       const joinedAt = p.joined_at
         ? `<t:${Math.floor(new Date(p.joined_at).getTime() / 1000)}:R>`
         : "недавно";
       lines.push(
         `**${index + 1}. ${p.character_name}**\n` +
         `• Организация: **${org}**${rank}\n` +
+        `• Репутация: **${rep} Rtg** ${repTier.emoji} *${repTier.name}*\n` +
         `• Вступил: ${joinedAt}`
       );
     });
@@ -290,11 +294,19 @@ export function createMemberProfileSelectRow(mission) {
   const participants = mission.participants || [];
   if (participants.length === 0) return null;
 
-  const options = participants.slice(0, 25).map((p, idx) => ({
-    label: `${idx + 1}. ${p.character_name.slice(0, 80)}`,
-    description: `${p.organization_name || "Вольный"} · ${p.rank || "Нет ранга"}`.slice(0, 100),
-    value: p.player_id,
-  }));
+  const options = participants.slice(0, 25).map((p, idx) => {
+    const rep = Number(p.reputation ?? 20);
+    const tier = getReputationTier(rep);
+    const org = p.organization_name || "Вольный";
+    const rank = p.rank || "Нет ранга";
+    const desc = `${org} · ${rank} · ${rep} Rtg (${tier.name})`.slice(0, 100);
+    return {
+      label: `${idx + 1}. ${p.character_name.slice(0, 80)}`,
+      description: desc,
+      value: p.player_id,
+      emoji: tier.emoji,
+    };
+  });
 
   return new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
@@ -311,12 +323,17 @@ export function createKickMemberSelectRow(mission) {
   const participants = mission.participants || [];
   if (participants.length === 0) return null;
 
-  const options = participants.slice(0, 25).map((p, idx) => ({
-    label: `${idx + 1}. ${p.character_name}`.slice(0, 100),
-    description: `Игрок: @${p.user_id} · ${p.organization_name || "Без орг."}`.slice(0, 100),
-    value: p.player_id,
-    emoji: "👢",
-  }));
+  const options = participants.slice(0, 25).map((p, idx) => {
+    const rep = Number(p.reputation ?? 20);
+    const org = p.organization_name || "Без орг.";
+    const desc = `Игрок: @${p.user_id} · ${org} · ${rep} Rtg`.slice(0, 100);
+    return {
+      label: `${idx + 1}. ${p.character_name}`.slice(0, 100),
+      description: desc,
+      value: p.player_id,
+      emoji: "👢",
+    };
+  });
 
   return new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
@@ -363,6 +380,8 @@ export function createPublicProfileEmbed(player, styles = [], baseUrl = null) {
   const org = player.organization || player.custom_org || "Не состоит";
   const rank = player.rank || "Нет ранга";
   const ap = Number(player.ap || 0);
+  const rep = Number(player.reputation ?? 20);
+  const repTier = getReputationTier(rep);
   const attribute = player.attribute_name || "Не указан";
   const avatar = safeAvatarUrl(player.character_avatar);
 
@@ -382,6 +401,7 @@ export function createPublicProfileEmbed(player, styles = [], baseUrl = null) {
         `**Атрибут:** ${attribute}`,
         `**Организация:** ${org}`,
         `**Ранг:** ${rank}`,
+        `**Репутация:** **${rep} Rtg** ${repTier.emoji} *${repTier.name}*`,
         `**Очки способностей:** ${ap} AP`,
         "",
         "### 🥋 Боевые стили:",

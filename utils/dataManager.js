@@ -328,6 +328,22 @@ export async function getPlayer(playerId) {
   }
 }
 
+export async function getPlayers(playerIds) {
+  if (!Array.isArray(playerIds) || playerIds.length === 0) return [];
+  try {
+    const db = getDB();
+    if (!db) return [];
+    const players = await db
+      .collection("players")
+      .find({ id: { $in: playerIds } })
+      .toArray();
+    return players.map(normalizePlayerDocument);
+  } catch (error) {
+    console.error("Error getting players:", error);
+    return [];
+  }
+}
+
 export async function updatePlayer(playerId, updates) {
   try {
     const db = getDB();

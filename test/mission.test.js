@@ -18,8 +18,10 @@ import {
 } from "../utils/missionStore.js";
 import {
   createKickMemberSelectRow,
+  createMemberProfileSelectRow,
   createMissionActionRows,
   createMissionCardEmbed,
+  createPartyListEmbed,
   createPublicProfileEmbed,
   createUnkickMemberSelectRow,
   MISSION_BTN_KICK,
@@ -902,6 +904,8 @@ test("публичный профиль союзников: полное отс�
   assert.ok(text.includes("GUARDIANS"), "Организация должна быть в профиле");
   assert.ok(text.includes("IV"), "Ранг должен быть в профиле");
   assert.ok(text.includes("320 AP"), "AP должно быть в профиле");
+  assert.ok(text.includes("Репутация:"), "Репутация должна быть в профиле");
+  assert.ok(text.includes("20 Rtg"), "Дефолтная репутация должна быть в профиле");
   assert.ok(text.includes("Громовой Кулак"), "Стиль должен быть в профиле");
   assert.ok(text.includes("/characters/hana-kami"), "Ссылка на веб-профиль по slug должна присутствовать");
 
@@ -1666,6 +1670,105 @@ test("kickParticipantFromMission: нельзя исключать участни
 
   assert.equal(kickAttempt.success, false);
   assert.equal(kickAttempt.reason, "invalid_status");
+});
+
+test("отображение репутации в меню 'Состав пати' и селекте 'Профили участников'", async () => {
+  const db = createMockDatabase();
+
+  const mockMission = {
+    public_id: "MSN-REP-TEST",
+    title: "Тестовая операция",
+    max_players: 4,
+    status: MISSION_STATUS.recruiting,
+    participants: [
+      {
+        player_id: "player_urban",
+        user_id: "user_urban",
+        character_name: "Городской Герой",
+        organization_name: "Синдикат",
+        rank: "III",
+        reputation: 1500,
+        joined_at: new Date(),
+      },
+      {
+        player_id: "player_district",
+        user_id: "user_district",
+        character_name: "Районный Воин",
+        organization_name: null,
+        rank: null,
+        reputation: 850,
+        joined_at: new Date(),
+      },
+    ],
+  };
+
+  // 1. Проверка createPartyListEmbed
+  const partyEmbed = createPartyListEmbed(mockMission);
+  const partyDesc = partyEmbed.data.description;
+  assert.ok(partyDesc.includes("1500 Rtg"), "Состав пати должен содержать 1500 Rtg");
+  assert.ok(partyDesc.includes("Городской"), "Состав пати должен содержать тир Городской");
+  assert.ok(partyDesc.includes("🏙️"), "Состав пати должен содержать эмодзи городского тира");
+  assert.ok(partyDesc.includes("850 Rtg"), "Состав пати должен содержать 850 Rtg");
+  assert.ok(partyDesc.includes("Район"), "Состав пати должен содержать тир Район");
+  assert.ok(partyDesc.includes("🏘️"), "Состав пати должен содержать эмодзи района");
+
+  // 2. Проверка createMemberProfileSelectRow
+  const selectRow = createMemberProfileSelectRow(mockMission);
+  assert.ok(selectRow, "Селект участников должен быть создан");
+  const options = selectRow.components[0].options;
+  assert.equal(options.length, 2);
+
+  assert.equal(options[0].data.label, "1. Городской Герой");
+  assert.ok(options[0].data.description.includes("1500 Rtg (Городской)"));
+  assert.equal(options[0].data.emoji.name, "🏙️");
+
+  assert.equal(options[1].data.label, "2. Районный Воин");
+  assert.ok(options[1].data.description.includes("850 Rtg (Район)"));
+  assert.equal(options[1].data.emoji.name, "🏘️");
+
+  // 3. Проверка createPublicProfileEmbed с кастомной репутацией
+  const heroPlayer = {
+    id: "player_world",
+    public_id: "world-hero",
+    character_name: "Мировой Защитник",
+    organization: "GUARDIANS",
+    rank: "I",
+    ap: 999,
+    reputation: 5200,
+  };
+  const profileEmbed = createPublicProfileEmbed(heroPlayer, []);
+  const profileDesc = profileEmbed.data.description;
+  assert.ok(profileDesc.includes("5200 Rtg"), "Публичный профиль должен содержать 5200 Rtg");
+  assert.ok(profileDesc.includes("Мировой"), "Публичный профиль должен содержать тир Мировой");
+  assert.ok(profileDesc.includes("🌍"), "Публичный профиль должен содержать эмодзи мирового тира");
+
+  // 4. Проверка сохранения репутации в joinMission
+  const newMission = await createMission(
+    {
+      title: "Миссия с репутацией",
+      description: "Тест",
+      access: MISSION_ACCESS.open,
+      maxPlayers: 3,
+      createdBy: { user_id: "gm_1", username: "GM" },
+      reward: { ap: 5, sp: 5, reputation: 1 },
+    },
+    db
+  );
+
+  const joinRes = await joinMission({
+    publicId: newMission.public_id,
+    playerId: "p_rep_test",
+    userId: "u_rep_test",
+    characterName: "Новичок",
+    reputation: 350,
+    db,
+  });
+  assert.equal(joinRes.success, true);
+
+  const savedMission = await getMissionByPublicId(newMission.public_id, db);
+  const joinedPart = savedMission.participants.find((p) => p.player_id === "p_rep_test");
+  assert.ok(joinedPart, "Участник должен быть сохранён в миссии");
+  assert.equal(joinedPart.reputation, 350, "Репутация участника должна быть сохранена в БД");
 });
 
 
