@@ -131,6 +131,8 @@ export function hasCommandPermission(member, commandName) {
     "deduct-reputation",
     "physical-register",
     "physical-edit",
+    "accept",
+    "accept-application",
   ];
 
   // 1. Check Anketolog commands (application acceptance and player onboarding)

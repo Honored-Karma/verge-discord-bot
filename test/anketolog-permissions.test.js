@@ -37,7 +37,9 @@ test("ANKETOLOG_ROLE_IDS grants permissions for onboarding/character approval co
     "set-reputation",
     "deduct-reputation",
     "physical-register",
-    "physical-edit"
+    "physical-edit",
+    "accept",
+    "accept-application"
   ];
 
   for (const cmd of allowedCommands) {

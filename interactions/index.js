@@ -36,6 +36,11 @@ import {
   announceInteractionHandler,
 } from "./announceSession.js";
 
+import {
+  ACCEPT_APPLICATION_NAMESPACE,
+  acceptApplicationInteractionHandler,
+} from "./acceptApplicationSession.js";
+
 /**
  * Single place where persistent interaction handlers are wired up. Every panel
  * registered here keeps working after a bot restart, because the state lives in
@@ -54,6 +59,7 @@ export function registerInteractionHandlers() {
   registerInteractionHandler(MISSION_BUILDER_NAMESPACE, missionBuilderInteractionHandler);
   registerInteractionHandler(PHYSICAL_STATS_NAMESPACE, physicalStatsInteractionHandler);
   registerInteractionHandler(ANNOUNCE_BUILDER_NAMESPACE, announceInteractionHandler);
+  registerInteractionHandler(ACCEPT_APPLICATION_NAMESPACE, acceptApplicationInteractionHandler);
   return [
     SHOP_NAMESPACE,
     PAY_NAMESPACE,
@@ -67,5 +73,6 @@ export function registerInteractionHandlers() {
     MISSION_BUILDER_NAMESPACE,
     PHYSICAL_STATS_NAMESPACE,
     ANNOUNCE_BUILDER_NAMESPACE,
+    ACCEPT_APPLICATION_NAMESPACE,
   ];
 }
