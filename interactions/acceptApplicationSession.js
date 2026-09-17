@@ -25,6 +25,7 @@ import { buildModalCustomId } from "../utils/interactionRouter.js";
 import { logCommand } from "../utils/logs.js";
 import { createErrorEmbed, createSuccessEmbed } from "../utils/embeds.js";
 import { slugifyCharacterName, generatePublicId } from "../services/playerService.js";
+import { describeOrgSync, syncOrgRoles } from "../utils/orgRoles.js";
 
 export const ACCEPT_APPLICATION_NAMESPACE = "accept_application";
 export const ACCEPT_APPLICATION_TTL_MS = 2 * 60 * 60 * 1000;
@@ -514,7 +515,7 @@ async function confirmAcceptApplication({ interaction, session }) {
   // 3. Manage Discord Roles
   const playerRoleId = DEFAULT_PLAYER_ROLE_ID;
   const unverifiedRoleId = DEFAULT_UNVERIFIED_ROLE_ID;
-  let roleStatus = { added: false, removed: false, error: null };
+  let roleStatus = { added: false, removed: false, orgSync: null, error: null };
 
   if (interaction.guild) {
     try {
@@ -535,6 +536,19 @@ async function confirmAcceptApplication({ interaction, session }) {
           }
         }
       }
+
+      // Sync organization role if an organization is specified for this character
+      if (state.organization) {
+        const syncRes = await syncOrgRoles({
+          guild: interaction.guild,
+          userId: targetUserId,
+          actorId: interaction.user.id,
+        }).catch((err) => {
+          console.warn("Could not sync org roles on accept:", err);
+          return null;
+        });
+        roleStatus.orgSync = syncRes;
+      }
     } catch (roleErr) {
       console.error("Error managing member roles on accept:", roleErr);
       roleStatus.error = roleErr.message;
@@ -550,12 +564,15 @@ async function confirmAcceptApplication({ interaction, session }) {
   // 5. Close session and notify anketolog
   await closeInteractionSession(session.message_id);
 
+  const orgNote = roleStatus.orgSync ? describeOrgSync(roleStatus.orgSync) : "";
+
   let successDesc =
     `Анкета игрока <@${targetUserId}> успешно принята!\n\n` +
     `• **Персонаж:** **${state.character_name}** (Слот ${state.slot})\n` +
     `• **Роль игрока:** <@&${playerRoleId}> ${roleStatus.added ? "✅ выдана" : "⚠️ ошибка выдачи"}\n` +
-    `• **Роль кандидата:** <@&${unverifiedRoleId}> ${roleStatus.removed ? "✅ снята" : "—"}\n\n` +
-    `Сообщение о принятии опубликовано в <#${interaction.channelId}>.`;
+    `• **Роль кандидата:** <@&${unverifiedRoleId}> ${roleStatus.removed ? "✅ снята" : "—"}\n` +
+    (orgNote ? `• **Организация:** ${orgNote}\n` : "") +
+    `\nСообщение о принятии опубликовано в <#${interaction.channelId}>.`;
 
   if (roleStatus.error) {
     successDesc += `\n\n⚠️ Предупреждение по ролям: ${roleStatus.error}`;

@@ -39,7 +39,7 @@ export async function getAllOrganizations(db = null) {
 
   // 1. Canonical organizations
   for (const org of CANONICAL_ORGANIZATIONS) {
-    orgMap.set(org.key, { ...org });
+    orgMap.set(org.key, { ...org, role_id: null });
   }
 
   // 2. Entries from org_roles registry
@@ -49,14 +49,19 @@ export async function getAllOrganizations(db = null) {
       for (const entry of orgRoles) {
         const key = entry.org_key || orgRoleKey(entry.label);
         if (!key) continue;
-        if (!orgMap.has(key)) {
+        const existing = orgMap.get(key);
+        if (!existing) {
           orgMap.set(key, {
             id: entry._id ? entry._id.toString() : key,
             key,
             name: entry.label || key,
             label: entry.label || key,
+            role_id: entry.role_id || null,
             isCustom: true,
           });
+        } else {
+          existing.role_id = entry.role_id || existing.role_id || null;
+          if (entry.label && !existing.label) existing.label = entry.label;
         }
       }
     } catch (error) {
@@ -76,10 +81,16 @@ export async function getAllOrganizations(db = null) {
             key,
             name: custom.name,
             label: custom.name,
+            role_id: null,
             isCustom: true,
           });
-        } else if (!existing.id && custom._id) {
-          existing.id = custom._id.toString();
+        } else {
+          if (!existing.id && custom._id) {
+            existing.id = custom._id.toString();
+          }
+          if (custom.name && !existing.name) {
+            existing.name = custom.name;
+          }
         }
       }
     } catch (error) {
@@ -99,6 +110,33 @@ export async function getOrganizationByKey(rawKey, db = null) {
 
   const orgs = await getAllOrganizations(db);
   return orgs.find((o) => o.key === key) || null;
+}
+
+/**
+ * Finds an organization by key, name, label or case-insensitive match.
+ */
+export async function findOrganization(input, db = null) {
+  if (!input) return null;
+  const raw = String(input).trim();
+  if (!raw) return null;
+
+  const key = orgRoleKey(raw);
+  const orgs = await getAllOrganizations(db);
+
+  if (key) {
+    const foundByKey = orgs.find((o) => o.key === key);
+    if (foundByKey) return foundByKey;
+  }
+
+  const lower = raw.toLowerCase();
+  return (
+    orgs.find(
+      (o) =>
+        o.name.toLowerCase() === lower ||
+        (o.label && o.label.toLowerCase() === lower) ||
+        o.key.toLowerCase() === lower
+    ) || null
+  );
 }
 
 /**

@@ -18,6 +18,7 @@ import {
   getCharacterAvatarData,
   deleteCharacterAvatar
 } from "./avatarStorage.js";
+import { normalizeOrganization } from "./rankSystem.js";
 
 const PLAYER_DEFAULTS = {
   character_avatar: null,
@@ -2054,14 +2055,22 @@ export async function setSalaryMultiplier(playerId, multiplier, adminId) {
  */
 export async function createCustomOrg(name, createdBy) {
   try {
+    const trimmed = String(name || "").trim();
+    if (!trimmed) return { success: false, reason: 'Название организации не может быть пустым.' };
+
+    const canonical = normalizeOrganization(trimmed);
+    if (canonical) {
+      return { success: false, reason: `Организация "${canonical}" является встроенной канонической организацией.` };
+    }
+
     const db = getDB();
     const existing = await db.collection("custom_orgs").findOne({
-      name: { $regex: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+      name: { $regex: new RegExp(`^${trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
     });
     if (existing) return { success: false, reason: 'Организация с таким названием уже существует.' };
 
     await db.collection("custom_orgs").insertOne({
-      name,
+      name: trimmed,
       created_by: createdBy,
       created_at: new Date(),
     });
@@ -2102,19 +2111,27 @@ export async function listCustomOrgs() {
 }
 
 /**
- * Назначает игроку кастомную организацию (без ранга).
+ * Назначает игроку организацию (синхронизирует custom_org и organization).
  */
 export async function setCustomOrg(playerId, orgName, adminId) {
   try {
     const db = getDB();
+    const canonical = normalizeOrganization(orgName);
+    const finalName = canonical || orgName;
     await db.collection("players").updateOne(
       { id: playerId },
-      { $set: { custom_org: orgName } },
+      {
+        $set: {
+          custom_org: finalName,
+          organization: finalName,
+          updated_at: new Date(),
+        },
+      },
     );
     logAdminAction(
       adminId,
       "SET_CUSTOM_ORG",
-      `Назначил кастомную организацию "${orgName}" игроку ${playerId}`,
+      `Назначил организацию "${finalName}" игроку ${playerId}`,
     );
     return true;
   } catch (error) {
@@ -2124,19 +2141,22 @@ export async function setCustomOrg(playerId, orgName, adminId) {
 }
 
 /**
- * Убирает кастомную организацию у игрока.
+ * Убирает организацию у игрока (очищает custom_org и organization).
  */
 export async function removeCustomOrg(playerId, adminId) {
   try {
     const db = getDB();
     await db.collection("players").updateOne(
       { id: playerId },
-      { $unset: { custom_org: "" } },
+      {
+        $unset: { custom_org: "", organization: "" },
+        $set: { updated_at: new Date() },
+      },
     );
     logAdminAction(
       adminId,
       "REMOVE_CUSTOM_ORG",
-      `Убрал кастомную организацию у игрока ${playerId}`,
+      `Убрал организацию у игрока ${playerId}`,
     );
     return true;
   } catch (error) {

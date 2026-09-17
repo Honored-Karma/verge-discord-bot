@@ -21,10 +21,14 @@ import {
     syncOrgRoles,
     unsetOrgRole,
 } from '../utils/orgRoles.js';
+import {
+    getAllOrganizations,
+    findOrganization,
+} from '../utils/organizationMissionSettings.js';
 
 export const data = new SlashCommandBuilder()
     .setName('org')
-    .setDescription('Управление кастомными организациями')
+    .setDescription('Управление организациями')
     .addSubcommand(sub =>
         sub.setName('create')
             .setDescription('[АДМИН] Создать новую кастомную организацию')
@@ -39,13 +43,14 @@ export const data = new SlashCommandBuilder()
             .addStringOption(opt =>
                 opt.setName('name')
                     .setDescription('Название организации')
-                    .setRequired(true)))
+                    .setRequired(true)
+                    .setAutocomplete(true)))
     .addSubcommand(sub =>
         sub.setName('list')
-            .setDescription('Список всех кастомных организаций'))
+            .setDescription('Список всех организаций'))
     .addSubcommand(sub =>
         sub.setName('assign')
-            .setDescription('[АДМИН] Назначить игроку кастомную организацию')
+            .setDescription('[АДМИН] Назначить игроку организацию')
             .addUserOption(opt =>
                 opt.setName('user')
                     .setDescription('Игрок')
@@ -53,7 +58,8 @@ export const data = new SlashCommandBuilder()
             .addStringOption(opt =>
                 opt.setName('name')
                     .setDescription('Название организации')
-                    .setRequired(true))
+                    .setRequired(true)
+                    .setAutocomplete(true))
             .addIntegerOption(opt =>
                 opt.setName('slot')
                     .setDescription('Слот (1, 2 или 3, по умолчанию активный)')
@@ -61,7 +67,7 @@ export const data = new SlashCommandBuilder()
                     .addChoices({ name: '1', value: 1 }, { name: '2', value: 2 }, { name: '3', value: 3 })))
     .addSubcommand(sub =>
         sub.setName('remove')
-            .setDescription('[АДМИН] Убрать кастомную организацию у игрока')
+            .setDescription('[АДМИН] Убрать организацию у игрока')
             .addUserOption(opt =>
                 opt.setName('user')
                     .setDescription('Игрок')
@@ -83,7 +89,8 @@ export const data = new SlashCommandBuilder()
                     .addStringOption(opt =>
                         opt.setName('name')
                             .setDescription('Название организации (TENRYU, GUARDIANS или кастомная)')
-                            .setRequired(true))
+                            .setRequired(true)
+                            .setAutocomplete(true))
                     .addRoleOption(opt =>
                         opt.setName('role')
                             .setDescription('Роль, которую выдавать участникам организации')
@@ -94,7 +101,8 @@ export const data = new SlashCommandBuilder()
                     .addStringOption(opt =>
                         opt.setName('name')
                             .setDescription('Название организации')
-                            .setRequired(true)))
+                            .setRequired(true)
+                            .setAutocomplete(true)))
             .addSubcommand(sub =>
                 sub.setName('sync')
                     .setDescription('[АДМИН] Пересобрать роли организации у одного игрока')
@@ -106,6 +114,58 @@ export const data = new SlashCommandBuilder()
                 sub.setName('sync-all')
                     .setDescription('[АДМИН] Пересобрать роли организаций у всех игроков')));
 
+export async function autocomplete(interaction) {
+    const focused = interaction.options.getFocused(true);
+    if (focused.name !== 'name') return;
+
+    const query = String(focused.value || '').trim().toLowerCase();
+    const group = interaction.options.getSubcommandGroup(false);
+    const sub = interaction.options.getSubcommand(false);
+
+    try {
+        if (sub === 'delete') {
+            const customOrgs = await listCustomOrgs();
+            const filtered = customOrgs.filter(o => o.name.toLowerCase().includes(query));
+            return interaction.respond(
+                filtered.slice(0, 25).map(o => ({
+                    name: o.name,
+                    value: o.name,
+                }))
+            );
+        }
+
+        if (group === 'role' && sub === 'unset') {
+            const roles = await listOrgRoles();
+            const filtered = roles.filter(r =>
+                (r.label || r.org_key).toLowerCase().includes(query)
+            );
+            return interaction.respond(
+                filtered.slice(0, 25).map(r => ({
+                    name: r.label || r.org_key,
+                    value: r.label || r.org_key,
+                }))
+            );
+        }
+
+        const allOrgs = await getAllOrganizations();
+        const filtered = allOrgs.filter(o =>
+            o.name.toLowerCase().includes(query) ||
+            o.key.toLowerCase().includes(query) ||
+            (o.label && o.label.toLowerCase().includes(query))
+        );
+
+        return interaction.respond(
+            filtered.slice(0, 25).map(o => ({
+                name: o.label || o.name,
+                value: o.name || o.label || o.key,
+            }))
+        );
+    } catch (error) {
+        console.error('Error handling org autocomplete:', error);
+        return interaction.respond([]);
+    }
+}
+
 export async function execute(interaction) {
     const group = interaction.options.getSubcommandGroup(false);
     const sub = interaction.options.getSubcommand();
@@ -113,18 +173,38 @@ export async function execute(interaction) {
     // list — доступно всем. Проверка на группу обязательна: без неё
     // `/org role list` провалился бы в публичный список организаций.
     if (!group && sub === 'list') {
-        const orgs = await listCustomOrgs();
-        if (orgs.length === 0) {
+        const [allOrgs, roles] = await Promise.all([
+            getAllOrganizations(),
+            listOrgRoles(),
+        ]);
+
+        if (allOrgs.length === 0) {
             const msg = await interaction.reply({
-                embeds: [createInfoEmbed('Кастомные организации', 'Кастомных организаций пока нет.')],
+                embeds: [createInfoEmbed('Организации', 'Организаций пока нет.')],
                 fetchReply: true
             });
             autoDeleteMessageShort(msg);
             return;
         }
-        const lines = orgs.map((o, i) => `**${i + 1}.** ${o.name}`).join('\n');
+
+        const roleMap = new Map(roles.map(r => [r.org_key, r.role_id]));
+        const guildRoles = interaction.guild?.roles?.cache;
+
+        const lines = allOrgs.map((org, i) => {
+            const typeBadge = org.isCustom ? '🏢 *Пользовательская*' : '🏛️ *Каноничная*';
+            const roleId = org.role_id || roleMap.get(org.key);
+            let roleInfo = '⚠️ *Роль не назначена*';
+
+            if (roleId) {
+                const guildRole = guildRoles?.get(roleId);
+                roleInfo = guildRole ? `🏷️ **${guildRole.name}** (\`${roleId}\`)` : `🏷️ \`${roleId}\``;
+            }
+
+            return `**${i + 1}.** **${org.name}** — ${typeBadge} | ${roleInfo}`;
+        });
+
         const msg = await interaction.reply({
-            embeds: [createInfoEmbed('🏢 Кастомные организации', lines)],
+            embeds: [createInfoEmbed('🏢 Организации сервера', lines.join('\n'))],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);
@@ -162,7 +242,7 @@ export async function execute(interaction) {
         const result = await createCustomOrg(name, interaction.user.id);
         if (result.success) {
             const msg = await interaction.reply({
-                embeds: [createSuccessEmbed('Организация создана', `Кастомная организация **${name}** успешно создана.`, 'addStyle')],
+                embeds: [createSuccessEmbed('Организация создана', `Организация **${name}** успешно создана и сохранена в базе данных.`, 'addStyle')],
                 fetchReply: true
             });
             autoDeleteMessageShort(msg);
@@ -181,7 +261,7 @@ export async function execute(interaction) {
         const ok = await deleteCustomOrg(name);
         if (ok) {
             const msg = await interaction.reply({
-                embeds: [createSuccessEmbed('Организация удалена', `Кастомная организация **${name}** удалена.`, 'deleteStyle')],
+                embeds: [createSuccessEmbed('Организация удалена', `Кастомная организация **${name}** удалена из базы данных.`, 'deleteStyle')],
                 fetchReply: true
             });
             autoDeleteMessageShort(msg);
@@ -199,7 +279,8 @@ export async function execute(interaction) {
         const targetUser = interaction.options.getUser('user');
         const name = interaction.options.getString('name').trim();
         const requestedSlot = interaction.options.getInteger('slot');
-        let slot = requestedSlot ?? await getActiveSlot(targetUser.id);
+        const activeSlot = await getActiveSlot(targetUser.id);
+        let slot = requestedSlot ?? activeSlot;
         if (slot < 1 || slot > 3) slot = 1;
         const playerId = makePlayerKey(targetUser.id, slot);
 
@@ -213,16 +294,16 @@ export async function execute(interaction) {
             return;
         }
 
-        // Проверяем что такая кастомная организация существует
-        const orgs = await listCustomOrgs();
-        const found = orgs.find(o => o.name.toLowerCase() === name.toLowerCase());
+        // Проверяем существование организации в базе данных (канонические, org_roles, custom_orgs)
+        const found = await findOrganization(name);
         if (!found) {
-            const orgList = orgs.length > 0
-                ? orgs.map(o => `• ${o.name}`).join('\n')
-                : 'Нет кастомных организаций. Создайте через `/org create`.';
+            const allOrgs = await getAllOrganizations();
+            const orgList = allOrgs.length > 0
+                ? allOrgs.map(o => `• ${o.name}`).join('\n')
+                : 'Нет организаций в базе данных. Создайте через `/org create`.';
             const msg = await interaction.reply({
                 embeds: [createErrorEmbed('Организация не найдена',
-                    `Кастомная организация **${name}** не существует.\n\nДоступные:\n${orgList}`)],
+                    `Организация **${name}** не существует.\n\nДоступные организации:\n${orgList}`)],
                 fetchReply: true
             });
             autoDeleteMessageShort(msg);
@@ -236,9 +317,13 @@ export async function execute(interaction) {
             actorId: interaction.user.id,
         });
         const note = describeOrgSync(sync);
+        const slotNote = slot !== activeSlot
+            ? `\n-# ℹ️ Назначено для слота ${slot}. Активен слот ${activeSlot}, роль Discord применится при переключении через \`/slot ${slot}\`.`
+            : '';
+
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('Организация назначена',
-                `Игроку **${player.character_name || player.username}** (слот **${slot}**) назначена организация **${found.name}**.${note ? `\n\n${note}` : ''}`,
+                `Игроку **${player.character_name || player.username}** (слот **${slot}**) назначена организация **${found.name}**.${note ? `\n\n${note}` : ''}${slotNote}`,
                 'setRank')],
             fetchReply: true
         });
@@ -272,7 +357,7 @@ export async function execute(interaction) {
         const note = describeOrgSync(sync);
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('Организация убрана',
-                `Кастомная организация убрана у игрока **${player.character_name || player.username}** (слот **${slot}**).${note ? `\n\n${note}` : ''}`,
+                `Организация убрана у игрока **${player.character_name || player.username}** (слот **${slot}**).${note ? `\n\n${note}` : ''}`,
                 'deleteStyle')],
             fetchReply: true
         });
