@@ -85,17 +85,12 @@ export function LoginPage() {
                 lineHeight: 1.15,
                 marginBottom: '14px',
                 fontFamily: 'var(--font-heading)',
-                fontWeight: 800
+                fontWeight: 800,
+                fontStyle: 'normal',
+                color: 'var(--color-ink)',
+                letterSpacing: '-0.03em'
               }}>
-                Вход в портал <br />
-                <span style={{ 
-                  background: 'linear-gradient(135deg, #f87171 0%, #c4b5fd 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  fontFamily: 'var(--font-display)'
-                }}>
-                  VERGE TRP
-                </span>
+                Вход в портал VERGE TRP
               </h1>
 
               <p style={{ fontSize: '0.94rem', color: 'var(--text-muted)', lineHeight: 1.65, marginBottom: '24px' }}>

@@ -1,13 +1,14 @@
+/* Hallmark · footer: Ft5 Statement · theme: atmospheric-custom */
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Flame, Shield, Globe, Terminal, MessageSquare, BookOpen, FileText, Activity } from 'lucide-react';
+import { Flame, Shield, MessageSquare, Activity } from 'lucide-react';
 
 export function Footer() {
   return (
     <footer style={{
-      borderTop: '1px solid var(--border-subtle)',
-      background: 'linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-core) 100%)',
-      padding: '48px 20px 36px',
+      borderTop: '1px solid var(--color-rule)',
+      background: 'var(--color-paper)',
+      padding: 'var(--space-2xl) 20px var(--space-xl)',
       marginTop: 'auto',
       position: 'relative',
       zIndex: 10
@@ -17,82 +18,115 @@ export function Footer() {
         margin: '0 auto',
         display: 'flex',
         flexDirection: 'column',
-        gap: '28px'
+        gap: 'var(--space-xl)'
       }}>
+        {/* Ft5 Statement Closing Sentence */}
+        <div style={{ maxWidth: '38ch' }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '0.74rem',
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--color-accent)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            marginBottom: 'var(--space-xs)'
+          }}>
+            <Flame size={14} />
+            <span>ХРОНИКИ ГЕНЕЗИСА • 2026</span>
+          </div>
+          <p style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 'clamp(1.5rem, 3.6vw, 2.4rem)',
+            fontWeight: 800,
+            lineHeight: 1.15,
+            letterSpacing: '-0.03em',
+            color: 'var(--color-ink)',
+            margin: 0
+          }}>
+            Мир расколот на Цусиме. Баланс сил в Токио и Сеуле создаётся каждым твоим шагом.
+          </p>
+        </div>
+
+        {/* Metadata & Links Row */}
         <div style={{
           display: 'flex',
-          flexWrap: 'wrap',
           justifyContent: 'space-between',
           alignItems: 'center',
-          gap: '24px'
+          flexWrap: 'wrap',
+          gap: 'var(--space-md)',
+          paddingTop: 'var(--space-md)',
+          borderTop: '1px solid var(--color-rule)'
         }}>
-          {/* Brand Info */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <img 
-              src="/assets/character/chibi_mascot.png" 
-              alt="Verge Mascot" 
-              style={{ width: '52px', height: '52px', objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(139, 92, 246, 0.4))' }} 
-            />
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                <Flame size={18} color="#ef4444" />
-                <span style={{ fontWeight: 800, fontSize: '1.05rem', letterSpacing: '0.04em', fontFamily: 'var(--font-display)' }}>
-                  VERGE TRP PORTAL
-                </span>
-                <span className="badge badge-purple" style={{ fontSize: '0.65rem', padding: '1px 6px' }}>v2.0</span>
-              </div>
-              <p style={{ fontSize: '0.84rem', color: 'var(--text-dim)', maxWidth: '460px', lineHeight: 1.5 }}>
-                Официальный текстовый ролевой проект. Эпоха Генезиса, Атрибуты, Скважины и геополитическое противостояние фракций.
-              </p>
-            </div>
+          {/* Brand & Edition */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ 
+              fontFamily: 'var(--font-display)', 
+              fontWeight: 800, 
+              fontSize: '1.05rem', 
+              letterSpacing: '-0.02em', 
+              color: 'var(--color-ink)' 
+            }}>
+              VERGE TRP
+            </span>
+            <span style={{
+              fontSize: '0.70rem',
+              fontFamily: 'var(--font-mono)',
+              padding: '2px 8px',
+              borderRadius: 'var(--radius-pill)',
+              background: 'var(--color-paper-2)',
+              border: '1px solid var(--color-rule)',
+              color: 'var(--color-muted)'
+            }}>
+              v2.0 • LIVE
+            </span>
           </div>
 
-          {/* Footer Navigation Links */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '22px', fontSize: '0.88rem', fontWeight: 600 }}>
-            <Link to="/" style={{ color: 'var(--text-muted)', transition: 'color var(--transition-fast)' }} onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+          {/* Clean Horizontal Links */}
+          <nav style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap', fontSize: '0.86rem', fontWeight: 600 }}>
+            <Link to="/" style={{ color: 'var(--color-muted)', transition: 'color var(--transition-fast)' }}>
               Главная
             </Link>
-            <Link to="/wiki" style={{ color: 'var(--text-muted)', transition: 'color var(--transition-fast)' }} onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+            <Link to="/wiki" style={{ color: 'var(--color-muted)', transition: 'color var(--transition-fast)' }}>
               База знаний
             </Link>
-            <Link to="/applications" style={{ color: 'var(--text-muted)', transition: 'color var(--transition-fast)' }} onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+            <Link to="/applications" style={{ color: 'var(--color-muted)', transition: 'color var(--transition-fast)' }}>
               Анкеты
             </Link>
             <a 
               href="https://discord.gg/vergetrp" 
               target="_blank" 
               rel="noopener noreferrer" 
-              style={{ color: 'var(--accent-purple-light)', display: 'flex', alignItems: 'center', gap: '5px' }}
+              style={{ color: 'var(--color-accent)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
-              <MessageSquare size={15} />
-              Discord Сервер
+              <MessageSquare size={14} />
+              <span>Discord</span>
             </a>
-          </div>
+          </nav>
         </div>
 
-        {/* Bottom Bar */}
+        {/* Legal & Status Bar */}
         <div style={{
-          paddingTop: '20px',
-          borderTop: '1px solid var(--border-subtle)',
           display: 'flex',
-          flexWrap: 'wrap',
           justifyContent: 'space-between',
           alignItems: 'center',
-          gap: '14px',
+          flexWrap: 'wrap',
+          gap: '12px',
           fontSize: '0.78rem',
-          color: 'var(--text-dim)'
+          color: 'var(--color-dim)'
         }}>
           <div>
             © 2020–2026 Verge TRP. Все права на лор и ролевую вселенную принадлежат проекту.
           </div>
-          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <Shield size={13} color="#8b5cf6" />
-              Тенрью & Стражи Мира
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <Shield size={12} color="var(--color-purple)" />
+              <span>Тенрью & Стражи</span>
             </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <Activity size={13} color="#10b981" />
-              Live Server Engine
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <Activity size={12} color="var(--color-emerald)" />
+              <span>Bot Core Online</span>
             </span>
           </div>
         </div>

@@ -1,0 +1,8 @@
+{
+  "scanDate": "2026-09-20",
+  "framework": "React 18 / Vite 5",
+  "fonts": "Unbounded + Onest + JetBrains Mono",
+  "palette": "Atmospheric custom OKLCH (design.md)",
+  "motion": "motion-cut (pure CSS)",
+  "designSystem": "design.md"
+}
