@@ -757,7 +757,18 @@ export const missionInteractionHandler = {
         );
       }
 
-      await interaction.deferUpdate();
+      // Immediately remove/clear buttons to prevent rapid double-clicks
+      try {
+        await interaction.update({
+          content: "⏳ **Выдача наград...** Пожалуйста, подождите.",
+          embeds: [],
+          components: [],
+        });
+      } catch {
+        if (!interaction.deferred && !interaction.replied) {
+          await interaction.deferUpdate().catch(() => {});
+        }
+      }
 
       const result = await deliverMissionRewards({
         publicId: mission.public_id,
@@ -766,8 +777,15 @@ export const missionInteractionHandler = {
       });
 
       if (!result.success) {
+        if (result.reason === "already_delivering") {
+          return interaction.editReply({
+            content: "⏳ Выдача наград для этой миссии уже выполняется. Пожалуйста, подождите завершения.",
+            embeds: [],
+            components: [],
+          });
+        }
         return interaction.editReply({
-          content: `Не удалось завершить миссию: ${result.reason}`,
+          content: `Не удалось завершить миссию: ${result.message || result.reason}`,
           embeds: [],
           components: [],
         });
@@ -775,47 +793,60 @@ export const missionInteractionHandler = {
 
       const fresh = (await getMissionByPublicId(mission.public_id)) || result.mission;
 
-      // If all delivered, update public mission card
-      if (result.allDelivered) {
+      if (result.alreadyCompleted) {
         if (session?.message_id) {
           await closeInteractionSession(session.message_id);
         }
         await updateMissionCardMessage(interaction, fresh);
+        return interaction.editReply({
+          content: "ℹ️ Эта миссия уже была успешно завершена, и все награды выданы ранее.",
+          embeds: [],
+          components: [],
+        });
+      }
 
-        // Notify mission thread if available
-        try {
-          const thread = await resolveOrCreateMissionThread(interaction, fresh, { createIfMissing: false });
-          if (thread && typeof thread.send === "function") {
-            const deliveries = fresh.reward_delivery || {};
-            const items = Array.isArray(fresh.reward?.items) && fresh.reward.items.length > 0
-              ? fresh.reward.items
-              : (fresh.reward?.item?.item_name ? [fresh.reward.item] : []);
+      // Always update public mission card
+      await updateMissionCardMessage(interaction, fresh);
 
-            const randomWinnerLines = [];
-            items.forEach((it, idx) => {
-              if (it.distribution === "random") {
-                const winnerKey = `mission:${fresh.public_id}:item:${idx}:winner`;
-                const winner = deliveries[winnerKey];
-                if (winner?.winner_character_name) {
-                  randomWinnerLines.push(
-                    `• 🎲 **${it.item_name}** ×${it.quantity || 1} достался: **${winner.winner_character_name}** (<@${winner.winner_user_id}>)`
-                  );
-                }
+      // Notify mission thread if available
+      try {
+        const thread = await resolveOrCreateMissionThread(interaction, fresh, { createIfMissing: false });
+        if (thread && typeof thread.send === "function") {
+          const deliveries = fresh.reward_delivery || {};
+          const items = Array.isArray(fresh.reward?.items) && fresh.reward.items.length > 0
+            ? fresh.reward.items
+            : (fresh.reward?.item?.item_name ? [fresh.reward.item] : []);
+
+          const randomWinnerLines = [];
+          items.forEach((it, idx) => {
+            if (it.distribution === "random") {
+              const winnerKey = `mission:${fresh.public_id}:item:${idx}:winner`;
+              const winner = deliveries[winnerKey];
+              if (winner?.winner_character_name) {
+                randomWinnerLines.push(
+                  `• 🎲 **${it.item_name}** ×${it.quantity || 1} достался: **${winner.winner_character_name}** (<@${winner.winner_user_id}>)`
+                );
               }
-            });
+            }
+          });
 
-            const winnerText = randomWinnerLines.length > 0
-              ? `\n\n**Результаты розыгрыша случайного лута:**\n${randomWinnerLines.join("\n")}`
-              : "";
+          const winnerText = randomWinnerLines.length > 0
+            ? `\n\n**Результаты розыгрыша случайного лута:**\n${randomWinnerLines.join("\n")}`
+            : "";
 
-            await thread.send(
-              `🏆 **Миссия «${fresh.title}» успешно завершена!**\nВсе награды начислены участникам.${winnerText}`
-            ).catch(() => {});
-          }
-        } catch (threadErr) {
-          console.warn("Could not post mission completion notice in thread:", threadErr?.message);
+          await thread.send(
+            `🏆 **Миссия «${fresh.title}» успешно завершена!**\nВсе награды начислены участникам.${winnerText}`
+          ).catch(() => {});
         }
+      } catch (threadErr) {
+        console.warn("Could not post mission completion notice in thread:", threadErr?.message);
+      }
 
+      // If all delivered, close interaction session and show report without buttons
+      if (result.allDelivered) {
+        if (session?.message_id) {
+          await closeInteractionSession(session.message_id);
+        }
         return interaction.editReply({
           content: null,
           embeds: [createRewardReportEmbed(fresh, result)],
@@ -823,7 +854,7 @@ export const missionInteractionHandler = {
         });
       }
 
-      // If there were partial failures, offer retry button
+      // If there were partial failures, keep session alive so retry button can be clicked
       return interaction.editReply({
         content: null,
         embeds: [createRewardReportEmbed(fresh, result)],

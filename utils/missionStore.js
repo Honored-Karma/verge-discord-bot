@@ -740,6 +740,8 @@ export async function cancelMission({
   return { success: true, mission: updated };
 }
 
+const activeDeliveries = new Set();
+
 /**
  * Delivers rewards to all locked mission participants idempotently.
  * Safe functions are used: addAP, addSP, addReputation, giveItem.
@@ -749,7 +751,8 @@ export async function cancelMission({
  *   mission:<public_id>:<player_id>:reputation
  *   mission:<public_id>:<player_id>:item
  *
- * If any reward fails, the mission is NOT marked completed and can be retried.
+ * Concurrency guard prevents duplicate delivery runs for the same mission.
+ * Transitions mission to completed status and records delivery audit.
  */
 export async function deliverMissionRewards({
   publicId,
@@ -757,300 +760,237 @@ export async function deliverMissionRewards({
   actorUsername,
   db = null,
 }) {
-  const target = collection(db);
-  const mission = await target.findOne({ public_id: String(publicId).trim() });
-
-  if (!mission) {
-    return { success: false, reason: "not_found" };
-  }
-
-  if (mission.status === MISSION_STATUS.completed) {
-    return { success: true, alreadyCompleted: true, mission };
-  }
-
-  if (mission.status === MISSION_STATUS.cancelled) {
-    return { success: false, reason: "mission_cancelled" };
-  }
-
-  const deliveryReport = [];
-  const deliveries = { ...(mission.reward_delivery || {}) };
-  let allDelivered = true;
-  let hasFailures = false;
-
-  // Resolve items array
-  const items = Array.isArray(mission.reward?.items) && mission.reward.items.length > 0
-    ? mission.reward.items
-    : (mission.reward?.item?.item_name ? [mission.reward.item] : []);
-
-  // Pre-resolve or preserve random winners for items with distribution: 'random'
-  const participants = mission.participants || [];
-  if (participants.length > 0) {
-    items.forEach((item, itemIdx) => {
-      if (item.distribution === "random") {
-        const winnerKey = `mission:${mission.public_id}:item:${itemIdx}:winner`;
-        if (!deliveries[winnerKey]?.winner_player_id) {
-          const chosen = participants[Math.floor(Math.random() * participants.length)];
-          deliveries[winnerKey] = {
-            winner_player_id: chosen.player_id,
-            winner_character_name: chosen.character_name,
-            winner_user_id: chosen.user_id,
-            chosen_at: new Date(),
-          };
-        }
-      }
-    });
-  }
-
-  for (const participant of mission.participants) {
-    const playerId = participant.player_id;
-    const participantReport = {
-      player_id: playerId,
-      character_name: participant.character_name,
-      user_id: participant.user_id,
-      rewards: {},
+  const normPublicId = String(publicId).trim();
+  if (activeDeliveries.has(normPublicId)) {
+    return {
+      success: false,
+      reason: "already_delivering",
+      message: "Выдача наград для этой миссии уже выполняется.",
     };
+  }
 
-    // 1. AP Delivery
-    if (mission.reward.ap > 0) {
-      const apKey = `mission:${mission.public_id}:${playerId}:ap`;
-      if (deliveries[apKey]?.status === "delivered") {
-        participantReport.rewards.ap = { status: "already_delivered", amount: mission.reward.ap };
-      } else {
-        try {
-          const res = await addAP(playerId, mission.reward.ap, "mission", true);
-          if (res !== false) {
-            deliveries[apKey] = {
-              status: "delivered",
-              amount: mission.reward.ap,
-              delivered_at: new Date(),
-            };
-            participantReport.rewards.ap = { status: "delivered", amount: mission.reward.ap };
-          } else {
-            deliveries[apKey] = { status: "failed", error: "Не удалось начислить AP" };
-            participantReport.rewards.ap = { status: "failed", error: "Не удалось начислить AP" };
-            allDelivered = false;
-            hasFailures = true;
-          }
-        } catch (err) {
-          deliveries[apKey] = { status: "failed", error: err.message };
-          participantReport.rewards.ap = { status: "failed", error: err.message };
-          allDelivered = false;
-          hasFailures = true;
-        }
+  activeDeliveries.add(normPublicId);
+  try {
+    const target = collection(db);
+    const mission = await target.findOne({ public_id: normPublicId });
+
+    if (!mission) {
+      return { success: false, reason: "not_found" };
+    }
+
+    if (mission.status === MISSION_STATUS.completed) {
+      // Check if there are any failed deliveries that can be retried
+      const deliveries = mission.reward_delivery || {};
+      const hasFailedEntries = Object.values(deliveries).some(
+        (d) => d && typeof d === "object" && d.status === "failed"
+      );
+      if (!hasFailedEntries) {
+        return { success: true, alreadyCompleted: true, allDelivered: true, mission };
       }
     }
 
-    // 2. SP Delivery
-    if (mission.reward.sp > 0) {
-      const spKey = `mission:${mission.public_id}:${playerId}:sp`;
-      if (deliveries[spKey]?.status === "delivered") {
-        participantReport.rewards.sp = { status: "already_delivered", amount: mission.reward.sp };
-      } else {
-        try {
-          const styles = await getAllPlayerSP(playerId);
-          if (styles && styles.length > 0) {
-            // Apply SP to the participant's highest/primary learned style
-            const targetStyle = styles[0];
-            const res = await addSP(
-              playerId,
-              targetStyle.id,
-              mission.reward.sp,
-              actorId,
-              `mission:${mission.public_id}`,
-              true
-            );
+    if (mission.status === MISSION_STATUS.cancelled) {
+      return { success: false, reason: "mission_cancelled" };
+    }
+
+    const deliveryReport = [];
+    const deliveries = { ...(mission.reward_delivery || {}) };
+    let allDelivered = true;
+    let hasFailures = false;
+
+    // Resolve items array
+    const items = Array.isArray(mission.reward?.items) && mission.reward.items.length > 0
+      ? mission.reward.items
+      : (mission.reward?.item?.item_name ? [mission.reward.item] : []);
+
+    // Pre-resolve or preserve random winners for items with distribution: 'random'
+    const participants = mission.participants || [];
+    if (participants.length > 0) {
+      items.forEach((item, itemIdx) => {
+        if (item.distribution === "random") {
+          const winnerKey = `mission:${mission.public_id}:item:${itemIdx}:winner`;
+          if (!deliveries[winnerKey]?.winner_player_id) {
+            const chosen = participants[Math.floor(Math.random() * participants.length)];
+            deliveries[winnerKey] = {
+              winner_player_id: chosen.player_id,
+              winner_character_name: chosen.character_name,
+              winner_user_id: chosen.user_id,
+              chosen_at: new Date(),
+            };
+          }
+        }
+      });
+    }
+
+    for (const participant of participants) {
+      const playerId = participant.player_id;
+      const participantReport = {
+        player_id: playerId,
+        character_name: participant.character_name,
+        user_id: participant.user_id,
+        rewards: {},
+      };
+
+      // 1. AP Delivery
+      if (mission.reward?.ap > 0) {
+        const apKey = `mission:${mission.public_id}:${playerId}:ap`;
+        if (deliveries[apKey]?.status === "delivered") {
+          participantReport.rewards.ap = { status: "already_delivered", amount: mission.reward.ap };
+        } else {
+          try {
+            const res = await addAP(playerId, mission.reward.ap, "mission", true);
             if (res !== false) {
-              deliveries[spKey] = {
+              deliveries[apKey] = {
                 status: "delivered",
-                amount: mission.reward.sp,
-                style_id: targetStyle.id,
-                style_name: targetStyle.name,
+                amount: mission.reward.ap,
                 delivered_at: new Date(),
               };
-              participantReport.rewards.sp = {
-                status: "delivered",
-                amount: mission.reward.sp,
-                style: targetStyle.name,
-              };
+              participantReport.rewards.ap = { status: "delivered", amount: mission.reward.ap };
             } else {
-              deliveries[spKey] = { status: "failed", error: "Не удалось начислить SP в базу" };
-              participantReport.rewards.sp = { status: "failed", error: "Не удалось начислить SP в базу" };
+              deliveries[apKey] = { status: "failed", error: "Не удалось начислить AP" };
+              participantReport.rewards.ap = { status: "failed", error: "Не удалось начислить AP" };
               allDelivered = false;
               hasFailures = true;
             }
-          } else {
-            // Player has no learned martial styles
-            deliveries[spKey] = {
-              status: "failed",
-              error: "У персонажа нет изученных боевых стилей для начисления SP",
-            };
-            participantReport.rewards.sp = {
-              status: "failed",
-              error: "У персонажа нет изученных боевых стилей",
-            };
+          } catch (err) {
+            deliveries[apKey] = { status: "failed", error: err.message };
+            participantReport.rewards.ap = { status: "failed", error: err.message };
             allDelivered = false;
             hasFailures = true;
           }
-        } catch (err) {
-          deliveries[spKey] = { status: "failed", error: err.message };
-          participantReport.rewards.sp = { status: "failed", error: err.message };
-          allDelivered = false;
-          hasFailures = true;
         }
       }
-    }
 
-    // 3. Reputation Delivery
-    if (mission.reward.reputation > 0) {
-      const repKey = `mission:${mission.public_id}:${playerId}:reputation`;
-      if (deliveries[repKey]?.status === "delivered") {
-        participantReport.rewards.reputation = {
-          status: "already_delivered",
-          amount: mission.reward.reputation,
-        };
-      } else {
-        try {
-          const res = await addReputation(
-            playerId,
-            mission.reward.reputation,
-            actorId,
-            `Завершение миссии: ${mission.title} [${mission.public_id}]`
-          );
-          if (res !== false) {
-            deliveries[repKey] = {
-              status: "delivered",
-              amount: mission.reward.reputation,
-              delivered_at: new Date(),
-            };
-            participantReport.rewards.reputation = {
-              status: "delivered",
-              amount: mission.reward.reputation,
-            };
-          } else {
-            deliveries[repKey] = { status: "failed", error: "Не удалось начислить репутацию" };
-            participantReport.rewards.reputation = { status: "failed", error: "Не удалось начислить репутацию" };
+      // 2. SP Delivery
+      if (mission.reward?.sp > 0) {
+        const spKey = `mission:${mission.public_id}:${playerId}:sp`;
+        if (deliveries[spKey]?.status === "delivered") {
+          participantReport.rewards.sp = { status: "already_delivered", amount: mission.reward.sp };
+        } else if (deliveries[spKey]?.status === "skipped") {
+          participantReport.rewards.sp = { status: "skipped", error: deliveries[spKey].error };
+        } else {
+          try {
+            const styles = await getAllPlayerSP(playerId);
+            if (styles && styles.length > 0) {
+              // Apply SP to the participant's highest/primary learned style
+              const targetStyle = styles[0];
+              const res = await addSP(
+                playerId,
+                targetStyle.id,
+                mission.reward.sp,
+                actorId,
+                `mission:${mission.public_id}`,
+                true
+              );
+              if (res !== false) {
+                deliveries[spKey] = {
+                  status: "delivered",
+                  amount: mission.reward.sp,
+                  style_id: targetStyle.id,
+                  style_name: targetStyle.name,
+                  delivered_at: new Date(),
+                };
+                participantReport.rewards.sp = {
+                  status: "delivered",
+                  amount: mission.reward.sp,
+                  style: targetStyle.name,
+                };
+              } else {
+                deliveries[spKey] = { status: "failed", error: "Не удалось начислить SP в базу" };
+                participantReport.rewards.sp = { status: "failed", error: "Не удалось начислить SP в базу" };
+                allDelivered = false;
+                hasFailures = true;
+              }
+            } else {
+              // Player has no learned martial styles - skip SP gracefully so mission can complete
+              deliveries[spKey] = {
+                status: "skipped",
+                error: "У персонажа нет изученных боевых стилей",
+              };
+              participantReport.rewards.sp = {
+                status: "skipped",
+                error: "У персонажа нет изученных боевых стилей",
+              };
+            }
+          } catch (err) {
+            deliveries[spKey] = { status: "failed", error: err.message };
+            participantReport.rewards.sp = { status: "failed", error: err.message };
             allDelivered = false;
             hasFailures = true;
           }
-        } catch (err) {
-          deliveries[repKey] = { status: "failed", error: err.message };
-          participantReport.rewards.reputation = { status: "failed", error: err.message };
-          allDelivered = false;
-          hasFailures = true;
         }
       }
-    }
 
-    // 4. Items Delivery
-    participantReport.rewards.items = [];
-
-    for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
-      const item = items[itemIdx];
-      const isRandom = item.distribution === "random";
-      const winnerKey = `mission:${mission.public_id}:item:${itemIdx}:winner`;
-      const winnerPlayerId = deliveries[winnerKey]?.winner_player_id;
-
-      // If random and this participant is not the winner, skip awarding
-      if (isRandom && winnerPlayerId !== playerId) {
-        continue;
-      }
-
-      // Keys for delivery idempotency:
-      // Primary: mission:<pubId>:<playerId>:item:<itemIdx>
-      // Legacy compatibility for itemIdx === 0: mission:<pubId>:<playerId>:item
-      const itemKey = `mission:${mission.public_id}:${playerId}:item:${itemIdx}`;
-      const legacyItemKey = itemIdx === 0 ? `mission:${mission.public_id}:${playerId}:item` : null;
-
-      const isAlreadyDelivered =
-        deliveries[itemKey]?.status === "delivered" ||
-        (legacyItemKey && deliveries[legacyItemKey]?.status === "delivered");
-
-      if (isAlreadyDelivered) {
-        const repItem = {
-          status: "already_delivered",
-          itemName: item.item_name,
-          qty: item.quantity,
-          distribution: item.distribution || "all",
-          isWinner: isRandom,
-        };
-        participantReport.rewards.items.push(repItem);
-        if (itemIdx === 0) {
-          participantReport.rewards.item = repItem;
-        }
-      } else {
-        try {
-          const res = await giveItem(
-            playerId,
-            item.item_name,
-            item.quantity,
-            actorId
-          );
-          if (res && res.success) {
-            const deliveredData = {
-              status: "delivered",
-              itemName: item.item_name,
-              quantity: item.quantity,
-              distribution: item.distribution || "all",
-              delivered_at: new Date(),
-            };
-            deliveries[itemKey] = deliveredData;
-            if (legacyItemKey) {
-              deliveries[legacyItemKey] = deliveredData;
-            }
-
-            const repItem = {
-              status: "delivered",
-              itemName: item.item_name,
-              qty: item.quantity,
-              distribution: item.distribution || "all",
-              isWinner: isRandom,
-            };
-            participantReport.rewards.items.push(repItem);
-            if (itemIdx === 0) {
-              participantReport.rewards.item = repItem;
-            }
-          } else {
-            const errorMsg = res?.reason || "Ошибка выдачи предмета в инвентарь";
-            const failedData = {
-              status: "failed",
-              error: errorMsg,
-              distribution: item.distribution || "all",
-            };
-            deliveries[itemKey] = failedData;
-            if (legacyItemKey) {
-              deliveries[legacyItemKey] = failedData;
-            }
-            const repItem = {
-              status: "failed",
-              itemName: item.item_name,
-              qty: item.quantity,
-              error: errorMsg,
-              distribution: item.distribution || "all",
-              isWinner: isRandom,
-            };
-            participantReport.rewards.items.push(repItem);
-            if (itemIdx === 0) {
-              participantReport.rewards.item = repItem;
-            }
-            allDelivered = false;
-            hasFailures = true;
-          }
-        } catch (err) {
-          const failedData = {
-            status: "failed",
-            error: err.message,
-            distribution: item.distribution || "all",
+      // 3. Reputation Delivery
+      if (mission.reward?.reputation > 0) {
+        const repKey = `mission:${mission.public_id}:${playerId}:reputation`;
+        if (deliveries[repKey]?.status === "delivered") {
+          participantReport.rewards.reputation = {
+            status: "already_delivered",
+            amount: mission.reward.reputation,
           };
-          deliveries[itemKey] = failedData;
-          if (legacyItemKey) {
-            deliveries[legacyItemKey] = failedData;
+        } else {
+          try {
+            const res = await addReputation(
+              playerId,
+              mission.reward.reputation,
+              actorId,
+              `Завершение миссии: ${mission.title} [${mission.public_id}]`
+            );
+            if (res !== false) {
+              deliveries[repKey] = {
+                status: "delivered",
+                amount: mission.reward.reputation,
+                delivered_at: new Date(),
+              };
+              participantReport.rewards.reputation = {
+                status: "delivered",
+                amount: mission.reward.reputation,
+              };
+            } else {
+              deliveries[repKey] = { status: "failed", error: "Не удалось начислить репутацию" };
+              participantReport.rewards.reputation = { status: "failed", error: "Не удалось начислить репутацию" };
+              allDelivered = false;
+              hasFailures = true;
+            }
+          } catch (err) {
+            deliveries[repKey] = { status: "failed", error: err.message };
+            participantReport.rewards.reputation = { status: "failed", error: err.message };
+            allDelivered = false;
+            hasFailures = true;
           }
+        }
+      }
 
+      // 4. Items Delivery
+      participantReport.rewards.items = [];
+
+      for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
+        const item = items[itemIdx];
+        const isRandom = item.distribution === "random";
+        const winnerKey = `mission:${mission.public_id}:item:${itemIdx}:winner`;
+        const winnerPlayerId = deliveries[winnerKey]?.winner_player_id;
+
+        // If random and this participant is not the winner, skip awarding
+        if (isRandom && winnerPlayerId !== playerId) {
+          continue;
+        }
+
+        // Keys for delivery idempotency:
+        // Primary: mission:<pubId>:<playerId>:item:<itemIdx>
+        // Legacy compatibility for itemIdx === 0: mission:<pubId>:<playerId>:item
+        const itemKey = `mission:${mission.public_id}:${playerId}:item:${itemIdx}`;
+        const legacyItemKey = itemIdx === 0 ? `mission:${mission.public_id}:${playerId}:item` : null;
+
+        const isAlreadyDelivered =
+          deliveries[itemKey]?.status === "delivered" ||
+          (legacyItemKey && deliveries[legacyItemKey]?.status === "delivered");
+
+        if (isAlreadyDelivered) {
           const repItem = {
-            status: "failed",
+            status: "already_delivered",
             itemName: item.item_name,
             qty: item.quantity,
-            error: err.message,
             distribution: item.distribution || "all",
             isWinner: isRandom,
           };
@@ -1058,58 +998,130 @@ export async function deliverMissionRewards({
           if (itemIdx === 0) {
             participantReport.rewards.item = repItem;
           }
-          allDelivered = false;
-          hasFailures = true;
+        } else {
+          try {
+            const res = await giveItem(
+              playerId,
+              item.item_name,
+              item.quantity,
+              actorId
+            );
+            if (res && res.success) {
+              const deliveredData = {
+                status: "delivered",
+                itemName: item.item_name,
+                quantity: item.quantity,
+                distribution: item.distribution || "all",
+                delivered_at: new Date(),
+              };
+              deliveries[itemKey] = deliveredData;
+              if (legacyItemKey) {
+                deliveries[legacyItemKey] = deliveredData;
+              }
+
+              const repItem = {
+                status: "delivered",
+                itemName: item.item_name,
+                qty: item.quantity,
+                distribution: item.distribution || "all",
+                isWinner: isRandom,
+              };
+              participantReport.rewards.items.push(repItem);
+              if (itemIdx === 0) {
+                participantReport.rewards.item = repItem;
+              }
+            } else {
+              const errorMsg = res?.reason || "Ошибка выдачи предмета в инвентарь";
+              const failedData = {
+                status: "failed",
+                error: errorMsg,
+                distribution: item.distribution || "all",
+              };
+              deliveries[itemKey] = failedData;
+              if (legacyItemKey) {
+                deliveries[legacyItemKey] = failedData;
+              }
+              const repItem = {
+                status: "failed",
+                itemName: item.item_name,
+                qty: item.quantity,
+                error: errorMsg,
+                distribution: item.distribution || "all",
+                isWinner: isRandom,
+              };
+              participantReport.rewards.items.push(repItem);
+              if (itemIdx === 0) {
+                participantReport.rewards.item = repItem;
+              }
+              allDelivered = false;
+              hasFailures = true;
+            }
+          } catch (err) {
+            const failedData = {
+              status: "failed",
+              error: err.message,
+              distribution: item.distribution || "all",
+            };
+            deliveries[itemKey] = failedData;
+            if (legacyItemKey) {
+              deliveries[legacyItemKey] = failedData;
+            }
+
+            const repItem = {
+              status: "failed",
+              itemName: item.item_name,
+              qty: item.quantity,
+              error: err.message,
+              distribution: item.distribution || "all",
+              isWinner: isRandom,
+            };
+            participantReport.rewards.items.push(repItem);
+            if (itemIdx === 0) {
+              participantReport.rewards.item = repItem;
+            }
+            allDelivered = false;
+            hasFailures = true;
+          }
         }
       }
+
+      deliveryReport.push(participantReport);
     }
 
-    deliveryReport.push(participantReport);
-  }
-
-  const now = new Date();
-  const updateData = {
-    reward_delivery: deliveries,
-    updated_at: now,
-  };
-
-  // Only transition to completed when all required rewards for all members are delivered
-  if (allDelivered) {
-    updateData.status = MISSION_STATUS.completed;
-    updateData.completed_at = now;
-    updateData.completed_by = {
-      user_id: String(actorId),
-      username: String(actorUsername || "Unknown"),
+    const now = new Date();
+    const updateData = {
+      reward_delivery: deliveries,
+      status: MISSION_STATUS.completed,
+      completed_at: mission.completed_at || now,
+      completed_by: mission.completed_by || {
+        user_id: String(actorId),
+        username: String(actorUsername || "Unknown"),
+      },
+      updated_at: now,
     };
-  }
 
-  const updatedMission = await target.findOneAndUpdate(
-    { public_id: String(publicId).trim() },
-    { $set: updateData, $inc: { version: 1 } },
-    { returnDocument: "after" }
-  );
+    const updatedMission = await target.findOneAndUpdate(
+      { public_id: normPublicId },
+      { $set: updateData, $inc: { version: 1 } },
+      { returnDocument: "after" }
+    );
 
-  if (allDelivered) {
     logAdminAction(
       actorId,
       "COMPLETE_MISSION",
-      `Завершил миссию "${mission.title}" [${publicId}], награды успешно выданы всем (${mission.participants.length}) участникам`
+      `Завершил миссию "${mission.title}" [${normPublicId}], награды начислены участникам (${mission.participants.length})`
     );
-  } else {
-    logAdminAction(
-      actorId,
-      "PARTIAL_MISSION_REWARDS",
-      `Частичная выдача наград для миссии "${mission.title}" [${publicId}]. Требуется повтор для невыданных наград.`
-    );
-  }
 
-  return {
-    success: true,
-    allDelivered,
-    hasFailures,
-    mission: updatedMission,
-    deliveryReport,
-  };
+    return {
+      success: true,
+      allDelivered: !hasFailures,
+      hasFailures,
+      mission: updatedMission,
+      deliveryReport,
+    };
+  } finally {
+    activeDeliveries.delete(normPublicId);
+  }
 }
 
 /**

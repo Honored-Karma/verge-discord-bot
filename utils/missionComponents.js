@@ -497,7 +497,15 @@ export function createRewardReportEmbed(mission, result) {
     const r = rep.rewards;
     const items = [];
     if (r.ap) items.push(`AP: ${r.ap.status === "failed" ? "❌ " + r.ap.error : "✅ +" + r.ap.amount}`);
-    if (r.sp) items.push(`SP: ${r.sp.status === "failed" ? "❌ " + r.sp.error : "✅ +" + r.sp.amount}`);
+    if (r.sp) {
+      if (r.sp.status === "failed") {
+        items.push(`SP: ❌ ${r.sp.error}`);
+      } else if (r.sp.status === "skipped") {
+        items.push(`SP: ⚠️ ${r.sp.error || "пропущено (нет стиля)"}`);
+      } else {
+        items.push(`SP: ✅ +${r.sp.amount}`);
+      }
+    }
     if (r.reputation) {
       items.push(
         `Rtg: ${r.reputation.status === "failed" ? "❌ " + r.reputation.error : "✅ +" + r.reputation.amount}`
@@ -527,7 +535,7 @@ export function createRewardReportEmbed(mission, result) {
         `**ID миссии:** \`${mission.public_id}\``,
         allDelivered
           ? "Все награды успешно начислены в базу данных!"
-          : "⚠️ У некоторых участников произошла ошибка (например, нет изученных стилей). Вы можете исправить причину и повторить выдачу только невыданных наград.",
+          : "⚠️ У некоторых участников произошла ошибка при начислении наград. Вы можете устранить проблему и нажать повтор.",
         "",
         lines.join("\n\n"),
       ].join("\n")

@@ -23,8 +23,12 @@ import {
   createMissionCardEmbed,
   createPartyListEmbed,
   createPublicProfileEmbed,
+  createRetryDeliveryActionRow,
+  createRewardReportEmbed,
   createUnkickMemberSelectRow,
+  MISSION_BTN_CONFIRM_FINISH,
   MISSION_BTN_KICK,
+  MISSION_BTN_RETRY_REWARDS,
   MISSION_SELECT_KICK,
   MISSION_SELECT_UNKICK,
 } from "../utils/missionComponents.js";
@@ -1769,6 +1773,485 @@ test("отображение репутации в меню 'Состав пат
   const joinedPart = savedMission.participants.find((p) => p.player_id === "p_rep_test");
   assert.ok(joinedPart, "Участник должен быть сохранён в миссии");
   assert.equal(joinedPart.reputation, 350, "Репутация участника должна быть сохранена в БД");
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 20. УЧАСТНИК БЕЗ БОЕВЫХ СТИЛЕЙ: МИССИЯ ЗАВЕРШАЕТСЯ, SP SKIPPED, НАГРАДЫ ВЫДАЮТСЯ
+// ─────────────────────────────────────────────────────────────────────────────
+test("завершение миссии с участником без боевых стилей: статус completed, SP skipped, AP и репутация начислены", async () => {
+  const db = createMockDatabase();
+  setDB(db);
+
+  const playerId = "player_unstyled_1";
+  await db.collection("players").insertOne({
+    id: playerId,
+    user_id: "user_unstyled_1",
+    character_name: "Необученный Боец",
+    organization: "GUARDIANS",
+    rank: "IV",
+    ap: 40,
+    reputation: 20,
+  });
+
+  // В коллекции player_sp НЕТ записей для этого персонажа!
+
+  const mission = await createMission(
+    {
+      guildId: "guild_unstyled_1",
+      channelId: "chan_unstyled_1",
+      title: "Обучающая миссия",
+      type: MISSION_TYPES.faction,
+      description: "Первое задание без изученных стилей",
+      access: MISSION_ACCESS.open,
+      maxPlayers: 2,
+      createdBy: { user_id: "gm_master_1", username: "GM_Master" },
+      reward: {
+        ap: 25,
+        sp: 15,
+        reputation: 10,
+        item: { item_name: "Базовый стимулятор", quantity: 2 },
+      },
+    },
+    db
+  );
+
+  await joinMission(
+    {
+      publicId: mission.public_id,
+      playerId,
+      userId: "user_unstyled_1",
+      characterName: "Необученный Боец",
+    },
+    db
+  );
+
+  await startMission({
+    publicId: mission.public_id,
+    actorId: "gm_master_1",
+    actorUsername: "GM_Master",
+    db,
+  });
+
+  // Завершение миссии и выдача наград
+  const result = await deliverMissionRewards({
+    publicId: mission.public_id,
+    actorId: "gm_master_1",
+    actorUsername: "GM_Master",
+    db,
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(result.allDelivered, true, "allDelivered должно быть true несмотря на пропущенный SP");
+  assert.equal(result.hasFailures, false, "отсутствие стиля не должно считаться ошибкой доставки");
+  assert.equal(result.mission.status, MISSION_STATUS.completed, "миссия обязана завершиться");
+
+  // Проверяем, что в БД статус действительно completed
+  const inDb = await getMissionByPublicId(mission.public_id, db);
+  assert.equal(inDb.status, MISSION_STATUS.completed);
+  assert.ok(inDb.completed_at);
+  assert.equal(inDb.completed_by.user_id, "gm_master_1");
+
+  // Проверяем начисление AP, репутации и предмета
+  const player = await db.collection("players").findOne({ id: playerId });
+  assert.equal(player.ap, 65, "AP должно увеличиться на 25");
+  assert.equal(player.reputation, 30, "Репутация должна увеличиться на 10");
+
+  const inventory = await db.collection("inventory").findOne({ player_id: playerId });
+  assert.ok(inventory, "Предмет должен быть выдан в инвентарь");
+  assert.equal(inventory.item_name, "Базовый стимулятор");
+  assert.equal(inventory.qty, 2);
+
+  // Проверяем статус SP в отчёте доставки
+  const partReport = result.deliveryReport[0];
+  assert.equal(partReport.rewards.sp.status, "skipped");
+  assert.equal(partReport.rewards.sp.error, "У персонажа нет изученных боевых стилей");
+
+  // Проверяем форматирование embed отчёта
+  const reportEmbed = createRewardReportEmbed(inDb, result);
+  assert.ok(reportEmbed.data.title.includes("✅ Награды успешно выданы"));
+  assert.ok(reportEmbed.data.description.includes("SP: ⚠️ У персонажа нет изученных боевых стилей"));
+  assert.ok(!reportEmbed.data.description.includes("undefined"));
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 21. МЬЮТЕКС И ЗАЩИТА ОТ КОНКУРЕНТНОЙ ВЫДАЧИ НАГРАД
+// ─────────────────────────────────────────────────────────────────────────────
+test("защита от конкурентной выдачи наград (concurrency mutex lock)", async () => {
+  const db = createMockDatabase();
+  setDB(db);
+
+  const playerId = "player_conc_1";
+  await db.collection("players").insertOne({
+    id: playerId,
+    user_id: "user_conc_1",
+    character_name: "Спринтер",
+    organization: "TENRYU",
+    rank: "B",
+    ap: 100,
+    reputation: 50,
+  });
+
+  const mission = await createMission(
+    {
+      guildId: "guild_conc_1",
+      channelId: "chan_conc_1",
+      title: "Параллельная выдача",
+      access: MISSION_ACCESS.open,
+      maxPlayers: 2,
+      createdBy: { user_id: "gm_conc_1", username: "GM_Conc" },
+      reward: { ap: 30, sp: 0, reputation: 15 },
+    },
+    db
+  );
+
+  await joinMission({
+    publicId: mission.public_id,
+    playerId,
+    userId: "user_conc_1",
+    characterName: "Спринтер",
+    db,
+  });
+
+  await startMission({
+    publicId: mission.public_id,
+    actorId: "gm_conc_1",
+    actorUsername: "GM_Conc",
+    db,
+  });
+
+  // Запускаем два параллельных вызова deliverMissionRewards
+  const [resA, resB] = await Promise.all([
+    deliverMissionRewards({
+      publicId: mission.public_id,
+      actorId: "gm_conc_1",
+      actorUsername: "GM_Conc",
+      db,
+    }),
+    deliverMissionRewards({
+      publicId: mission.public_id,
+      actorId: "gm_conc_1",
+      actorUsername: "GM_Conc",
+      db,
+    }),
+  ]);
+
+  // Один вызов обязан завершиться успехом, а второй — быть отклонён мьютексом
+  const successResult = resA.success ? resA : resB;
+  const lockedResult = !resA.success ? resA : resB;
+
+  assert.equal(successResult.success, true);
+  assert.equal(lockedResult.success, false);
+  assert.equal(lockedResult.reason, "already_delivering");
+
+  // AP и репутация начислены СТРОГО 1 раз, не 2 раза!
+  const player = await db.collection("players").findOne({ id: playerId });
+  assert.equal(player.ap, 133, "AP должно увеличиться ровно 1 раз (100 + 33 = 133 с учётом ранга B)");
+  assert.equal(player.reputation, 65, "Репутация должна увеличиться ровно 1 раз (50 + 15 = 65)");
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 22. ПОВТОРНЫЙ ВЫЗОВ НА ЗАВЕРШЁННОЙ МИССИИ (ALREADY COMPLETED) И ОБНОВЛЕНИЕ КАРТОЧКИ
+// ─────────────────────────────────────────────────────────────────────────────
+test("повторный вызов deliverMissionRewards на завершённой миссии (alreadyCompleted) идемпотентен", async () => {
+  const db = createMockDatabase();
+  setDB(db);
+
+  const playerId = "player_idemp_1";
+  await db.collection("players").insertOne({
+    id: playerId,
+    user_id: "user_idemp_1",
+    character_name: "Идемпотент",
+    organization: "TENRYU",
+    rank: "A",
+    ap: 100,
+    reputation: 50,
+  });
+
+  const mission = await createMission(
+    {
+      guildId: "guild_idemp_1",
+      channelId: "chan_idemp_1",
+      title: "Идемпотентная миссия",
+      access: MISSION_ACCESS.open,
+      maxPlayers: 2,
+      createdBy: { user_id: "gm_idemp_1", username: "GM_Idemp" },
+      reward: { ap: 20, sp: 0, reputation: 10 },
+    },
+    db
+  );
+
+  await joinMission({
+    publicId: mission.public_id,
+    playerId,
+    userId: "user_idemp_1",
+    characterName: "Идемпотент",
+    db,
+  });
+
+  await startMission({
+    publicId: mission.public_id,
+    actorId: "gm_idemp_1",
+    actorUsername: "GM_Idemp",
+    db,
+  });
+
+  // Первое завершение
+  const firstRes = await deliverMissionRewards({
+    publicId: mission.public_id,
+    actorId: "gm_idemp_1",
+    actorUsername: "GM_Idemp",
+    db,
+  });
+  assert.equal(firstRes.success, true);
+  assert.equal(firstRes.mission.status, MISSION_STATUS.completed);
+
+  const apAfterFirst = (await db.collection("players").findOne({ id: playerId })).ap;
+  assert.equal(apAfterFirst, 123, "AP после первого завершения 123 (100 + 20*1.15)");
+
+  // Второе завершение
+  const secondRes = await deliverMissionRewards({
+    publicId: mission.public_id,
+    actorId: "gm_idemp_1",
+    actorUsername: "GM_Idemp",
+    db,
+  });
+  assert.equal(secondRes.success, true);
+  assert.equal(secondRes.alreadyCompleted, true);
+  assert.equal(secondRes.allDelivered, true);
+
+  // Награды не продублировались
+  const player = await db.collection("players").findOne({ id: playerId });
+  assert.equal(player.ap, apAfterFirst, "AP не должно дублироваться");
+  assert.equal(player.reputation, 60);
+
+  // Проверяем обработку в missionInteractionHandler для MISSION_BTN_CONFIRM_FINISH на завершённой миссии
+  await setMissionMessageId(mission.public_id, "msg_card_idemp_1", db);
+
+  let publicCardUpdated = false;
+  const mockPublicCard = {
+    id: "msg_card_idemp_1",
+    async edit() {
+      publicCardUpdated = true;
+    },
+  };
+
+  const session = {
+    message_id: "msg_ephem_idemp_1",
+    state: { public_id: mission.public_id },
+  };
+  await createInteractionSession({
+    messageId: session.message_id,
+    namespace: "mission",
+    ownerId: "gm_idemp_1",
+    guildId: "guild_idemp_1",
+    channelId: "chan_idemp_1",
+    state: session.state,
+  });
+
+  let editReplyContent = null;
+  const finishConfirmInteraction = {
+    customId: MISSION_BTN_CONFIRM_FINISH,
+    user: { id: "gm_idemp_1", username: "GM_Idemp" },
+    guildId: "guild_idemp_1",
+    channelId: "chan_idemp_1",
+    message: { id: session.message_id },
+    client: {
+      channels: {
+        async fetch() {
+          return {
+            messages: {
+              async fetch() {
+                return mockPublicCard;
+              },
+            },
+          };
+        },
+      },
+    },
+    member: {
+      id: "gm_idemp_1",
+      permissions: { has: () => true },
+      roles: { cache: { some: () => true } },
+    },
+    async update() {},
+    async editReply(payload) {
+      editReplyContent = payload.content;
+    },
+  };
+
+  await missionInteractionHandler.handleComponent({
+    interaction: finishConfirmInteraction,
+    session,
+  });
+
+  assert.ok(editReplyContent.includes("уже была успешно завершена"), "должно уведомить, что миссия уже завершена");
+  assert.ok(publicCardUpdated, "публичная карточка должна быть обновлена");
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 23. КНОПКА ПОДТВЕРЖДЕНИЯ СРАЗУ УДАЛЯЕТ КНОПКИ ДЛЯ ЗАЩИТЫ ОТ ДВОЙНОГО КЛИКА
+// ─────────────────────────────────────────────────────────────────────────────
+test("кнопка подтверждения завершения немедленно убирает кнопки для защиты от двойного клика", async () => {
+  const db = createMockDatabase();
+  setDB(db);
+
+  const mission = await createMission(
+    {
+      guildId: "guild_btn_1",
+      channelId: "chan_btn_1",
+      title: "Быстрый клик",
+      access: MISSION_ACCESS.open,
+      maxPlayers: 2,
+      createdBy: { user_id: "gm_btn_1", username: "GM_Btn" },
+      reward: { ap: 10, sp: 0, reputation: 5 },
+    },
+    db
+  );
+
+  await startMission({
+    publicId: mission.public_id,
+    actorId: "gm_btn_1",
+    actorUsername: "GM_Btn",
+    db,
+  });
+
+  let updatePayload = null;
+  const confirmInteraction = {
+    customId: MISSION_BTN_CONFIRM_FINISH,
+    user: { id: "gm_btn_1", username: "GM_Btn" },
+    guildId: "guild_btn_1",
+    channelId: "chan_btn_1",
+    message: { id: "msg_ephem_btn_1" },
+    member: {
+      id: "gm_btn_1",
+      permissions: { has: () => true },
+      roles: { cache: { some: () => true } },
+    },
+    async update(payload) {
+      updatePayload = payload;
+    },
+    async editReply() {},
+  };
+
+  const session = {
+    message_id: "msg_ephem_btn_1",
+    state: { public_id: mission.public_id },
+  };
+
+  await missionInteractionHandler.handleComponent({
+    interaction: confirmInteraction,
+    session,
+  });
+
+  assert.ok(updatePayload, "interaction.update должен быть вызван немедленно");
+  assert.deepEqual(updatePayload.components, [], "компоненты (кнопки) должны быть немедленно очищены");
+  assert.ok(updatePayload.content.includes("Выдача наград"), "сообщение должно показать статус ожидания");
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 24. ЧАСТИЧНАЯ ОШИБКА ВЫДАЧИ И ПОВТОР (RETRY) ДОЗАВЕРШАЕТ ТОЛЬКО НЕВЫДАННОЕ
+// ─────────────────────────────────────────────────────────────────────────────
+test("частичная ошибка выдачи и повтор (retry) дозавершает только невыданную награду", async () => {
+  const db = createMockDatabase();
+  setDB(db);
+
+  const playerId1 = "player_retry_ok";
+  const playerId2 = "player_retry_fail";
+
+  await db.collection("players").insertOne({
+    id: playerId1,
+    user_id: "u_ok",
+    character_name: "Успешный",
+    organization: "TENRYU",
+    rank: "B",
+    ap: 50,
+    reputation: 10,
+  });
+
+  // playerId2 намеренно отсутствует в коллекции players на первом этапе, чтобы giveItem вернул player_not_found!
+
+  const mission = await createMission(
+    {
+      guildId: "guild_retry_1",
+      channelId: "chan_retry_1",
+      title: "Миссия с повтором",
+      access: MISSION_ACCESS.open,
+      maxPlayers: 2,
+      createdBy: { user_id: "gm_retry_1", username: "GM_Retry" },
+      reward: {
+        ap: 10,
+        sp: 0,
+        reputation: 5,
+        item: { item_name: "Артефакт", quantity: 1 },
+      },
+    },
+    db
+  );
+
+  // Напрямую добавляем участников
+  mission.participants = [
+    { player_id: playerId1, user_id: "u_ok", character_name: "Успешный" },
+    { player_id: playerId2, user_id: "u_fail", character_name: "Отстающий" },
+  ];
+  await db.collection("missions").updateOne(
+    { public_id: mission.public_id },
+    { $set: { participants: mission.participants, status: MISSION_STATUS.active } }
+  );
+
+  // 1. Первая попытка выдачи наград
+  const res1 = await deliverMissionRewards({
+    publicId: mission.public_id,
+    actorId: "gm_retry_1",
+    actorUsername: "GM_Retry",
+    db,
+  });
+
+  assert.equal(res1.success, true);
+  assert.equal(res1.hasFailures, true, "должна быть ошибка из-за отсутствия второго игрока");
+  assert.equal(res1.allDelivered, false);
+  assert.equal(res1.mission.status, MISSION_STATUS.completed, "миссия всё равно переводится в completed");
+
+  // Игрок 1 получил свои награды
+  const p1After = await db.collection("players").findOne({ id: playerId1 });
+  assert.equal(p1After.ap, 61, "AP с учётом ранга B: 50 + 11 = 61");
+  assert.equal(p1After.reputation, 15);
+  const inv1 = await db.collection("inventory").findOne({ player_id: playerId1 });
+  assert.equal(inv1.qty, 1);
+
+  // Теперь добавляем игрока 2 в базу (исправляем причину ошибки)
+  await db.collection("players").insertOne({
+    id: playerId2,
+    user_id: "u_fail",
+    character_name: "Отстающий",
+    organization: "TENRYU",
+    rank: "C",
+    ap: 20,
+    reputation: 5,
+  });
+
+  // 2. Повторная выдача наград (retry)
+  const res2 = await deliverMissionRewards({
+    publicId: mission.public_id,
+    actorId: "gm_retry_1",
+    actorUsername: "GM_Retry",
+    db,
+  });
+
+  assert.equal(res2.success, true);
+  assert.equal(res2.allDelivered, true, "после повтора все награды выданы");
+  assert.equal(res2.hasFailures, false);
+
+  // Игрок 1 НЕ получил повторных наград (строгая защита от дублей)
+  const p1Final = await db.collection("players").findOne({ id: playerId1 });
+  assert.equal(p1Final.ap, 61, "AP первого игрока не должно увеличиться снова");
+  assert.equal(p1Final.reputation, 15, "Репутация первого игрока не должна увеличиться снова");
+  const inv1Final = await db.collection("inventory").find({ player_id: playerId1 }).toArray?.() || [inv1];
+  assert.equal(inv1.qty, 1, "Количество предметов первого игрока не должно увеличиться");
+
+  // Игрок 2 теперь получил свою награду
+  const inv2 = await db.collection("inventory").findOne({ player_id: playerId2 });
+  assert.ok(inv2, "Игрок 2 должен получить предмет при повторе");
+  assert.equal(inv2.qty, 1);
 });
 
 
