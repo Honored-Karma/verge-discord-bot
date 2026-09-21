@@ -5,7 +5,17 @@ import { getDB } from '../utils/db.js';
 
 export const data = new SlashCommandBuilder()
     .setName('log-enable')
-    .setDescription('[АДМИН] Включить логирование команд в этом канале');
+    .setDescription('[АДМИН] Включить логирование команд в этом канале')
+    .addStringOption(option =>
+        option.setName('type')
+            .setDescription('Тип логов для этого канала')
+            .setRequired(false)
+            .addChoices(
+                { name: 'Все логи (тренировки и команды)', value: 'all' },
+                { name: 'Только тренировки (train-ap, train-sp, social-rp)', value: 'training' },
+                { name: 'Только административные команды', value: 'commands' }
+            )
+    );
 
 export async function execute(interaction) {
     if (!isAdmin(interaction.member)) {
@@ -25,12 +35,15 @@ export async function execute(interaction) {
 
     try {
         const channelId = interaction.channelId;
+        const type = interaction.options.getString('type') || 'all';
+
         await db.collection('log_channels').updateOne(
             { channel_id: channelId },
             {
                 $set: {
                     channel_id: channelId,
                     guild_id: interaction.guildId,
+                    type,
                     enabled: true,
                     enabled_at: new Date(),
                     enabled_by: interaction.user.id
@@ -39,10 +52,17 @@ export async function execute(interaction) {
             { upsert: true }
         );
 
+        let typeDescription = 'Все логи команд и тренировок';
+        if (type === 'training') {
+            typeDescription = 'Только логи тренировок (/train-ap, /train-sp, /social-rp)';
+        } else if (type === 'commands') {
+            typeDescription = 'Только административные команды';
+        }
+
         await interaction.reply({
             embeds: [createSuccessEmbed(
                 '✅ Логирование включено',
-                `Логи команд будут отправляться в <#${channelId}>.`,
+                `${typeDescription} будут отправляться в <#${channelId}>.`,
                 'logEnable'
             )],
             flags: 64
@@ -55,3 +75,4 @@ export async function execute(interaction) {
         });
     }
 }
+

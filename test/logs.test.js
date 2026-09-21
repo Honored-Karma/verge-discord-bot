@@ -44,6 +44,30 @@ test('buildLogEmbed formats train-ap log with full player text in description an
     assert.match(rewardField.value, /150%/);
 });
 
+test('buildLogEmbed sanitizes legacy userId with _slot suffix and formats legacy train command', () => {
+    const entry = {
+        command: 'train',
+        userId: '123456789012345678_slot2',
+        userTag: 'LegacyPlayer',
+        extra: {
+            text: 'Старая тренировка до разделения команд на train-ap и train-sp'
+        }
+    };
+
+    const embed = buildLogEmbed(entry);
+    const data = embed.toJSON();
+
+    assert.equal(data.title, '🏋️ Лог тренировки AP: /train-ap');
+    const playerField = data.fields.find(f => f.name === '👤 Игрок');
+    assert.ok(playerField);
+    assert.match(playerField.value, /<@123456789012345678>/);
+    assert.doesNotMatch(playerField.value, /_slot2/);
+
+    const charField = data.fields.find(f => f.name === '🎭 Персонаж');
+    assert.ok(charField);
+    assert.match(charField.value, /Слот 2/);
+});
+
 test('buildLogEmbed formats train-sp log with style name and SP reward', () => {
     const entry = {
         command: 'train-sp',
@@ -97,10 +121,12 @@ test('buildLogEmbed formats social-rp log with character and text', () => {
     assert.match(data.description, /Разговор в таверне/);
 });
 
-test('getDestinationLogChannels merges env variable and DB log_channels without duplicates', async () => {
+test('getDestinationLogChannels merges env variables and DB log_channels with training channel support', async () => {
     const origEnv = process.env.LOGS_CHANNEL_ID;
+    const origTrainEnv = process.env.TRAINING_LOG_CHANNEL_ID;
     try {
         process.env.LOGS_CHANNEL_ID = '111112222233333444';
+        process.env.TRAINING_LOG_CHANNEL_ID = '222223333344444555';
 
         const mockDb = {
             collection(name) {
@@ -108,8 +134,9 @@ test('getDestinationLogChannels merges env variable and DB log_channels without 
                     return {
                         async toArray() {
                             return [
-                                { channel_id: '111112222233333444', enabled: true }, // duplicate of env
-                                { channel_id: '555556666677777888', enabled: true }
+                                { channel_id: '111112222233333444', enabled: true, type: 'all' }, // duplicate of env
+                                { channel_id: '555556666677777888', enabled: true, type: 'training' },
+                                { channel_id: '999990000011111222', enabled: true, type: 'commands' }
                             ];
                         },
                         find() {
@@ -121,20 +148,29 @@ test('getDestinationLogChannels merges env variable and DB log_channels without 
             }
         };
 
-        const channels = await getDestinationLogChannels(mockDb, 'guild_123');
-        assert.equal(channels.length, 2);
-        assert.ok(channels.includes('111112222233333444'));
-        assert.ok(channels.includes('555556666677777888'));
+        // When isTraining = true, includes training channel, general logs channel, and DB training channels
+        const trainChannels = await getDestinationLogChannels(mockDb, 'guild_123', true);
+        assert.ok(trainChannels.includes('111112222233333444')); // general
+        assert.ok(trainChannels.includes('222223333344444555')); // training env
+        assert.ok(trainChannels.includes('555556666677777888')); // training DB
+        assert.ok(!trainChannels.includes('999990000011111222')); // commands-only DB channel excluded
+
+        // When isTraining = false, excludes dedicated training channels
+        const commandChannels = await getDestinationLogChannels(mockDb, 'guild_123', false);
+        assert.ok(commandChannels.includes('111112222233333444'));
+        assert.ok(!commandChannels.includes('222223333344444555'));
+        assert.ok(!commandChannels.includes('555556666677777888'));
+        assert.ok(commandChannels.includes('999990000011111222'));
     } finally {
-        if (origEnv !== undefined) {
-            process.env.LOGS_CHANNEL_ID = origEnv;
-        } else {
-            delete process.env.LOGS_CHANNEL_ID;
-        }
+        if (origEnv !== undefined) process.env.LOGS_CHANNEL_ID = origEnv;
+        else delete process.env.LOGS_CHANNEL_ID;
+
+        if (origTrainEnv !== undefined) process.env.TRAINING_LOG_CHANNEL_ID = origTrainEnv;
+        else delete process.env.TRAINING_LOG_CHANNEL_ID;
     }
 });
 
-test('logCommand falls back to standard embed if modern components throw', async () => {
+test('logCommand directly sends standard embed to channel', async () => {
     let insertedDoc = null;
     const mockDb = {
         collection(name) {
@@ -165,9 +201,6 @@ test('logCommand falls back to standard embed if modern components throw', async
     const mockChannel = {
         isTextBased: () => true,
         async send(payload) {
-            if (payload.flags && !payload.embeds) {
-                throw new Error('DiscordAPIError[50035]: Invalid Form Body for components v2');
-            }
             sentPayloads.push(payload);
             return { id: 'msg_1' };
         }
@@ -198,27 +231,19 @@ test('logCommand falls back to standard embed if modern components throw', async
         }
     };
 
-    // To test logCommand, we can test buildLogEmbed and channel delivery logic directly
     const embed = buildLogEmbed(entry);
     assert.ok(embed);
 
-    // Test that channel.send fallback works
-    let sent = false;
-    try {
-        await mockChannel.send({ flags: 32768, components: [] });
-        sent = true;
-    } catch {
-        await mockChannel.send({ embeds: [embed] });
-        sent = true;
-    }
-
-    assert.equal(sent, true);
+    await mockChannel.send({ embeds: [embed] });
     assert.equal(sentPayloads.length, 1);
     assert.ok(sentPayloads[0].embeds);
+    assert.equal(sentPayloads[0].embeds[0].data.title, '🏋️ Лог тренировки AP: /train-ap');
 });
 
-test('commands/logs renders training text snippet and metadata', async () => {
-    const { execute } = await import('../commands/logs.js');
+test('commands/logs renders training text snippet and metadata, and exposes autocomplete', async () => {
+    const { execute, autocomplete } = await import('../commands/logs.js');
     assert.equal(typeof execute, 'function');
+    assert.equal(typeof autocomplete, 'function');
 });
+
 

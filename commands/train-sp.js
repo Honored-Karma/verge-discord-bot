@@ -306,7 +306,7 @@ export async function handleModalSubmit(interaction) {
     guildId: interaction.guildId,
     channelId: interaction.channelId,
     userId: interaction.user.id,
-    userTag: interaction.user.username,
+    userTag: interaction.user.tag || interaction.user.username,
     command: "train-sp",
     extra: {
       text: trainingText,
@@ -316,5 +316,5 @@ export async function handleModalSubmit(interaction) {
       sp_gained: result.gained,
       multiplier: result.multiplier,
     },
-  });
+  }).catch(err => console.error("[train-sp] logCommand error:", err));
 }

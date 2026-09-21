@@ -208,7 +208,7 @@ export async function handleModalSubmit(interaction) {
     guildId: interaction.guildId,
     channelId: interaction.channelId,
     userId: interaction.user.id,
-    userTag: interaction.user.username,
+    userTag: interaction.user.tag || interaction.user.username,
     command: "train-ap",
     extra: {
       text: trainingText,
@@ -217,5 +217,5 @@ export async function handleModalSubmit(interaction) {
       ap_gained: result.gained,
       multiplier: result.multiplier,
     },
-  });
+  }).catch(err => console.error("[train-ap] logCommand error:", err));
 }

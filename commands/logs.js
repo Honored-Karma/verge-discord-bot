@@ -8,8 +8,39 @@ export const data = new SlashCommandBuilder()
     .setName('logs')
     .setDescription('Показать последние записи использования команд (только в канале логов)')
     .addIntegerOption(option => option.setName('limit').setDescription('Количество записей (по умолчанию: 10)').setRequired(false))
-    .addStringOption(option => option.setName('command').setDescription('Фильтр по команде').setRequired(false))
+    .addStringOption(option => option.setName('command').setDescription('Фильтр по команде (начните вводить)').setAutocomplete(true).setRequired(false))
     .addUserOption(option => option.setName('user').setDescription('Фильтр по пользователю').setRequired(false));
+
+const POPULAR_LOG_COMMANDS = [
+    { name: '🏋️ Все тренировки (train-ap, train-sp, social-rp, train)', value: 'train' },
+    { name: '🏋️ Тренировка AP (/train-ap)', value: 'train-ap' },
+    { name: '🥋 Тренировка стиля SP (/train-sp)', value: 'train-sp' },
+    { name: '🎭 Социальный RP (/social-rp)', value: 'social-rp' },
+    { name: '🔒 Блокировки тренировок (/train-block)', value: 'train-block' },
+    { name: '🎁 Лутбокс (/lootbox)', value: 'lootbox' },
+    { name: '💳 Перевод валюты (/pay)', value: 'pay' },
+    { name: '🛒 Магазин (/shop)', value: 'shop' },
+    { name: '📦 Выдача предметов (/give-item)', value: 'give-item' },
+    { name: '⚡ Начисление AP (/add-ap)', value: 'add-ap' },
+    { name: '🥋 Начисление SP (/add-sp)', value: 'add-sp' },
+    { name: '💰 Начисление валюты (/add-currency)', value: 'add-currency' },
+    { name: '💸 Списание валюты (/deduct-currency)', value: 'deduct-currency' },
+    { name: '⭐ Начисление репутации (/add-reputation)', value: 'add-reputation' },
+    { name: '📜 Регистрация (/register)', value: 'register' }
+];
+
+export async function autocomplete(interaction) {
+    try {
+        const focusedValue = (interaction.options.getFocused() || '').toLowerCase().trim();
+        const filtered = POPULAR_LOG_COMMANDS.filter(choice =>
+            choice.name.toLowerCase().includes(focusedValue) ||
+            choice.value.toLowerCase().includes(focusedValue)
+        ).slice(0, 25);
+        await interaction.respond(filtered);
+    } catch {
+        // Autocomplete error ignored
+    }
+}
 
 export async function execute(interaction) {
     const logsChannel = process.env.LOGS_CHANNEL_ID || null;
@@ -58,16 +89,41 @@ export async function execute(interaction) {
         return interaction.editReply({ embeds: [createErrorEmbed('Ошибка', 'База данных недоступна.')] });
     }
 
-    const query = {};
-    if (commandFilter) query.command = commandFilter;
-    if (userFilter) {
-        query.$or = [
-            { user_id: userFilter.id },
-            { user_id: new RegExp(`^${userFilter.id}(_|$)`) }
-        ];
-    }
-    if (interaction.guildId) query.guild_id = interaction.guildId;
+    const andClauses = [];
 
+    if (commandFilter) {
+        const cmd = commandFilter.trim().toLowerCase();
+        if (cmd === 'train' || cmd === 'training' || cmd === 'тренировка' || cmd === 'тренировки' || cmd === 'треня') {
+            andClauses.push({ command: { $in: ['train', 'train-ap', 'train-sp', 'social-rp'] } });
+        } else if (cmd === 'train-ap') {
+            andClauses.push({ command: { $in: ['train-ap', 'train'] } });
+        } else if (cmd === 'train-block') {
+            andClauses.push({ command: { $in: ['train-block', 'train-block block', 'train-block unblock'] } });
+        } else {
+            andClauses.push({ command: { $regex: new RegExp(`^${cmd}$`, 'i') } });
+        }
+    }
+
+    if (userFilter) {
+        andClauses.push({
+            $or: [
+                { user_id: userFilter.id },
+                { user_id: new RegExp(`^${userFilter.id}(_|$)`) }
+            ]
+        });
+    }
+
+    if (interaction.guildId) {
+        andClauses.push({
+            $or: [
+                { guild_id: interaction.guildId },
+                { guild_id: null },
+                { guild_id: { $exists: false } }
+            ]
+        });
+    }
+
+    const query = andClauses.length > 0 ? { $and: andClauses } : {};
     const rows = await db.collection('command_logs').find(query).sort({ timestamp: -1 }).limit(limit).toArray();
 
     if (!rows || rows.length === 0) {
@@ -87,7 +143,8 @@ export async function execute(interaction) {
         let extraInfo = '';
         if (r.extra) {
             const parts = [];
-            if (r.extra.slot) parts.push(`Слот ${r.extra.slot}`);
+            const slotNum = r.extra.slot || (r.user_id && /_slot(\d+)$/.test(String(r.user_id)) ? Number(String(r.user_id).match(/_slot(\d+)$/)[1]) : null);
+            if (slotNum) parts.push(`Слот ${slotNum}`);
             if (r.extra.character_name) parts.push(`персонаж: **${r.extra.character_name}**`);
             if (r.extra.style) parts.push(`стиль: **${r.extra.style}**`);
             if (r.extra.ap_gained !== undefined) parts.push(`+${r.extra.ap_gained} AP`);
@@ -99,7 +156,7 @@ export async function execute(interaction) {
         let line = `• [${time}] ${who} — **/${cmd}**${target}${ch}${extraInfo}`;
         if (r.extra?.text) {
             const snippet = String(r.extra.text).trim().replace(/\s+/g, ' ');
-            const preview = snippet.length > 120 ? snippet.slice(0, 117) + '...' : snippet;
+            const preview = snippet.length > 280 ? snippet.slice(0, 277) + '...' : snippet;
             line += `\n  > 💬 *«${preview}»*`;
         }
         return line;

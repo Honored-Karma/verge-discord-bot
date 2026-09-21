@@ -1,17 +1,20 @@
 import { getDB } from './db.js';
 import { EmbedBuilder } from 'discord.js';
-import { modernizeResponsePayload } from './modernResponses.js';
 
 export function buildLogEmbed(entry) {
     const { command, userId, userTag, targetTag, channelId, extra, timestamp } = entry;
-    const isTraining = command === 'train-ap' || command === 'train-sp' || command === 'social-rp' || Boolean(extra?.text);
+    const isTraining = command === 'train-ap' || command === 'train-sp' || command === 'social-rp' || command === 'train' || Boolean(extra?.text);
 
     const embed = new EmbedBuilder().setTimestamp(timestamp || new Date());
+
+    // Sanitize user ID in case legacy log has _slotN attached
+    const cleanUserId = userId ? String(userId).replace(/_slot\d+$/, '') : null;
+    const inferredSlot = extra?.slot || (userId && /_slot(\d+)$/.test(String(userId)) ? Number(String(userId).match(/_slot(\d+)$/)[1]) : null);
 
     if (isTraining) {
         let title = `📋 Лог активности: /${command}`;
         let color = '#b209d4';
-        if (command === 'train-ap') {
+        if (command === 'train-ap' || command === 'train') {
             title = '🏋️ Лог тренировки AP: /train-ap';
             color = '#38bdf8';
         } else if (command === 'train-sp') {
@@ -24,17 +27,20 @@ export function buildLogEmbed(entry) {
 
         embed.setTitle(title).setColor(color);
 
-        const executor = userTag ? `<@${userId}> (${userTag})` : `<@${userId}>`;
+        const executor = userTag
+            ? (cleanUserId ? `<@${cleanUserId}> (${userTag})` : userTag)
+            : (cleanUserId ? `<@${cleanUserId}>` : 'Не указан');
+
         embed.addFields(
             { name: '👤 Игрок', value: executor, inline: true },
             { name: '⏰ Время', value: `<t:${Math.floor((timestamp || new Date()).getTime() / 1000)}:F>`, inline: true },
             { name: '💬 Канал', value: channelId ? `<#${channelId}>` : 'Не указан', inline: true }
         );
 
-        if (extra?.character_name || extra?.slot) {
-            const charVal = extra.character_name
-                ? `**${extra.character_name}** (Слот ${extra.slot || 1})`
-                : `Слот ${extra.slot || 1}`;
+        if (extra?.character_name || inferredSlot) {
+            const charVal = extra?.character_name
+                ? `**${extra.character_name}** (Слот ${inferredSlot || 1})`
+                : `Слот ${inferredSlot || 1}`;
             embed.addFields({ name: '🎭 Персонаж', value: charVal, inline: true });
         }
 
@@ -68,11 +74,15 @@ export function buildLogEmbed(entry) {
             embed.addFields({ name: 'ℹ️ Прочее', value: extraStr.slice(0, 1021), inline: false });
         }
     } else {
+        const executor = userTag
+            ? (cleanUserId ? `<@${cleanUserId}> (${userTag})` : userTag)
+            : (cleanUserId ? `<@${cleanUserId}>` : 'Не указан');
+
         embed
             .setColor('#b209d4')
             .setTitle(`📋 Лог команды: /${command}`)
             .addFields(
-                { name: '👤 Исполнитель', value: userTag ? `<@${userId}> (${userTag})` : `<@${userId}>`, inline: true },
+                { name: '👤 Исполнитель', value: executor, inline: true },
                 { name: '⏰ Время', value: `<t:${Math.floor((timestamp || new Date()).getTime() / 1000)}:F>`, inline: true },
                 { name: '💬 Канал', value: channelId ? `<#${channelId}>` : 'Не указан', inline: true }
             );
@@ -95,16 +105,27 @@ export function buildLogEmbed(entry) {
     return embed;
 }
 
-export async function getDestinationLogChannels(db, guildId = null) {
+export async function getDestinationLogChannels(db, guildId = null, isTraining = false) {
     const channelIds = new Set();
 
-    // 1. Environment variable LOGS_CHANNEL_ID if provided
+    // 1. Dedicated training log channel from environment if training
+    if (isTraining) {
+        const trainEnvChannelId = process.env.TRAINING_LOG_CHANNEL_ID || process.env.TRAIN_LOG_CHANNEL_ID;
+        if (trainEnvChannelId) {
+            const chId = String(trainEnvChannelId).trim();
+            if (/^\d{5,25}$/.test(chId)) {
+                channelIds.add(chId);
+            }
+        }
+    }
+
+    // 2. General environment variable LOGS_CHANNEL_ID
     const envChannelId = process.env.LOGS_CHANNEL_ID ? String(process.env.LOGS_CHANNEL_ID).trim() : null;
     if (envChannelId && /^\d{5,25}$/.test(envChannelId)) {
         channelIds.add(envChannelId);
     }
 
-    // 2. Enabled log channels from DB
+    // 3. Enabled log channels from DB
     if (db) {
         try {
             const query = { enabled: true };
@@ -117,11 +138,17 @@ export async function getDestinationLogChannels(db, guildId = null) {
             }
             const logChannelDocs = await db.collection('log_channels').find(query).toArray();
             for (const doc of logChannelDocs) {
-                if (doc.channel_id) {
-                    const chId = String(doc.channel_id).trim();
-                    if (/^\d{5,25}$/.test(chId)) {
-                        channelIds.add(chId);
-                    }
+                if (!doc.channel_id) continue;
+                const chId = String(doc.channel_id).trim();
+                if (!/^\d{5,25}$/.test(chId)) continue;
+
+                const type = doc.type || 'all';
+                if (type === 'all') {
+                    channelIds.add(chId);
+                } else if (isTraining && (type === 'training' || type === 'train')) {
+                    channelIds.add(chId);
+                } else if (!isTraining && (type === 'commands' || type === 'admin')) {
+                    channelIds.add(chId);
                 }
             }
         } catch (dbErr) {
@@ -135,7 +162,6 @@ export async function getDestinationLogChannels(db, guildId = null) {
 export async function logCommand({ client, guildId, channelId, userId, userTag, command, targetId = null, targetTag = null, extra = null }) {
     try {
         const db = getDB();
-        if (!db) return false;
 
         const entry = {
             timestamp: new Date(),
@@ -149,36 +175,37 @@ export async function logCommand({ client, guildId, channelId, userId, userTag, 
             extra: extra || null
         };
 
+        const isTraining = command === 'train-ap' || command === 'train-sp' || command === 'social-rp' || command === 'train' || Boolean(extra?.text);
+
         // Optionally save to DB (default: true). Set LOGS_SAVE_TO_DB=false to disable DB writes.
-        const saveToDb = process.env.LOGS_SAVE_TO_DB ? (process.env.LOGS_SAVE_TO_DB.toLowerCase() !== 'false' && process.env.LOGS_SAVE_TO_DB !== '0') : true;
-        if (saveToDb) {
-            await db.collection('command_logs').insertOne(entry);
+        if (db) {
+            const saveToDb = process.env.LOGS_SAVE_TO_DB ? (process.env.LOGS_SAVE_TO_DB.toLowerCase() !== 'false' && process.env.LOGS_SAVE_TO_DB !== '0') : true;
+            if (saveToDb) {
+                await db.collection('command_logs').insertOne(entry).catch(err => {
+                    console.error('Failed to insert command log to DB:', err);
+                });
+            }
         }
 
         // Send log embed to enabled log channels
         if (client) {
             try {
-                const destinationChannelIds = await getDestinationLogChannels(db, guildId);
-                const embed = buildLogEmbed(entry);
+                const destinationChannelIds = await getDestinationLogChannels(db, guildId, isTraining);
+                if (destinationChannelIds.length > 0) {
+                    const embed = buildLogEmbed(entry);
 
-                for (const chId of destinationChannelIds) {
-                    try {
-                        const logsChannel = await client.channels.fetch(chId);
-                        if (logsChannel && logsChannel.isTextBased()) {
-                            let sent = false;
-                            try {
-                                const modernPayload = modernizeResponsePayload({ embeds: [embed] });
-                                await logsChannel.send(modernPayload);
-                                sent = true;
-                            } catch (modernErr) {
-                                console.warn(`[logs] modernizeResponsePayload failed for channel ${chId}, falling back to standard embed:`, modernErr?.message || modernErr);
-                            }
-                            if (!sent) {
+                    for (const chId of destinationChannelIds) {
+                        try {
+                            const logsChannel = await client.channels.fetch(chId).catch(err => {
+                                console.error(`[logs] Failed to fetch channel ${chId}:`, err?.message || err);
+                                return null;
+                            });
+                            if (logsChannel && logsChannel.isTextBased()) {
                                 await logsChannel.send({ embeds: [embed] });
                             }
+                        } catch (err) {
+                            console.error(`Failed to send log to channel ${chId}:`, err);
                         }
-                    } catch (err) {
-                        console.error(`Failed to send log to channel ${chId}:`, err);
                     }
                 }
             } catch (err) {
