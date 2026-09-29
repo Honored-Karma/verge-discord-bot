@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { getDB } from "./db.js";
 import {
   addAP,
+  addCurrency,
   addSP,
   addReputation,
   getAllPlayerSP,
@@ -222,6 +223,8 @@ export async function createMission({
   }
 
   const safeReward = {
+    krw: Math.max(0, Number(reward.krw || 0)),
+    yen: Math.max(0, Number(reward.yen || 0)),
     ap: Math.max(0, Number(reward.ap || 0)),
     sp: Math.max(0, Number(reward.sp || 0)),
     reputation: Math.max(0, Number(reward.reputation || 0)),
@@ -831,7 +834,93 @@ export async function deliverMissionRewards({
         rewards: {},
       };
 
-      // 1. AP Delivery
+      // 1. Currency (KRW) Delivery
+      if (mission.reward?.krw > 0) {
+        const krwKey = `mission:${mission.public_id}:${playerId}:krw`;
+        if (deliveries[krwKey]?.status === "delivered") {
+          participantReport.rewards.krw = {
+            status: "already_delivered",
+            amount: mission.reward.krw,
+          };
+        } else {
+          try {
+            const res = await addCurrency(
+              playerId,
+              "krw",
+              mission.reward.krw,
+              actorId
+            );
+            if (res !== false) {
+              deliveries[krwKey] = {
+                status: "delivered",
+                amount: mission.reward.krw,
+                newBalance: res,
+                delivered_at: new Date(),
+              };
+              participantReport.rewards.krw = {
+                status: "delivered",
+                amount: mission.reward.krw,
+                newBalance: res,
+              };
+            } else {
+              deliveries[krwKey] = { status: "failed", error: "Не удалось начислить KRW" };
+              participantReport.rewards.krw = { status: "failed", error: "Не удалось начислить KRW" };
+              allDelivered = false;
+              hasFailures = true;
+            }
+          } catch (err) {
+            deliveries[krwKey] = { status: "failed", error: err.message };
+            participantReport.rewards.krw = { status: "failed", error: err.message };
+            allDelivered = false;
+            hasFailures = true;
+          }
+        }
+      }
+
+      // 2. Currency (YEN) Delivery
+      if (mission.reward?.yen > 0) {
+        const yenKey = `mission:${mission.public_id}:${playerId}:yen`;
+        if (deliveries[yenKey]?.status === "delivered") {
+          participantReport.rewards.yen = {
+            status: "already_delivered",
+            amount: mission.reward.yen,
+          };
+        } else {
+          try {
+            const res = await addCurrency(
+              playerId,
+              "yen",
+              mission.reward.yen,
+              actorId
+            );
+            if (res !== false) {
+              deliveries[yenKey] = {
+                status: "delivered",
+                amount: mission.reward.yen,
+                newBalance: res,
+                delivered_at: new Date(),
+              };
+              participantReport.rewards.yen = {
+                status: "delivered",
+                amount: mission.reward.yen,
+                newBalance: res,
+              };
+            } else {
+              deliveries[yenKey] = { status: "failed", error: "Не удалось начислить YEN" };
+              participantReport.rewards.yen = { status: "failed", error: "Не удалось начислить YEN" };
+              allDelivered = false;
+              hasFailures = true;
+            }
+          } catch (err) {
+            deliveries[yenKey] = { status: "failed", error: err.message };
+            participantReport.rewards.yen = { status: "failed", error: err.message };
+            allDelivered = false;
+            hasFailures = true;
+          }
+        }
+      }
+
+      // 3. AP Delivery
       if (mission.reward?.ap > 0) {
         const apKey = `mission:${mission.public_id}:${playerId}:ap`;
         if (deliveries[apKey]?.status === "delivered") {

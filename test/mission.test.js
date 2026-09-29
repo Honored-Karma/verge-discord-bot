@@ -193,6 +193,20 @@ function createMockDatabase() {
                     return doc.participants?.some((p) => p.player_id === subFilter["participants.player_id"]);
                   }
                   for (const [sk, sv] of Object.entries(subFilter)) {
+                    if (sv && typeof sv === "object") {
+                      if (sv.$exists === false) {
+                        if (Object.hasOwn(doc, sk) && doc[sk] !== undefined) return false;
+                        continue;
+                      }
+                      if (sv.$lte !== undefined) {
+                        if ((Number(doc[sk]) || 0) > sv.$lte) return false;
+                        continue;
+                      }
+                      if (sv.$gte !== undefined) {
+                        if ((Number(doc[sk]) || 0) < sv.$gte) return false;
+                        continue;
+                      }
+                    }
                     if (doc[sk] !== sv) return false;
                   }
                   return true;
@@ -747,6 +761,8 @@ test("завершение миссии: безопасная и идемпот�
     title: "Охота на реликвию",
     maxPlayers: 2,
     reward: {
+      krw: 50000,
+      yen: 2500,
       ap: 20,
       sp: 10,
       reputation: 5,
@@ -787,18 +803,24 @@ test("завершение миссии: безопасная и идемпот�
 
   const playerAfter = await db.collection("players").findOne({ id: playerId });
   const spAfter = await db.collection("player_sp").findOne({ player_id: playerId, style_id: 10 });
-  const inventoryAfter = await db.collection("inventory").findOne({ player_id: playerId });
+  const inventoryAfter = await db.collection("inventory").find({ player_id: playerId }).toArray();
 
+  assert.equal(playerAfter.krw, 50000, "KRW начислено на баланс игрока");
+  assert.equal(playerAfter.yen, 2500, "YEN начислено на баланс игрока");
   assert.ok(playerAfter.ap > 100, "AP начислено");
   assert.ok(spAfter.sp > 200, "SP начислено");
   assert.equal(playerAfter.reputation, 55, "Репутация +5");
-  assert.equal(inventoryAfter.item_name, "Фрагмент чёрного коралла");
-  assert.equal(inventoryAfter.qty, 1);
+  // В инвентаре ТОЛЬКО 1 предмет — фрагмент коралла, и НИКАКИХ денег!
+  assert.equal(inventoryAfter.length, 1, "В инвентаре только реальный предмет, деньги на балансе");
+  assert.equal(inventoryAfter[0].item_name, "Фрагмент чёрного коралла");
+  assert.equal(inventoryAfter[0].qty, 1);
 
+  const krwSnapshot = playerAfter.krw;
+  const yenSnapshot = playerAfter.yen;
   const apSnapshot = playerAfter.ap;
   const spSnapshot = spAfter.sp;
   const repSnapshot = playerAfter.reputation;
-  const invSnapshot = inventoryAfter.qty;
+  const invSnapshot = inventoryAfter[0].qty;
 
   // 2. Вторая (повторная) попытка выдачи наград — должна быть строго идемпотентной
   const delivery2 = await deliverMissionRewards({
@@ -814,12 +836,15 @@ test("завершение миссии: безопасная и идемпот�
   // Значения не должны измениться ни на единицу
   const playerUnchanged = await db.collection("players").findOne({ id: playerId });
   const spUnchanged = await db.collection("player_sp").findOne({ player_id: playerId, style_id: 10 });
-  const invUnchanged = await db.collection("inventory").findOne({ player_id: playerId });
+  const invUnchanged = await db.collection("inventory").find({ player_id: playerId }).toArray();
 
+  assert.equal(playerUnchanged.krw, krwSnapshot, "KRW не должно дублироваться");
+  assert.equal(playerUnchanged.yen, yenSnapshot, "YEN не должно дублироваться");
   assert.equal(playerUnchanged.ap, apSnapshot, "AP не должно дублироваться");
   assert.equal(spUnchanged.sp, spSnapshot, "SP не должно дублироваться");
   assert.equal(playerUnchanged.reputation, repSnapshot, "Репутация не должна дублироваться");
-  assert.equal(invUnchanged.qty, invSnapshot, "Предмет не должен дублироваться");
+  assert.equal(invUnchanged.length, 1, "Количество предметов в инвентаре не изменилось");
+  assert.equal(invUnchanged[0].qty, invSnapshot, "Предмет не должен дублироваться");
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

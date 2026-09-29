@@ -73,6 +73,12 @@ export function createMissionCardEmbed(mission, client = null) {
 
   // Format rewards
   const rewardLines = [];
+  if (mission.reward?.krw > 0) {
+    rewardLines.push(`• <:Flag_of_South_Korea:1438985777949179935>  +${Number(mission.reward.krw).toLocaleString("ru-RU")} KRW каждому (на баланс)`);
+  }
+  if (mission.reward?.yen > 0) {
+    rewardLines.push(`• <:2640japanflag:1438980353925714081>  +${Number(mission.reward.yen).toLocaleString("ru-RU")} ¥ каждому (на баланс)`);
+  }
   if (mission.reward?.ap > 0) {
     rewardLines.push(`• +${mission.reward.ap} AP каждому`);
   }
@@ -426,9 +432,11 @@ export function createPublicProfileEmbed(player, styles = [], baseUrl = null) {
 export function createCompletionConfirmationEmbed(mission) {
   const participants = mission.participants || [];
   const rewards = [];
-  if (mission.reward.ap > 0) rewards.push(`• +${mission.reward.ap} AP каждому`);
-  if (mission.reward.sp > 0) rewards.push(`• +${mission.reward.sp} SP каждому (в основной стиль)`);
-  if (mission.reward.reputation > 0) rewards.push(`• +${mission.reward.reputation} Rtg каждому`);
+  if (mission.reward?.krw > 0) rewards.push(`• +${Number(mission.reward.krw).toLocaleString("ru-RU")} KRW каждому (на баланс)`);
+  if (mission.reward?.yen > 0) rewards.push(`• +${Number(mission.reward.yen).toLocaleString("ru-RU")} YEN каждому (на баланс)`);
+  if (mission.reward?.ap > 0) rewards.push(`• +${mission.reward.ap} AP каждому`);
+  if (mission.reward?.sp > 0) rewards.push(`• +${mission.reward.sp} SP каждому (в основной стиль)`);
+  if (mission.reward?.reputation > 0) rewards.push(`• +${mission.reward.reputation} Rtg каждому`);
 
   const items = Array.isArray(mission.reward?.items) && mission.reward.items.length > 0
     ? mission.reward.items
@@ -496,6 +504,16 @@ export function createRewardReportEmbed(mission, result) {
   for (const rep of deliveryReport) {
     const r = rep.rewards;
     const items = [];
+    if (r.krw) {
+      items.push(
+        `KRW: ${r.krw.status === "failed" ? "❌ " + r.krw.error : "✅ +" + Number(r.krw.amount).toLocaleString("ru-RU") + " ₩"}`
+      );
+    }
+    if (r.yen) {
+      items.push(
+        `YEN: ${r.yen.status === "failed" ? "❌ " + r.yen.error : "✅ +" + Number(r.yen.amount).toLocaleString("ru-RU") + " ¥"}`
+      );
+    }
     if (r.ap) items.push(`AP: ${r.ap.status === "failed" ? "❌ " + r.ap.error : "✅ +" + r.ap.amount}`);
     if (r.sp) {
       if (r.sp.status === "failed") {

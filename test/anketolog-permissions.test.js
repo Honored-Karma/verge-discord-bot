@@ -32,6 +32,7 @@ test("ANKETOLOG_ROLE_IDS grants permissions for onboarding/character approval co
     "add-ap",
     "set-ap",
     "give-item",
+    "remove-item",
     "set-rank",
     "add-reputation",
     "set-reputation",

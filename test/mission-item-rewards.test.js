@@ -5,13 +5,16 @@ import {
   createRewardsModal,
   formatRewardItemsForModal,
   MB_INPUT_AP,
+  MB_INPUT_CURRENCY,
   MB_INPUT_DISTRIBUTION,
   MB_INPUT_ITEM,
   MB_INPUT_QTY,
   MB_INPUT_REP,
   MB_INPUT_SP,
+  isCurrencyLine,
   missionBuilderInteractionHandler,
   parseDistributionMode,
+  parseRewardCurrency,
   parseRewardItems,
 } from "../interactions/missionBuilderSession.js";
 import {
@@ -552,3 +555,87 @@ test("7. deliverMissionRewards correctly distributes 'all' to everyone and 'rand
   assert.equal(allScaleHoldersAfter.length, 1, "Still exactly one dragon scale item in database");
   assert.equal(allScaleHoldersAfter[0].player_id, winnerPlayerId, "Winner preserved");
 });
+
+test("8. currency rewards are parsed separately and never given as inventory items", async () => {
+  // Test parseRewardCurrency
+  assert.deepEqual(parseRewardCurrency("50000 KRW"), { krw: 50000, yen: 0 });
+  assert.deepEqual(parseRewardCurrency("20000 ₩"), { krw: 20000, yen: 0 });
+  assert.deepEqual(parseRewardCurrency("50 000 вон"), { krw: 50000, yen: 0 });
+  assert.deepEqual(parseRewardCurrency("1500 YEN"), { krw: 0, yen: 1500 });
+  assert.deepEqual(parseRewardCurrency("3000 ¥"), { krw: 0, yen: 3000 });
+  assert.deepEqual(parseRewardCurrency("50000 KRW, 1000 YEN"), { krw: 50000, yen: 1000 });
+  assert.deepEqual(parseRewardCurrency("10k KRW"), { krw: 10000, yen: 0 });
+  assert.deepEqual(parseRewardCurrency("25000"), { krw: 25000, yen: 0 });
+  assert.deepEqual(parseRewardCurrency(""), { krw: 0, yen: 0 });
+
+  // Test isCurrencyLine
+  assert.equal(isCurrencyLine("50000 KRW"), true);
+  assert.equal(isCurrencyLine("1000 YEN"), true);
+  assert.equal(isCurrencyLine("10000 вон (каждому)"), true);
+  assert.equal(isCurrencyLine("500 ¥"), true);
+  assert.equal(isCurrencyLine("Деньги: 2500 KRW"), true);
+  assert.equal(isCurrencyLine("Большое зелье x2"), false);
+  assert.equal(isCurrencyLine("Меч дракона"), false);
+
+  // Test that items field with money automatically extracts money and excludes from inventory
+  const draft = createDraftState({
+    title: "Тестовая миссия с деньгами",
+    reward: {
+      items: [
+        { item_name: "50000 KRW", quantity: 1 },
+        { item_name: "Зелье лечения", quantity: 2 },
+      ],
+    },
+  });
+
+  assert.equal(draft.reward.krw, 50000, "KRW extracted from item line");
+  assert.equal(draft.reward.items.length, 1, "Only real item left in items array");
+  assert.equal(draft.reward.items[0].item_name, "Зелье лечения");
+
+  // Test modal handling with MB_INPUT_CURRENCY
+  const db = createMockDatabase();
+  setDB(db);
+  const session = {
+    message_id: "msg_session_currency",
+    owner_id: "gm_currency",
+    state: createDraftState(),
+  };
+  await db.collection("interaction_sessions").insertOne(session);
+
+  let updatedPayload = null;
+  const mockInteraction = {
+    user: { id: "gm_currency" },
+    fields: {
+      getTextInputValue(fieldId) {
+        if (fieldId === MB_INPUT_CURRENCY) return "75000 KRW, 500 YEN";
+        if (fieldId === MB_INPUT_AP) return "10";
+        if (fieldId === MB_INPUT_SP) return "5";
+        if (fieldId === MB_INPUT_REP) return "2";
+        if (fieldId === MB_INPUT_ITEM) return "Свиток телепортации x1";
+        return "";
+      },
+    },
+    update: async (payload) => {
+      updatedPayload = payload;
+    },
+  };
+
+  await missionBuilderInteractionHandler.handleModal({
+    interaction: mockInteraction,
+    session,
+    action: "rewards",
+  });
+
+  const updatedSession = await db.collection("interaction_sessions").findOne({ message_id: "msg_session_currency" });
+  assert.ok(updatedSession);
+  assert.equal(updatedSession.state.reward.krw, 75000);
+  assert.equal(updatedSession.state.reward.yen, 500);
+  assert.equal(updatedSession.state.reward.items.length, 1);
+  assert.equal(updatedSession.state.reward.items[0].item_name, "Свиток телепортации");
+
+  // Check builder embed shows money
+  const description = updatedPayload.embeds[0].data.description;
+  assert.ok(description.includes("75") && description.includes("KRW"));
+  assert.ok(description.includes("500") && description.includes("YEN"));
+});
+

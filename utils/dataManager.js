@@ -1,7 +1,11 @@
 import { getDB, withTransaction } from "./db.js";
 import { calculateExchange, calculateTransfer } from "./banking.js";
 import { getItemDefinition } from "./itemSystem.js";
-import { incrementInventoryStack } from "./inventoryStore.js";
+import {
+  decrementOrRemoveInventoryStack,
+  incrementInventoryStack,
+} from "./inventoryStore.js";
+
 import {
   isTransactionUnsupportedError,
   transferCurrencyCompensated,
@@ -1209,6 +1213,57 @@ export async function giveItem(playerId, itemName, qty, adminId) {
     };
   } catch (error) {
     console.error("Error giving item:", error);
+    return {
+      success: false,
+      reason: "error",
+    };
+  }
+}
+
+export async function removeItem(playerId, itemName, qty = 1, adminId, { removeAll = false, reason = null } = {}) {
+  try {
+    const db = getDB();
+    const safeName = String(itemName || "").trim();
+    const safeQuantity = Number(qty);
+    if (!safeName || safeName.length > 100) {
+      return { success: false, reason: "invalid_item" };
+    }
+    if (!removeAll && (!Number.isSafeInteger(safeQuantity) || safeQuantity < 1)) {
+      return { success: false, reason: "invalid_quantity" };
+    }
+
+    const playerExists = await db.collection("players").findOne(
+      { id: playerId },
+      { projection: { id: 1 } },
+    );
+    if (!playerExists) return { success: false, reason: "player_not_found" };
+
+    const result = await decrementOrRemoveInventoryStack(db.collection("inventory"), {
+      playerId,
+      itemName: safeName,
+      quantity: safeQuantity,
+      removeAll,
+    });
+    if (!result.success) return result;
+
+    if (adminId !== "system") {
+      const reasonSuffix = reason ? ` (Причина: ${reason})` : "";
+      logAdminAction(
+        adminId,
+        "REMOVE_ITEM",
+        `Удалил ${result.removedQuantity}x ${result.itemName} у игрока ${playerId}${reasonSuffix}`,
+      );
+    }
+
+    return {
+      success: true,
+      itemName: result.itemName,
+      removedQuantity: result.removedQuantity,
+      remainingQuantity: result.remainingQuantity,
+      previousQuantity: result.previousQuantity,
+    };
+  } catch (error) {
+    console.error("Error removing item:", error);
     return {
       success: false,
       reason: "error",

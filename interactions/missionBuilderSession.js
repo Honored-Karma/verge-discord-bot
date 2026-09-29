@@ -74,6 +74,7 @@ export const MB_INPUT_PLAYERS = "mb_input_players";
 export const MB_INPUT_CHANNEL = "mb_input_channel";
 export const MB_INPUT_DESC = "mb_input_desc";
 
+export const MB_INPUT_CURRENCY = "mb_input_currency";
 export const MB_INPUT_AP = "mb_input_ap";
 export const MB_INPUT_SP = "mb_input_sp";
 export const MB_INPUT_REP = "mb_input_rep";
@@ -104,6 +105,71 @@ export function parseDistributionMode(rawStr) {
     return "random";
   }
   return "all";
+}
+
+/**
+ * Парсит награду валюты из текста.
+ * Поддерживает форматы:
+ * - "50000 KRW" / "50 000 вон" / "50000 ₩"
+ * - "10000 YEN" / "10 000 йен" / "10000 ¥"
+ * - "50000 KRW, 2000 YEN"
+ * - "50000" (по умолчанию KRW)
+ */
+export function parseRewardCurrency(rawText, defaultCurrency = "krw") {
+  if (!rawText || !String(rawText).trim()) {
+    return { krw: 0, yen: 0 };
+  }
+
+  const text = String(rawText).trim();
+  const parts = text.split(/[\r\n,;+]+/).map((p) => p.trim()).filter(Boolean);
+
+  let krw = 0;
+  let yen = 0;
+
+  for (const part of parts) {
+    const match = part.match(/^([^\d]*?)(\d[\d\s_.,]*)\s*([kк](?![a-zа-яё]))?\s*(.*)$/i);
+    if (!match) continue;
+
+    const [, prefix, numStr, kMultiplier, suffix] = match;
+    const cleanNum = numStr.replace(/[\s_.,]/g, "");
+    let amount = parseInt(cleanNum, 10);
+    if (isNaN(amount) || amount <= 0) continue;
+    if (kMultiplier) {
+      amount *= 1000;
+    }
+
+    const tag = (prefix + " " + suffix).toLowerCase().trim();
+    if (/yen|йен|иен|¥|jpy/.test(tag)) {
+      yen += amount;
+    } else if (/krw|вон|₩/.test(tag)) {
+      krw += amount;
+    } else {
+      if (defaultCurrency === "yen") {
+        yen += amount;
+      } else {
+        krw += amount;
+      }
+    }
+  }
+
+  return {
+    krw: Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, krw)),
+    yen: Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, yen)),
+  };
+}
+
+/**
+ * Проверяет, является ли строка текста указанием валюты (например, "5000 KRW", "10000 вон")
+ */
+export function isCurrencyLine(line) {
+  if (!line) return false;
+  const clean = String(line)
+    .replace(/(?:\(|\[)(?:каждому|всем|all|everyone|рандом(?:но)?|случайн(?:о|ому)?|random)(?:\)|\])/gi, "")
+    .trim();
+  return (
+    /^(?:деньги|валюта|награда\s*денег)?\s*[:—\-]?\s*(\d[\d\s_.,]*)\s*(?:[kк](?![a-zа-яё]))?\s*(?:krw|вон[а-я]*|₩|yen|йен[а-я]*|иен[а-я]*|¥|jpy)\s*$/i.test(clean) ||
+    /^(?:krw|yen|₩|¥)\s*[:—\-]?\s*(\d[\d\s_.,]*)\s*(?:[kк](?![a-zа-яё]))?\s*$/i.test(clean)
+  );
 }
 
 /**
@@ -228,6 +294,19 @@ export function createDraftState({
     }
   }
 
+  // Filter out any currency-like items from items if present, and convert to currency!
+  let extraKrw = 0;
+  let extraYen = 0;
+  items = items.filter((it) => {
+    if (isCurrencyLine(it.item_name)) {
+      const parsed = parseRewardCurrency(it.item_name);
+      extraKrw += parsed.krw * (it.quantity || 1);
+      extraYen += parsed.yen * (it.quantity || 1);
+      return false;
+    }
+    return true;
+  });
+
   return {
     title: String(title || "").slice(0, 100),
     description: String(description || "").slice(0, 1000),
@@ -241,6 +320,8 @@ export function createDraftState({
     image_url: image_url ? String(image_url).trim().slice(0, 500) : null,
     thumbnail_url: thumbnail_url ? String(thumbnail_url).trim().slice(0, 500) : null,
     reward: {
+      krw: Math.max(0, (Number(reward?.krw) || 0) + extraKrw),
+      yen: Math.max(0, (Number(reward?.yen) || 0) + extraYen),
       ap: Math.max(0, Number(reward?.ap) || 0),
       sp: Math.max(0, Number(reward?.sp) || 0),
       reputation: Math.max(0, Number(reward?.reputation) || 0),
@@ -270,6 +351,8 @@ export function createMissionBuilderEmbed(state, client = null) {
     : "*Текущий канал*";
 
   const rewards = [];
+  if (state.reward?.krw > 0) rewards.push(`💵 Деньги (KRW): **+${Number(state.reward.krw).toLocaleString("ru-RU")} ₩**`);
+  if (state.reward?.yen > 0) rewards.push(`💴 Деньги (YEN): **+${Number(state.reward.yen).toLocaleString("ru-RU")} ¥**`);
   if (state.reward?.ap > 0) rewards.push(`⚡ AP: **+${state.reward.ap}**`);
   if (state.reward?.sp > 0) rewards.push(`💠 SP: **+${state.reward.sp}**`);
   if (state.reward?.reputation > 0) rewards.push(`🎖️ Репутация: **+${state.reward.reputation}**`);
@@ -539,6 +622,25 @@ export function createRewardsModal(state, messageId) {
     .setCustomId(buildModalCustomId(MISSION_BUILDER_NAMESPACE, "rewards", messageId))
     .setTitle("Награды за миссию");
 
+  const currencyInput = new TextInputBuilder()
+    .setCustomId(MB_INPUT_CURRENCY)
+    .setLabel("Деньги / Валюта (KRW / YEN)")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setPlaceholder("Например: 50000 KRW, 2500 YEN или 15000");
+
+  let initialCurrency = "";
+  if (state.reward?.krw > 0 && state.reward?.yen > 0) {
+    initialCurrency = `${Number(state.reward.krw).toLocaleString("ru-RU")} KRW, ${Number(state.reward.yen).toLocaleString("ru-RU")} YEN`;
+  } else if (state.reward?.krw > 0) {
+    initialCurrency = `${Number(state.reward.krw).toLocaleString("ru-RU")} KRW`;
+  } else if (state.reward?.yen > 0) {
+    initialCurrency = `${Number(state.reward.yen).toLocaleString("ru-RU")} YEN`;
+  }
+  if (initialCurrency) {
+    currencyInput.setValue(initialCurrency.replace(/\s+/g, " "));
+  }
+
   const apInput = new TextInputBuilder()
     .setCustomId(MB_INPUT_AP)
     .setLabel("Награда AP (0 или положительное число)")
@@ -574,7 +676,7 @@ export function createRewardsModal(state, messageId) {
 
   const itemInput = new TextInputBuilder()
     .setCustomId(MB_INPUT_ITEM)
-    .setLabel("Предметы (по 1 на строку: Предмет [xКол-во])")
+    .setLabel("Предметы (Предмет [xКол-во] [(рандомно)])")
     .setStyle(TextInputStyle.Paragraph)
     .setRequired(false)
     .setPlaceholder("Например:\nЗелье восстановления x2\nСвиток молнии x1 (рандомно)\nСундук сокровищ");
@@ -589,22 +691,12 @@ export function createRewardsModal(state, messageId) {
     itemInput.setValue(formatRewardItemsForModal(existingItems));
   }
 
-  const distInput = new TextInputBuilder()
-    .setCustomId(MB_INPUT_DISTRIBUTION)
-    .setLabel("Кому выдавать предметы (каждому / рандомно)")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(false)
-    .setPlaceholder("каждому (по умолчанию) или рандомно");
-
-  const currentDist = state.reward?.item_distribution === "random" ? "рандомно" : "каждому";
-  distInput.setValue(currentDist);
-
   modal.addComponents(
+    new ActionRowBuilder().addComponents(currencyInput),
     new ActionRowBuilder().addComponents(apInput),
     new ActionRowBuilder().addComponents(spInput),
     new ActionRowBuilder().addComponents(repInput),
-    new ActionRowBuilder().addComponents(itemInput),
-    new ActionRowBuilder().addComponents(distInput)
+    new ActionRowBuilder().addComponents(itemInput)
   );
 
   return modal;
@@ -728,6 +820,8 @@ async function publishMission({ interaction, session }) {
   }));
 
   const reward = {
+    krw: Math.max(0, Number(state.reward?.krw) || 0),
+    yen: Math.max(0, Number(state.reward?.yen) || 0),
     ap: Math.max(0, Number(state.reward?.ap) || 0),
     sp: Math.max(0, Number(state.reward?.sp) || 0),
     reputation: Math.max(0, Number(state.reward?.reputation) || 0),
@@ -985,6 +1079,11 @@ async function handleModal({ interaction, session, action }) {
     state.max_players = maxPlayers;
     state.description = desc.slice(0, 1000);
   } else if (action === "rewards") {
+    let rawCurrency = "";
+    try {
+      rawCurrency = interaction.fields.getTextInputValue(MB_INPUT_CURRENCY)?.trim() || "";
+    } catch {}
+
     const rawAp = interaction.fields.getTextInputValue(MB_INPUT_AP)?.trim() || "0";
     const rawSp = interaction.fields.getTextInputValue(MB_INPUT_SP)?.trim() || "0";
     const rawRep = interaction.fields.getTextInputValue(MB_INPUT_REP)?.trim() || "0";
@@ -1006,9 +1105,27 @@ async function handleModal({ interaction, session, action }) {
     const rep = Math.max(0, parseInt(rawRep, 10) || 0);
 
     const distribution = parseDistributionMode(rawDist);
-    const parsedItems = parseRewardItems(rawItemsText, distribution, fallbackQty);
+    let parsedItems = parseRewardItems(rawItemsText, distribution, fallbackQty);
+
+    const parsedCurrency = parseRewardCurrency(rawCurrency);
+
+    // Also: if any line in items was actually a currency (e.g. "50000 KRW" entered into items),
+    // extract it and do NOT put it in inventory items!
+    let extraKrw = 0;
+    let extraYen = 0;
+    parsedItems = parsedItems.filter((it) => {
+      if (isCurrencyLine(it.item_name)) {
+        const itemCurr = parseRewardCurrency(it.item_name);
+        extraKrw += itemCurr.krw * (it.quantity || 1);
+        extraYen += itemCurr.yen * (it.quantity || 1);
+        return false;
+      }
+      return true;
+    });
 
     state.reward = {
+      krw: parsedCurrency.krw + extraKrw,
+      yen: parsedCurrency.yen + extraYen,
       ap,
       sp,
       reputation: rep,
