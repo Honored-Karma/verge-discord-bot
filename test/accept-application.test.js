@@ -20,6 +20,7 @@ import {
   DEFAULT_UNVERIFIED_ROLE_ID,
 } from "../interactions/acceptApplicationSession.js";
 import { hasCommandPermission } from "../utils/adminCheck.js";
+import { resolveAcceptanceSlot } from "../commands/accept.js";
 
 test("accept command permissions: anketolog, GM, admin can run accept", () => {
   process.env.ANKETOLOG_ROLE_IDS = "1431759459528610013";
@@ -78,7 +79,7 @@ test("createAcceptApplicationState: initializes state with defaults and target u
   assert.equal(stateSlot2.slot, 2);
 });
 
-test("createAcceptApplicationPreviewEmbed: correctly renders preview with role mentions", () => {
+test("createAcceptApplicationPreviewEmbed: correctly renders preview with role mentions and preserves member role", () => {
   const state = createAcceptApplicationState({
     target_user_id: "555666",
     target_username: "hero",
@@ -106,7 +107,7 @@ test("createAcceptApplicationPreviewEmbed: correctly renders preview with role m
   assert.ok(desc.includes("TENRYU"));
   assert.ok(/1[\s\u00a0\u202f]000\s*кг/.test(desc));
   assert.ok(desc.includes(`Будет выдана роль: <@&${DEFAULT_PLAYER_ROLE_ID}>`));
-  assert.ok(desc.includes(`Будет снята роль: <@&${DEFAULT_UNVERIFIED_ROLE_ID}>`));
+  assert.ok(!desc.includes("Будет снята роль"));
 });
 
 test("createAcceptApplicationComponents: creates buttons with correct customIds", () => {
@@ -209,3 +210,109 @@ test("acceptApplicationInteractionHandler.authorize: validates owner and anketol
     false
   );
 });
+
+test("resolveAcceptanceSlot: auto-selects slot 1 when user has no characters", () => {
+  const res = resolveAcceptanceSlot({
+    requestedSlot: null,
+    slot1Player: null,
+    slot2Player: null,
+    slot3Player: null,
+    isSlot3Unlocked: false,
+    targetUserId: "123",
+  });
+  assert.equal(res.ok, true);
+  assert.equal(res.slot, 1);
+});
+
+test("resolveAcceptanceSlot: auto-selects slot 2 when slot 1 is occupied", () => {
+  const res = resolveAcceptanceSlot({
+    requestedSlot: null,
+    slot1Player: { character_name: "Первый" },
+    slot2Player: null,
+    slot3Player: null,
+    isSlot3Unlocked: false,
+    targetUserId: "123",
+  });
+  assert.equal(res.ok, true);
+  assert.equal(res.slot, 2);
+});
+
+test("resolveAcceptanceSlot: blocks accepting into occupied slot 1", () => {
+  const res = resolveAcceptanceSlot({
+    requestedSlot: 1,
+    slot1Player: { character_name: "Первый" },
+    slot2Player: null,
+    slot3Player: null,
+    isSlot3Unlocked: false,
+    targetUserId: "123",
+  });
+  assert.equal(res.ok, false);
+  assert.equal(res.title, "Слот занят");
+  assert.ok(res.message.includes("Первый"));
+  assert.ok(res.message.includes("во избежание удаления существующего персонажа"));
+});
+
+test("resolveAcceptanceSlot: blocks accepting into occupied slot 2", () => {
+  const res = resolveAcceptanceSlot({
+    requestedSlot: 2,
+    slot1Player: { character_name: "Первый" },
+    slot2Player: { character_name: "Второй" },
+    slot3Player: null,
+    isSlot3Unlocked: false,
+    targetUserId: "123",
+  });
+  assert.equal(res.ok, false);
+  assert.equal(res.title, "Слот занят");
+  assert.ok(res.message.includes("Второй"));
+});
+
+test("resolveAcceptanceSlot: enforces sequential rule (slot 2 requires slot 1)", () => {
+  const res = resolveAcceptanceSlot({
+    requestedSlot: 2,
+    slot1Player: null,
+    slot2Player: null,
+    slot3Player: null,
+    isSlot3Unlocked: false,
+    targetUserId: "123",
+  });
+  assert.equal(res.ok, false);
+  assert.equal(res.title, "Сначала примите слот 1");
+});
+
+test("resolveAcceptanceSlot: blocks slot 3 when locked and allows when unlocked and slots 1&2 exist", () => {
+  const lockedRes = resolveAcceptanceSlot({
+    requestedSlot: 3,
+    slot1Player: { character_name: "Первый" },
+    slot2Player: { character_name: "Второй" },
+    slot3Player: null,
+    isSlot3Unlocked: false,
+    targetUserId: "123",
+  });
+  assert.equal(lockedRes.ok, false);
+  assert.equal(lockedRes.title, "Слот 3 заблокирован");
+
+  const unlockedRes = resolveAcceptanceSlot({
+    requestedSlot: 3,
+    slot1Player: { character_name: "Первый" },
+    slot2Player: { character_name: "Второй" },
+    slot3Player: null,
+    isSlot3Unlocked: true,
+    targetUserId: "123",
+  });
+  assert.equal(unlockedRes.ok, true);
+  assert.equal(unlockedRes.slot, 3);
+});
+
+test("resolveAcceptanceSlot: blocks accepting when all slots are occupied", () => {
+  const res = resolveAcceptanceSlot({
+    requestedSlot: null,
+    slot1Player: { character_name: "Первый" },
+    slot2Player: { character_name: "Второй" },
+    slot3Player: { character_name: "Третий" },
+    isSlot3Unlocked: true,
+    targetUserId: "123",
+  });
+  assert.equal(res.ok, false);
+  assert.equal(res.title, "Все слоты заняты");
+});
+

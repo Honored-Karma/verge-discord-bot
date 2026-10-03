@@ -135,7 +135,6 @@ export function createAcceptApplicationPreviewEmbed(state) {
     "",
     "**Действия с ролями:**",
     `➕ Будет выдана роль: <@&${playerRoleId}>`,
-    `➖ Будет снята роль: <@&${unverifiedRoleId}>`,
   ];
 
   const embed = new EmbedBuilder()
@@ -417,51 +416,48 @@ async function confirmAcceptApplication({ interaction, session }) {
   if (db) {
     const existingPlayer = await db.collection("players").findOne({ id: playerId });
 
-    if (!existingPlayer) {
-      await db.collection("players").insertOne({
-        id: playerId,
-        username: state.target_username,
-        character_name: state.character_name.trim(),
-        character_avatar: state.character_avatar || null,
-        attribute_name: state.attribute_name ? state.attribute_name.trim() : null,
-        organization: state.organization ? state.organization.trim() : null,
-        rank: state.rank ? state.rank.trim() : null,
-        krw: 0,
-        yen: 0,
-        ap: 0,
-        reputation: 20,
-        last_train_timestamp: 0,
-        last_socialrp_timestamp: 0,
-        last_sp_train_timestamp: 0,
-        unlocked_avatar: 0,
-        ap_multiplier: 100.0,
-        sp_multiplier: 100.0,
-        ap_multiplier_expires_at: 0,
-        sp_multiplier_expires_at: 0,
-        last_ap_change_at: 0,
-        last_sp_change_at: 0,
-        physical_stats: hasPhysicalStats ? physicalStats : undefined,
-        physical_stats_registered: hasPhysicalStats,
-        created_at: now,
-        updated_at: now,
+    if (existingPlayer) {
+      await closeInteractionSession(session.message_id).catch(() => {});
+      await interaction.editReply({
+        embeds: [
+          createErrorEmbed(
+            "Слот занят",
+            `В слоте **${slot}** у пользователя <@${targetUserId}> уже зарегистрирован персонаж (**${existingPlayer.character_name || existingPlayer.username}**).\n\nПринятие отменено во избежание перезаписи существующего персонажа.`
+          ),
+        ],
+        components: [],
       });
-      await setActiveSlot(targetUserId, slot);
-    } else {
-      const updates = {
-        character_name: state.character_name.trim(),
-        updated_at: now,
-      };
-      if (state.attribute_name) updates.attribute_name = state.attribute_name.trim();
-      if (state.organization) updates.organization = state.organization.trim();
-      if (state.rank) updates.rank = state.rank.trim();
-      if (state.character_avatar) updates.character_avatar = state.character_avatar;
-      if (hasPhysicalStats) {
-        updates.physical_stats = physicalStats;
-        updates.physical_stats_registered = true;
-      }
-
-      await db.collection("players").updateOne({ id: playerId }, { $set: updates });
+      return;
     }
+
+    await db.collection("players").insertOne({
+      id: playerId,
+      username: state.target_username,
+      character_name: state.character_name.trim(),
+      character_avatar: state.character_avatar || null,
+      attribute_name: state.attribute_name ? state.attribute_name.trim() : null,
+      organization: state.organization ? state.organization.trim() : null,
+      rank: state.rank ? state.rank.trim() : null,
+      krw: 0,
+      yen: 0,
+      ap: 0,
+      reputation: 20,
+      last_train_timestamp: 0,
+      last_socialrp_timestamp: 0,
+      last_sp_train_timestamp: 0,
+      unlocked_avatar: 0,
+      ap_multiplier: 100.0,
+      sp_multiplier: 100.0,
+      ap_multiplier_expires_at: 0,
+      sp_multiplier_expires_at: 0,
+      last_ap_change_at: 0,
+      last_sp_change_at: 0,
+      physical_stats: hasPhysicalStats ? physicalStats : undefined,
+      physical_stats_registered: hasPhysicalStats,
+      created_at: now,
+      updated_at: now,
+    });
+    await setActiveSlot(targetUserId, slot);
 
     // 2. Sync / Save in applications collection (Web Portal integration)
     try {
@@ -514,8 +510,7 @@ async function confirmAcceptApplication({ interaction, session }) {
 
   // 3. Manage Discord Roles
   const playerRoleId = DEFAULT_PLAYER_ROLE_ID;
-  const unverifiedRoleId = DEFAULT_UNVERIFIED_ROLE_ID;
-  let roleStatus = { added: false, removed: false, orgSync: null, error: null };
+  let roleStatus = { added: false, orgSync: null, error: null };
 
   if (interaction.guild) {
     try {
@@ -526,14 +521,6 @@ async function confirmAcceptApplication({ interaction, session }) {
             roleStatus.error = `Не удалось выдать роль <@&${playerRoleId}>: ${err.message}`;
           });
           roleStatus.added = true;
-        }
-        if (unverifiedRoleId) {
-          if (member.roles.cache.has(unverifiedRoleId)) {
-            await member.roles.remove(unverifiedRoleId).catch((err) => {
-              console.warn("Could not remove unverified role:", err);
-            });
-            roleStatus.removed = true;
-          }
         }
       }
 
@@ -570,7 +557,6 @@ async function confirmAcceptApplication({ interaction, session }) {
     `Анкета игрока <@${targetUserId}> успешно принята!\n\n` +
     `• **Персонаж:** **${state.character_name}** (Слот ${state.slot})\n` +
     `• **Роль игрока:** <@&${playerRoleId}> ${roleStatus.added ? "✅ выдана" : "⚠️ ошибка выдачи"}\n` +
-    `• **Роль кандидата:** <@&${unverifiedRoleId}> ${roleStatus.removed ? "✅ снята" : "—"}\n` +
     (orgNote ? `• **Организация:** ${orgNote}\n` : "") +
     `\nСообщение о принятии опубликовано в <#${interaction.channelId}>.`;
 
