@@ -1,5 +1,5 @@
 import { MessageFlags, SlashCommandBuilder } from 'discord.js';
-import { getActiveSlot, getPlayer, getTotalSP } from '../utils/dataManager.js';
+import { getActiveSlot, getPlayer, getTotalSP, getPlayerLeaderboardRank } from '../utils/dataManager.js';
 import { createCooldownEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 import { createProfileV2Components } from '../utils/profileComponents.js';
@@ -66,6 +66,11 @@ export async function execute(interaction) {
         slot,
     });
 
+    const [totalSP, leaderboardRank] = await Promise.all([
+        getTotalSP(playerId),
+        getPlayerLeaderboardRank(playerId),
+    ]);
+
     // Двухфазный ответ: текстовый вид уходит мгновенно, карточка досылается
     // правкой. Раньше канвас и загрузка аватара выполнялись ДО первого ответа,
     // у которого есть только три секунды.
@@ -76,7 +81,8 @@ export async function execute(interaction) {
             player,
             user: targetUser,
             slot,
-            totalSP: await getTotalSP(playerId),
+            totalSP,
+            leaderboardRank,
             history: [],
             imageName: null,
         }),

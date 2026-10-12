@@ -309,6 +309,7 @@ export async function renderProfileCard(data) {
     orgRank,
     slot = 1,
     playerId = "",
+    leaderboardRank = null,
   } = data;
 
   const { canvas, ctx } = createSurface(CARD.width, CARD.height);
@@ -316,7 +317,16 @@ export async function renderProfileCard(data) {
 
   // ── Верхняя строка: принадлежность персонажа ────────────────────────────
   const org = orgName ? `${orgName}${orgRank ? ` · ${orgRank}` : ""}` : "БЕЗ ОРГАНИЗАЦИИ";
-  label(ctx, "профиль", pad, pad + T.space(2), { color: T.accent });
+  const profileLabelWidth = label(ctx, "профиль", pad, pad + T.space(2), { color: T.accent });
+
+  const rankPos = typeof leaderboardRank === "object" ? leaderboardRank?.position : leaderboardRank;
+  const rankTotal = typeof leaderboardRank === "object" ? leaderboardRank?.total : null;
+  if (rankPos) {
+    label(ctx, `• #${rankPos} В ТОПЕ`, pad + profileLabelWidth + T.space(3), pad + T.space(2), {
+      color: T.textMuted,
+    });
+  }
+
   label(ctx, org, CARD.width - pad, pad + T.space(2), { align: "right", color: T.textMuted });
 
   const headerY = pad + T.space(5);
@@ -422,10 +432,20 @@ export async function renderProfileCard(data) {
     T.sp,
   );
 
-  // Репутация и множители — одной строкой чипов, без пустых значений.
+  // Лидерборд, репутация и множители — одной строкой чипов, без пустых значений.
   let chipX = rightX;
   const chipY = progressY - T.space(3);
-  const chips = [{ title: "Репутация", value: `${formatNumber(reputation)}${reputationTier ? ` · ${reputationTier}` : ""}` }];
+  const chips = [];
+  if (rankPos) {
+    chips.push({
+      title: "Лидерборд",
+      value: rankTotal ? `#${rankPos} из ${formatNumber(rankTotal)}` : `#${rankPos}`,
+    });
+  }
+  chips.push({
+    title: "Репутация",
+    value: `${formatNumber(reputation)}${reputationTier ? ` · ${reputationTier}` : ""}`,
+  });
   if (Number(apMultiplier) !== 100) chips.push({ title: "AP", value: `×${apMultiplier}%` });
   if (Number(spMultiplier) !== 100) chips.push({ title: "SP", value: `×${spMultiplier}%` });
   if (Number(salaryMultiplier) !== 100) chips.push({ title: "Зарплата", value: `×${salaryMultiplier}%` });

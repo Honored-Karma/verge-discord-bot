@@ -110,6 +110,19 @@ test("рейтинг считается на живой базе и делит �
     assert.equal(sp.rows[0].leaderboard_value, 1000);
     assert.equal(sp.rows[1].character_name, "Борис");
     assert.equal(sp.rows[1].leaderboard_value, 400);
+
+    // getPlayerLeaderboardRank возвращает точную позицию персонажа
+    const { getPlayerLeaderboardRank } = await import("../utils/dataManager.js");
+    const p4Rank = await getPlayerLeaderboardRank("p4", "ap");
+    assert.deepEqual(p4Rank, {
+      position: 2,
+      row: 4,
+      total: 7,
+      value: 300,
+    });
+
+    const missingRank = await getPlayerLeaderboardRank("unknown_id", "ap");
+    assert.equal(missingRank, null);
   } finally {
     await closeDatabase().catch(() => {});
     await server.stop().catch(() => {});

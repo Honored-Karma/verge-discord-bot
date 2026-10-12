@@ -2,6 +2,7 @@ import { AttachmentBuilder, MessageFlags } from "discord.js";
 import {
   getAllPlayerSP,
   getPlayer,
+  getPlayerLeaderboardRank,
   getRecentProgressionHistory,
   getReputationTier,
   getTotalSP,
@@ -61,11 +62,12 @@ export async function renderProfilePage(state, targetUser, { disabled = false } 
   if (!player) return null;
 
   const page = IMAGE_BY_PAGE[state.page] ? state.page : "history";
-  const [history, styles, totalSP, initialAvatarBuffer] = await Promise.all([
+  const [history, styles, totalSP, initialAvatarBuffer, leaderboardRank] = await Promise.all([
     getRecentProgressionHistory(state.player_id, 8),
     getAllPlayerSP(state.player_id),
     getTotalSP(state.player_id),
     getCharacterAvatarBuffer(state.player_id),
+    getPlayerLeaderboardRank(state.player_id),
   ]);
 
   let avatarBuffer = initialAvatarBuffer;
@@ -106,6 +108,7 @@ export async function renderProfilePage(state, targetUser, { disabled = false } 
       orgRank: player.rank || null,
       playerId: player.id,
       slot: state.slot,
+      leaderboardRank,
     }).catch((error) => {
       console.error("Profile card render error:", error);
       return null;
@@ -131,6 +134,7 @@ export async function renderProfilePage(state, targetUser, { disabled = false } 
       user: targetUser,
       slot: state.slot,
       totalSP,
+      leaderboardRank,
       history,
       imageName,
       disabled,

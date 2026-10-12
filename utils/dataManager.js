@@ -1669,6 +1669,28 @@ export async function getLeaderboardPage(
 }
 
 /**
+ * Возвращает позицию игрока в рейтинге по выбранной метрике (по умолчанию AP).
+ */
+export async function getPlayerLeaderboardRank(playerId, sortBy = "ap") {
+  if (!playerId) return null;
+  try {
+    const snapshot = await getLeaderboardPage(sortBy, playerId, 0, 1);
+    if (!snapshot || snapshot.error || !snapshot.currentPlayer) {
+      return null;
+    }
+    return {
+      position: snapshot.currentPlayer.leaderboard_position || null,
+      row: snapshot.currentPlayer.leaderboard_row || null,
+      total: snapshot.total || 0,
+      value: snapshot.currentPlayer.leaderboard_value || 0,
+    };
+  } catch (error) {
+    console.error("Error getting player leaderboard rank:", error);
+    return null;
+  }
+}
+
+/**
  * Applies a signed delta to a balance in a single atomic update.
  *
  * The previous read-modify-write lost concurrent changes (two admins, or an

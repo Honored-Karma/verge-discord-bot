@@ -89,6 +89,13 @@ test("карточки рисуются в PNG с кириллицей", async (
   assert.ok(main.length > 10_000, "основная карточка подозрительно мала");
   assert.ok(main.subarray(0, 4).equals(PNG_MAGIC), "это не PNG");
 
+  const withRank = await renderProfileCard({
+    ...PLAYER,
+    leaderboardRank: { position: 1, total: 10 },
+  });
+  assert.ok(withRank.length > 10_000);
+  assert.ok(withRank.subarray(0, 4).equals(PNG_MAGIC));
+
   const physical = await renderPhysicalCard({
     characterName: PLAYER.characterName,
     stats: {
@@ -147,3 +154,34 @@ test("текстовый вид профиля читается закончен
     assert.ok(text.includes(fragment), `в текстовом виде нет «${fragment}»`);
   }
 });
+
+test("текстовый вид профиля отображает позицию в лидерборде", () => {
+  const player = {
+    id: "1",
+    character_name: "Аяко",
+    organization: "TENRYU",
+    rank: "A",
+    attribute_name: "Тень Пепла",
+    ap: 12480,
+    krw: 17500000,
+    yen: 940000,
+    reputation: 1500,
+  };
+
+  const json = createProfileV2Components({
+    page: "main",
+    player,
+    user: { displayAvatarURL: () => "https://example.test/a.png" },
+    slot: 1,
+    totalSP: 1770,
+    leaderboardRank: { position: 3, total: 25 },
+    history: [],
+    imageName: null,
+  })[0].toJSON();
+
+  const text = JSON.stringify(json);
+  assert.ok(text.includes("#3"), "в текстовом виде нет места #3");
+  assert.ok(text.includes("лидерборде"), "в текстовом виде нет упоминания лидерборда");
+  assert.ok(text.includes("25"), "в текстовом виде нет общего числа участников");
+});
+

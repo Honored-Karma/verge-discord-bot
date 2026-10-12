@@ -83,13 +83,19 @@ function formatHistory(history) {
  * пока рисуется карточка, и как постоянный вид, если канвас не справился.
  * Поэтому он должен читаться законченным, а не заготовкой под картинку.
  */
-function mainFallback(player, totalSP) {
+function mainFallback(player, totalSP, leaderboardRank = null) {
   const number = (value) => Number(value || 0).toLocaleString("ru-RU");
   const name = player.character_name || player.username || "Неизвестно";
   const org = player.organization || player.custom_org;
   const affiliation = org
     ? `${org}${player.rank ? ` · ${player.rank}` : ""}`
     : "Без организации";
+
+  const rankPos = typeof leaderboardRank === "object" ? leaderboardRank?.position : leaderboardRank;
+  const rankTotal = typeof leaderboardRank === "object" ? leaderboardRank?.total : null;
+  const rankLine = rankPos
+    ? `🏆 **#${number(rankPos)}** в лидерборде${rankTotal ? ` (из ${number(rankTotal)})` : ""}`
+    : null;
 
   const lines = [
     `## ${name}`,
@@ -98,6 +104,9 @@ function mainFallback(player, totalSP) {
     `**${number(player.ap)}** AP · **${number(totalSP)}** SP`,
     `**${number(player.krw)}** ₩ · **${number(player.yen)}** ¥ · репутация **${number(player.reputation)}**`,
   ];
+  if (rankLine) {
+    lines.push(rankLine);
+  }
   return lines.join("\n");
 }
 
@@ -107,6 +116,7 @@ export function createProfileV2Components({
   user,
   slot,
   totalSP = 0,
+  leaderboardRank = null,
   history = [],
   imageName = null,
   disabled = false,
@@ -121,7 +131,7 @@ export function createProfileV2Components({
       );
     } else {
       container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(mainFallback(player, totalSP)),
+        new TextDisplayBuilder().setContent(mainFallback(player, totalSP, leaderboardRank)),
       );
     }
   } else if (page === "physical") {
