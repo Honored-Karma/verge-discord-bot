@@ -35,8 +35,8 @@ const PLAYER_GROUPS = [
     id: "tabletop",
     label: "Броски",
     emoji: "🎲",
-    description: "Кубики и случайный выбор для отыгрыша.",
-    commands: ["roll", "pick", "mission"],
+    description: "Кубики, случайный выбор и юмор.",
+    commands: ["roll", "pick", "mission", "roast"],
   },
   {
     id: "economy",
