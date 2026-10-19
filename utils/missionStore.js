@@ -454,10 +454,42 @@ export async function joinMission({
     if (Array.isArray(fresh.kicked_user_ids) && fresh.kicked_user_ids.includes(String(userId))) {
       return { success: false, reason: "kicked" };
     }
-    if (fresh.participants.some((p) => p.user_id === String(userId) || p.player_id === String(playerId))) {
+    if (fresh.participants?.some((p) => p.user_id === String(userId) || p.player_id === String(playerId))) {
       return { success: false, reason: "already_joined" };
     }
-    return { success: false, reason: "party_full" };
+    if ((fresh.participants?.length || 0) >= (fresh.max_players || 5)) {
+      return { success: false, reason: "party_full" };
+    }
+
+    // Party has an available spot and player is eligible: retry join with optimistic version lock
+    const retry = await target.findOneAndUpdate(
+      {
+        public_id: String(publicId).trim(),
+        status: MISSION_STATUS.recruiting,
+        version: fresh.version,
+      },
+      {
+        $push: { participants: participant },
+        $set: { updated_at: new Date() },
+        $inc: { version: 1 },
+      },
+      { returnDocument: "after" }
+    );
+
+    if (retry) {
+      logAdminAction(
+        userId,
+        "JOIN_MISSION",
+        `Персонаж ${participant.character_name} вступил в миссию ${mission.title} [${publicId}]`
+      );
+      return { success: true, mission: retry, participant };
+    }
+
+    const afterConflict = await target.findOne({ public_id: String(publicId).trim() });
+    if ((afterConflict?.participants?.length || 0) >= (afterConflict?.max_players || 5)) {
+      return { success: false, reason: "party_full" };
+    }
+    return { success: false, reason: "join_failed" };
   }
 
   logAdminAction(
@@ -488,10 +520,10 @@ export async function leaveMission({ publicId, playerId, userId, db = null }) {
     };
   }
 
-  const isMember = mission.participants.some(
+  const member = (mission.participants || []).find(
     (p) => p.user_id === String(userId) || p.player_id === String(playerId)
   );
-  if (!isMember) {
+  if (!member) {
     return { success: false, reason: "not_in_party" };
   }
 
@@ -503,7 +535,7 @@ export async function leaveMission({ publicId, playerId, userId, db = null }) {
     {
       $pull: {
         participants: {
-          $or: [{ user_id: String(userId) }, { player_id: String(playerId) }],
+          user_id: String(member.user_id || userId),
         },
       },
       $set: { updated_at: new Date() },
@@ -563,10 +595,7 @@ export async function kickParticipantFromMission({
     {
       $pull: {
         participants: {
-          $or: [
-            { player_id: participant.player_id },
-            { user_id: participant.user_id },
-          ],
+          user_id: String(participant.user_id),
         },
       },
       $addToSet: {
