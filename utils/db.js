@@ -66,8 +66,8 @@ async function initializeDatabase() {
         // 1. Players collection and indexes
         if (!collectionNames.includes('players')) {
             await db.createCollection('players');
-            await db.collection('players').createIndex({ id: 1 }, { unique: true });
         }
+        await db.collection('players').createIndex({ id: 1 }, { unique: true });
         await db.collection('players').createIndex(
             { slug: 1 },
             { unique: true, sparse: true, name: 'player_slug_unique' }

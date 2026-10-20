@@ -115,7 +115,7 @@ export function createAdminRouter(discordClient) {
 
             const systemStatus = {
                 database: db ? 'connected' : 'simulation_mode',
-                discordBot: discordClient && discordClient.isReady ? (discordClient.isReady() ? 'online' : 'offline') : 'offline',
+                discordBot: discordClient ? (typeof discordClient.isReady === 'function' ? (discordClient.isReady() ? 'online' : 'offline') : (discordClient.isReady ? 'online' : 'offline')) : 'offline',
                 serverTime: new Date().toISOString(),
                 nodeEnv: process.env.NODE_ENV || 'development'
             };

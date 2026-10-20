@@ -45,6 +45,7 @@ export function calculateUserCapabilities(user) {
             canViewInventories: false,
             canManageCharacters: false,
             canManageEconomy: false,
+            canManageRoles: false,
             canViewAuditLog: false
         };
     }
@@ -85,6 +86,7 @@ export function calculateUserCapabilities(user) {
         canViewInventories: isStaff || isFullAdmin,
         canManageCharacters: isFullAdmin,
         canManageEconomy: isFullAdmin,
+        canManageRoles: isFullAdmin,
         canViewAuditLog: isFullAdmin
     };
 

@@ -36,7 +36,16 @@ export async function execute(interaction) {
     let payload;
     try {
         if (file) {
-            const response = await fetch(file.url);
+            if (file.size && file.size > 500 * 1024) {
+                return interaction.editReply({ content: '❌ Размер JSON файла превышает лимит (максимум 500 КБ).' });
+            }
+            if (!file.url || (!file.url.includes('cdn.discordapp.com') && !file.url.includes('media.discordapp.net'))) {
+                return interaction.editReply({ content: '❌ Файл должен быть загружен через Discord.' });
+            }
+            const response = await fetch(file.url, { signal: AbortSignal.timeout(8000) });
+            if (!response.ok) {
+                return interaction.editReply({ content: `❌ Не удалось скачать файл (HTTP ${response.status})` });
+            }
             const text = await response.text();
             payload = JSON.parse(text);
         } else {

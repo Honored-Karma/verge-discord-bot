@@ -430,34 +430,51 @@ async function confirmAcceptApplication({ interaction, session }) {
       return;
     }
 
-    await db.collection("players").insertOne({
-      id: playerId,
-      username: state.target_username,
-      character_name: state.character_name.trim(),
-      character_avatar: state.character_avatar || null,
-      attribute_name: state.attribute_name ? state.attribute_name.trim() : null,
-      organization: state.organization ? state.organization.trim() : null,
-      rank: state.rank ? state.rank.trim() : null,
-      krw: 0,
-      yen: 0,
-      ap: 0,
-      reputation: 20,
-      last_train_timestamp: 0,
-      last_socialrp_timestamp: 0,
-      last_sp_train_timestamp: 0,
-      unlocked_avatar: 0,
-      ap_multiplier: 100.0,
-      sp_multiplier: 100.0,
-      ap_multiplier_expires_at: 0,
-      sp_multiplier_expires_at: 0,
-      last_ap_change_at: 0,
-      last_sp_change_at: 0,
-      physical_stats: hasPhysicalStats ? physicalStats : undefined,
-      physical_stats_registered: hasPhysicalStats,
-      created_at: now,
-      updated_at: now,
-    });
-    await setActiveSlot(targetUserId, slot);
+    try {
+      await db.collection("players").insertOne({
+        id: playerId,
+        username: state.target_username,
+        character_name: state.character_name.trim(),
+        character_avatar: state.character_avatar || null,
+        attribute_name: state.attribute_name ? state.attribute_name.trim() : null,
+        organization: state.organization ? state.organization.trim() : null,
+        rank: state.rank ? state.rank.trim() : null,
+        krw: 0,
+        yen: 0,
+        ap: 0,
+        reputation: 20,
+        last_train_timestamp: 0,
+        last_socialrp_timestamp: 0,
+        last_sp_train_timestamp: 0,
+        unlocked_avatar: 0,
+        ap_multiplier: 100.0,
+        sp_multiplier: 100.0,
+        ap_multiplier_expires_at: 0,
+        sp_multiplier_expires_at: 0,
+        last_ap_change_at: 0,
+        last_sp_change_at: 0,
+        physical_stats: hasPhysicalStats ? physicalStats : undefined,
+        physical_stats_registered: hasPhysicalStats,
+        created_at: now,
+        updated_at: now,
+      });
+      await setActiveSlot(targetUserId, slot);
+    } catch (insertErr) {
+      if (insertErr?.code === 11000) {
+        await closeInteractionSession(session.message_id).catch(() => {});
+        await interaction.editReply({
+          embeds: [
+            createErrorEmbed(
+              "Слот уже занят",
+              `В слоте **${slot}** у пользователя <@${targetUserId}> уже существует персонаж.\n\nПовторная регистрация отменена.`
+            ),
+          ],
+          components: [],
+        });
+        return;
+      }
+      throw insertErr;
+    }
 
     // 2. Sync / Save in applications collection (Web Portal integration)
     try {

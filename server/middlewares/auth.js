@@ -38,7 +38,13 @@ export function requireAdmin(req, res, next) {
     }
 
     const caps = calculateUserCapabilities(req.session.user);
-    if (!caps.canManageEconomy && !req.session.user.permissions?.isAdmin) {
+    const isFullAdmin = Boolean(
+        caps.canManageEconomy ||
+        caps.canManageRoles ||
+        req.session.user.is_admin ||
+        req.session.user.permissions?.isAdmin
+    );
+    if (!isFullAdmin) {
         return res.status(403).json({
             error: 'Forbidden',
             message: 'Требуются полные права администратора'

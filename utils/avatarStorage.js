@@ -58,6 +58,60 @@ function detectImageType(buffer) {
 }
 
 /**
+ * Sanitizes playerId for filesystem and DB operations to prevent path traversal
+ */
+export function sanitizePlayerStorageId(playerId) {
+  if (!playerId || typeof playerId !== 'string') return null;
+  const clean = String(playerId).trim();
+  if (!/^[a-zA-Z0-9_\-]+$/.test(clean)) return null;
+  return clean;
+}
+
+/**
+ * Strictly validates image URL to prevent SSRF against loopback, cloud metadata, or private intranet
+ */
+export function isSafeRemoteImageUrl(urlString) {
+  if (!urlString || typeof urlString !== 'string') return false;
+  try {
+    const parsed = new URL(urlString.trim());
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false;
+    }
+    // Block embedded credentials
+    if (parsed.username || parsed.password) {
+      return false;
+    }
+    const hostname = parsed.hostname.toLowerCase();
+    // Block localhost, loopback, zero-IP, and cloud metadata
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '::1' ||
+      hostname === '0.0.0.0' ||
+      hostname === '169.254.169.254' ||
+      hostname === 'metadata.google.internal'
+    ) {
+      return false;
+    }
+    // Block internal and private domain suffixes
+    if (hostname.endsWith('.internal') || hostname.endsWith('.local') || hostname.endsWith('.localhost')) {
+      return false;
+    }
+    // Block private IPv4 ranges (RFC 1918 + RFC 3927 loopback/link-local)
+    if (/^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3}|0\.0\.0\.0)$/.test(hostname)) {
+      return false;
+    }
+    // Block IPv6 formats
+    if (hostname.includes(':') || /^\[?[0-9a-fA-F:]+\]?$/.test(hostname)) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Checks if a string is a Discord CDN attachment URL
  */
 export function isDiscordCdnUrl(url) {
@@ -138,8 +192,8 @@ export async function fetchImageBuffer(source, client = null) {
     throw new Error('Не указан источник изображения');
   }
 
-  if (!/^https?:\/\//i.test(url)) {
-    throw new Error('URL должен начинаться с http:// или https://');
+  if (!isSafeRemoteImageUrl(url)) {
+    throw new Error('Недопустимый или небезопасный URL изображения');
   }
 
   // Pre-refresh Discord CDN URLs if expired
@@ -211,6 +265,15 @@ export async function fetchImageBuffer(source, client = null) {
  */
 export async function saveCharacterAvatar(playerId, source, client = null) {
   try {
+    const safeId = sanitizePlayerStorageId(playerId);
+    if (!safeId) {
+      return {
+        success: false,
+        avatarUrl: null,
+        error: 'Некорректный идентификатор персонажа'
+      };
+    }
+
     const { buffer, contentType, originalUrl } = await fetchImageBuffer(source, client);
 
     // 1. Update in-memory cache
@@ -218,7 +281,7 @@ export async function saveCharacterAvatar(playerId, source, client = null) {
       const oldestKey = memoryCache.keys().next().value;
       memoryCache.delete(oldestKey);
     }
-    memoryCache.set(playerId, {
+    memoryCache.set(safeId, {
       data: buffer,
       contentType,
       updatedAt: Date.now()
@@ -226,18 +289,18 @@ export async function saveCharacterAvatar(playerId, source, client = null) {
 
     // 2. Persist to disk cache
     ensureCacheDir();
-    const diskPath = join(AVATAR_DIR, `${playerId}.bin`);
+    const diskPath = join(AVATAR_DIR, `${safeId}.bin`);
     try {
       writeFileSync(diskPath, buffer);
     } catch (diskErr) {
-      console.warn(`Failed to write avatar to disk cache for ${playerId}:`, diskErr.message);
+      console.warn(`Failed to write avatar to disk cache for ${safeId}:`, diskErr.message);
     }
 
     // 3. Persist to MongoDB `character_avatars` collection
     const db = getDB();
     if (db) {
       await db.collection('character_avatars').updateOne(
-        { _id: playerId },
+        { _id: safeId },
         {
           $set: {
             data: buffer,
@@ -252,9 +315,9 @@ export async function saveCharacterAvatar(playerId, source, client = null) {
 
     // Generate public/stable URL
     const webBaseUrl = process.env.WEB_BASE_URL;
-    let publicAvatarUrl = `/api/avatar/${playerId}`;
+    let publicAvatarUrl = `/api/avatar/${safeId}`;
     if (webBaseUrl && /^https?:\/\//i.test(webBaseUrl) && !webBaseUrl.includes('localhost')) {
-      publicAvatarUrl = `${webBaseUrl.replace(/\/+$/, '')}/api/avatar/${playerId}?v=${Date.now()}`;
+      publicAvatarUrl = `${webBaseUrl.replace(/\/+$/, '')}/api/avatar/${safeId}?v=${Date.now()}`;
     } else if (originalUrl && !isDiscordCdnUrl(originalUrl)) {
       publicAvatarUrl = originalUrl;
     }
@@ -282,20 +345,21 @@ export async function saveCharacterAvatar(playerId, source, client = null) {
  * @returns {Promise<Buffer|null>}
  */
 export async function getCharacterAvatarBuffer(playerId) {
-  if (!playerId) return null;
+  const safeId = sanitizePlayerStorageId(playerId);
+  if (!safeId) return null;
 
   // 1. Memory cache
-  if (memoryCache.has(playerId)) {
-    return memoryCache.get(playerId).data;
+  if (memoryCache.has(safeId)) {
+    return memoryCache.get(safeId).data;
   }
 
   // 2. Disk cache
-  const diskPath = join(AVATAR_DIR, `${playerId}.bin`);
+  const diskPath = join(AVATAR_DIR, `${safeId}.bin`);
   if (existsSync(diskPath)) {
     try {
       const data = readFileSync(diskPath);
       const contentType = detectImageType(data) || 'image/png';
-      memoryCache.set(playerId, { data, contentType, updatedAt: Date.now() });
+      memoryCache.set(safeId, { data, contentType, updatedAt: Date.now() });
       return data;
     } catch {}
   }
@@ -304,13 +368,13 @@ export async function getCharacterAvatarBuffer(playerId) {
   const db = getDB();
   if (db) {
     try {
-      const doc = await db.collection('character_avatars').findOne({ _id: playerId });
+      const doc = await db.collection('character_avatars').findOne({ _id: safeId });
       if (doc && doc.data) {
         const buffer = Buffer.isBuffer(doc.data) ? doc.data : Buffer.from(doc.data.buffer || doc.data);
         const contentType = doc.contentType || detectImageType(buffer) || 'image/png';
         
         // Populate caches
-        memoryCache.set(playerId, { data: buffer, contentType, updatedAt: Date.now() });
+        memoryCache.set(safeId, { data: buffer, contentType, updatedAt: Date.now() });
         try {
           ensureCacheDir();
           writeFileSync(diskPath, buffer);
@@ -319,7 +383,7 @@ export async function getCharacterAvatarBuffer(playerId) {
         return buffer;
       }
     } catch (err) {
-      console.error(`Error fetching avatar from DB for ${playerId}:`, err.message);
+      console.error(`Error fetching avatar from DB for ${safeId}:`, err.message);
     }
   }
 
@@ -333,11 +397,12 @@ export async function getCharacterAvatarBuffer(playerId) {
  * @returns {Promise<{ data: Buffer, contentType: string, updatedAt: Date }|null>}
  */
 export async function getCharacterAvatarData(playerId) {
-  if (!playerId) return null;
+  const safeId = sanitizePlayerStorageId(playerId);
+  if (!safeId) return null;
 
   // 1. Memory cache
-  if (memoryCache.has(playerId)) {
-    const item = memoryCache.get(playerId);
+  if (memoryCache.has(safeId)) {
+    const item = memoryCache.get(safeId);
     return {
       data: item.data,
       contentType: item.contentType,
@@ -349,22 +414,22 @@ export async function getCharacterAvatarData(playerId) {
   const db = getDB();
   if (db) {
     try {
-      const doc = await db.collection('character_avatars').findOne({ _id: playerId });
+      const doc = await db.collection('character_avatars').findOne({ _id: safeId });
       if (doc && doc.data) {
         const buffer = Buffer.isBuffer(doc.data) ? doc.data : Buffer.from(doc.data.buffer || doc.data);
         const contentType = doc.contentType || detectImageType(buffer) || 'image/png';
         const updatedAt = doc.updatedAt ? new Date(doc.updatedAt) : new Date();
 
-        memoryCache.set(playerId, { data: buffer, contentType, updatedAt: updatedAt.getTime() });
+        memoryCache.set(safeId, { data: buffer, contentType, updatedAt: updatedAt.getTime() });
         return { data: buffer, contentType, updatedAt };
       }
     } catch (err) {
-      console.error(`Error getting avatar data for ${playerId}:`, err.message);
+      console.error(`Error getting avatar data for ${safeId}:`, err.message);
     }
   }
 
   // 3. Disk cache
-  const diskPath = join(AVATAR_DIR, `${playerId}.bin`);
+  const diskPath = join(AVATAR_DIR, `${safeId}.bin`);
   if (existsSync(diskPath)) {
     try {
       const data = readFileSync(diskPath);
@@ -380,11 +445,12 @@ export async function getCharacterAvatarData(playerId) {
  * Deletes character avatar when player/character is deleted
  */
 export async function deleteCharacterAvatar(playerId) {
-  if (!playerId) return;
+  const safeId = sanitizePlayerStorageId(playerId);
+  if (!safeId) return;
 
-  memoryCache.delete(playerId);
+  memoryCache.delete(safeId);
 
-  const diskPath = join(AVATAR_DIR, `${playerId}.bin`);
+  const diskPath = join(AVATAR_DIR, `${safeId}.bin`);
   if (existsSync(diskPath)) {
     try {
       unlinkSync(diskPath);
@@ -394,9 +460,9 @@ export async function deleteCharacterAvatar(playerId) {
   const db = getDB();
   if (db) {
     try {
-      await db.collection('character_avatars').deleteOne({ _id: playerId });
+      await db.collection('character_avatars').deleteOne({ _id: safeId });
     } catch (err) {
-      console.error(`Error deleting avatar for ${playerId}:`, err.message);
+      console.error(`Error deleting avatar for ${safeId}:`, err.message);
     }
   }
 }

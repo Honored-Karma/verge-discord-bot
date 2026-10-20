@@ -30,7 +30,11 @@ export function createAvatarRouter(discordClient = null) {
             }
 
             // Strip optional extension like .png, .jpg, .webp, .svg
-            playerId = playerId.replace(/\.(png|jpe?g|webp|gif|svg)$/i, '');
+            playerId = playerId.replace(/\.(png|jpe?g|webp|gif|svg)$/i, '').trim();
+
+            if (!/^[a-zA-Z0-9_\-]+$/.test(playerId)) {
+                return res.status(400).json({ error: 'BadRequest', message: 'Некорректный формат ID игрока' });
+            }
 
             // 1. Try to get avatar data by direct ID
             let avatarData = await getCharacterAvatarData(playerId);

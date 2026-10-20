@@ -113,8 +113,8 @@ export function createAuthRouter() {
     // GET /api/auth/me - Current user session info + character data
     router.get('/me', async (req, res) => {
         if (!req.session || !req.session.user || !req.session.user.id) {
-            if (!process.env.MONGODB_URI && process.env.NODE_ENV !== 'production') {
-                // Fallback for visual review in offline preview mode
+            if (!process.env.MONGODB_URI && process.env.NODE_ENV === 'development') {
+                // Fallback for visual review in offline preview mode only
                 const demoUser = {
                     id: 'demo_user',
                     username: 'solok',
@@ -197,7 +197,7 @@ export function createAuthRouter() {
 
     // POST /api/auth/active-slot - Switch active slot for current user
     router.post('/active-slot', csrfProtection, async (req, res) => {
-        const userId = req.session?.user?.id || (!process.env.MONGODB_URI ? 'demo_user' : null);
+        const userId = req.session?.user?.id || (!process.env.MONGODB_URI && process.env.NODE_ENV === 'development' ? 'demo_user' : null);
         if (!userId) {
             return res.status(401).json({ error: 'Unauthorized', message: 'Требуется авторизация' });
         }

@@ -2,6 +2,7 @@ import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, setCharacterAvatar, getActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
+import { isSafeRemoteImageUrl } from '../utils/avatarStorage.js';
 
 export const data = new SlashCommandBuilder()
     .setName('set-avatar')
@@ -131,22 +132,22 @@ export async function execute(interaction) {
     }
 }
 
-// Помощник для проверки URL (только http/https)
+// Помощник для безопасной проверки URL (без SSRF на loopback/metadata)
 function isValidUrl(string) {
-    try {
-        const url = new URL(string);
-        return url.protocol === 'http:' || url.protocol === 'https:';
-    } catch (_) {
-        return false;
-    }
+    return isSafeRemoteImageUrl(string);
 }
 
 // Помощник для проверки, что это изображение
 function isImageUrl(url) {
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
-    const lowercaseUrl = url.toLowerCase();
-    
-    return imageExtensions.some(ext => lowercaseUrl.includes(ext)) ||
-           url.includes('cdn.discordapp.com') ||
-           url.includes('media.discordapp.net');
+    try {
+        const parsed = new URL(url);
+        const pathname = parsed.pathname.toLowerCase();
+        const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
+        
+        return imageExtensions.some(ext => pathname.endsWith(ext)) ||
+               parsed.hostname.includes('cdn.discordapp.com') ||
+               parsed.hostname.includes('media.discordapp.net');
+    } catch {
+        return false;
+    }
 }

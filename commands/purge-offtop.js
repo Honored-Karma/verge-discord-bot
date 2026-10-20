@@ -60,12 +60,23 @@ export async function execute(interaction) {
 
   try {
     // Проверяем права бота на удаление сообщений в канале
-    const botMember = interaction.guild.members.me;
-    const hasPerms = botMember
-      .permissionsIn(interaction.channel)
-      .has(PermissionFlagsBits.ManageMessages);
+    const botMember = interaction.guild?.members?.me || (interaction.guild ? await interaction.guild.members.fetchMe().catch(() => null) : null);
+    if (!botMember) {
+      return interaction.editReply({
+        embeds: [
+          createErrorEmbed(
+            "Ошибка",
+            "Не удалось получить данные бота на сервере.",
+          ),
+        ],
+      });
+    }
 
-    if (!hasPerms) {
+    const botHasPerms = botMember
+      .permissionsIn(interaction.channel)
+      ?.has(PermissionFlagsBits.ManageMessages);
+
+    if (!botHasPerms) {
       return interaction.editReply({
         embeds: [
           createErrorEmbed(

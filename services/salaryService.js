@@ -43,7 +43,15 @@ async function notifySalaryLogChannel(client, lines, totals) {
 
 export async function runWeeklySalary(client) {
     const db = getDB();
-    const players = await db.collection('players').find({}).toArray();
+    if (!db) {
+        console.warn('[salary] Database is not connected; skipping weekly salary run.');
+        return;
+    }
+
+    const players = await db.collection('players').find(
+        { organization: { $exists: true, $ne: null } },
+        { projection: { id: 1, organization: 1, rank: 1, salary_multiplier: 1, character_name: 1, username: 1 } }
+    ).toArray();
     const lines = [];
     const totals = { krw: 0, yen: 0 };
     let paidCount = 0;

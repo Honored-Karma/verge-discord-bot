@@ -17,6 +17,8 @@ import {
 } from '../services/applicationService.js';
 import { isValidSafeUrl, sanitizeSafeUrl } from '../utils/urlHelper.js';
 import { csrfProtection } from '../server/middlewares/csrf.js';
+import { isSafeRemoteImageUrl, sanitizePlayerStorageId } from '../utils/avatarStorage.js';
+import { calculateUserCapabilities, hasCapability } from '../services/permissionService.js';
 
 // Setup full test Express server with session and routes
 function createSecurityTestApp(customUserSession = null) {
@@ -204,3 +206,55 @@ test('7. External application entries without text import are marked as external
     assert.equal(sanitized.source.url, 'https://docs.google.com/document/d/example');
     assert.equal(sanitized.player_id, undefined);
 });
+
+test('8. SSRF Protection blocks loopback, cloud metadata, and private IP ranges', () => {
+    // Dangerous loopback / local IPs
+    assert.equal(isSafeRemoteImageUrl('http://127.0.0.1/evil.png'), false);
+    assert.equal(isSafeRemoteImageUrl('http://localhost:3000/avatar.jpg'), false);
+    assert.equal(isSafeRemoteImageUrl('http://0.0.0.0:80/img.png'), false);
+    assert.equal(isSafeRemoteImageUrl('http://[::1]/pic.png'), false);
+
+    // Cloud metadata services
+    assert.equal(isSafeRemoteImageUrl('http://169.254.169.254/latest/meta-data/'), false);
+    assert.equal(isSafeRemoteImageUrl('http://169.254.169.254/latest/meta-data/.png'), false);
+    assert.equal(isSafeRemoteImageUrl('http://metadata.google.internal/computeMetadata/v1/'), false);
+
+    // Private IPv4 ranges
+    assert.equal(isSafeRemoteImageUrl('http://10.0.0.1/admin.png'), false);
+    assert.equal(isSafeRemoteImageUrl('http://192.168.1.1/router.jpg'), false);
+    assert.equal(isSafeRemoteImageUrl('http://172.16.0.5/secret.png'), false);
+
+    // URL with embedded credentials
+    assert.equal(isSafeRemoteImageUrl('https://user:pass@example.com/img.png'), false);
+
+    // Legitimate public HTTPS URLs
+    assert.equal(isSafeRemoteImageUrl('https://cdn.discordapp.com/attachments/123/456/avatar.png'), true);
+    assert.equal(isSafeRemoteImageUrl('https://media.discordapp.net/attachments/123/456/avatar.jpg'), true);
+    assert.equal(isSafeRemoteImageUrl('https://i.imgur.com/example.png'), true);
+});
+
+test('9. Path Traversal Protection blocks ../ and directory separators in player IDs', () => {
+    assert.equal(sanitizePlayerStorageId('../../../etc/passwd'), null);
+    assert.equal(sanitizePlayerStorageId('..\\..\\windows\\system32'), null);
+    assert.equal(sanitizePlayerStorageId('user/slot1'), null);
+    assert.equal(sanitizePlayerStorageId('user\\slot1'), null);
+    assert.equal(sanitizePlayerStorageId('user.slot1'), null);
+    assert.equal(sanitizePlayerStorageId('user*name'), null);
+
+    // Valid IDs
+    assert.equal(sanitizePlayerStorageId('123456789'), '123456789');
+    assert.equal(sanitizePlayerStorageId('123456789_2'), '123456789_2');
+    assert.equal(sanitizePlayerStorageId('player-hana-kami'), 'player-hana-kami');
+});
+
+test('10. RBAC: canManageRoles is available to full admins and required for slot 3', () => {
+    const regularUser = { id: 'user_1', permissions: {} };
+    assert.equal(hasCapability(regularUser, 'canManageRoles'), false);
+
+    const staffUser = { id: 'staff_1', permissions: { isStaff: true } };
+    assert.equal(hasCapability(staffUser, 'canManageRoles'), false);
+
+    const adminUser = { id: 'admin_1', permissions: { isAdmin: true } };
+    assert.equal(hasCapability(adminUser, 'canManageRoles'), true);
+});
+
