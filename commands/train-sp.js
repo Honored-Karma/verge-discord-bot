@@ -21,6 +21,7 @@ import {
 import { checkTrainingBlock, TRAINING_TYPES } from "../utils/trainingBlocks.js";
 import { logCommand } from "../utils/logs.js";
 import { makePlayerKey } from "../utils/playerKey.js";
+import { enforceRPActivityChannel } from "../utils/rpActivity.js";
 import {
   createSPTrainingErrorComponents,
   createSPTrainingSuccessComponents,
@@ -75,6 +76,8 @@ export async function execute(interaction) {
     autoDeleteMessageShort(msg);
     return;
   }
+
+  if (await enforceRPActivityChannel(interaction, playerId, "sp")) return;
 
   const blockCheck = await checkTrainingBlock(
     interaction.user.id,
@@ -188,6 +191,9 @@ export async function handleModalSubmit(interaction) {
     return;
   }
 
+  const playerId = makePlayerKey(interaction.user.id, slot);
+  if (await enforceRPActivityChannel(interaction, playerId, "sp", styleId)) return;
+
   const blockCheck = await checkTrainingBlock(
     interaction.user.id,
     slot,
@@ -219,7 +225,6 @@ export async function handleModalSubmit(interaction) {
     return;
   }
 
-  const playerId = makePlayerKey(interaction.user.id, slot);
   const [player, style] = await Promise.all([
     getPlayer(playerId),
     getStyleById(styleId),
@@ -254,6 +259,7 @@ export async function handleModalSubmit(interaction) {
     styleId,
     SP_TRAINING_REWARD,
     SP_TRAINING_COOLDOWN,
+    { guildId: interaction.guildId, channelId: interaction.channelId },
   );
 
   if (!result.success) {
@@ -293,6 +299,7 @@ export async function handleModalSubmit(interaction) {
       multiplier: result.multiplier,
       dynamicBonus: result.dynamicBonus,
       shopBonus: result.shopBonus,
+      locationFactor: result.locationFactor,
       oldSP: result.oldSP,
       newSP: result.newSP,
       retryAt: result.retryAt,
@@ -315,6 +322,7 @@ export async function handleModalSubmit(interaction) {
       style: result.style.name,
       sp_gained: result.gained,
       multiplier: result.multiplier,
+      location_repeats: result.locationRepeats,
     },
   }).catch(err => console.error("[train-sp] logCommand error:", err));
 }

@@ -628,7 +628,7 @@ export function createProfilePhysicalPage(player, user, renderedCard = false) {
   const stats = player.physical_stats;
   if (!stats) {
     embed.setDescription(
-      "**Показатели ещё не зарегистрированы.**\nОбратитесь к анкетологу, модератору, ГМу или администратору.",
+      "**Показатели ещё не зарегистрированы.**\nОбратитесь к анкетологу, ГМу или администратору.",
     );
     return embed;
   }

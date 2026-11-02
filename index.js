@@ -22,6 +22,7 @@ import { createLootboxPayload } from './utils/lootbox.js';
 import { checkGlobalCooldown } from './utils/cooldowns.js';
 import { logCommand } from './utils/logs.js';
 import { isAdmin } from './utils/adminCheck.js';
+import { resetTrainingLocationOnMessage } from './utils/rpActivity.js';
 
 config();
 
@@ -236,6 +237,10 @@ client.on(Events.InteractionCreate, async interaction => {
 
 client.on(Events.MessageCreate, async message => {
     if (message.author.bot) return;
+
+    await resetTrainingLocationOnMessage(message).catch(error => {
+        logger.error('Failed to reset training location:', error);
+    });
 
     const raw = message.content ? message.content.trim() : '';
     if (!raw.startsWith('!')) return;

@@ -37,7 +37,7 @@ export async function execute(interaction) {
     const member = await resolveMember(interaction);
     if (!hasCommandPermission(member, 'give-style')) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторами.')],
+            embeds: [createErrorEmbed('Доступ запрещен', 'Команда доступна анкетологам, администраторам и сотрудникам с правом выдачи стилей.')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

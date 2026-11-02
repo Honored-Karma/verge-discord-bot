@@ -46,7 +46,7 @@ export async function execute(interaction) {
     const member = await resolveMember(interaction);
     if (!hasCommandPermission(member, 'add-sp')) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам.')],
+            embeds: [createErrorEmbed('Доступ запрещен', 'Команда доступна анкетологам, модераторам, ГМам и администраторам.')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

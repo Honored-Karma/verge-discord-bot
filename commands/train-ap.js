@@ -19,6 +19,7 @@ import {
 import { checkTrainingBlock, TRAINING_TYPES } from "../utils/trainingBlocks.js";
 import { logCommand } from "../utils/logs.js";
 import { makePlayerKey } from "../utils/playerKey.js";
+import { enforceRPActivityChannel } from "../utils/rpActivity.js";
 import {
   createAPActivityErrorComponents,
   createTrainingModal,
@@ -61,6 +62,8 @@ export async function execute(interaction) {
       flags: MessageFlags.Ephemeral,
     });
   }
+
+  if (await enforceRPActivityChannel(interaction, playerId, "ap")) return;
 
   const blockCheck = await checkTrainingBlock(
     interaction.user.id,
@@ -117,6 +120,9 @@ export async function handleModalSubmit(interaction) {
     return;
   }
 
+  const playerId = makePlayerKey(interaction.user.id, slot);
+  if (await enforceRPActivityChannel(interaction, playerId, "ap")) return;
+
   const blockCheck = await checkTrainingBlock(
     interaction.user.id,
     slot,
@@ -148,7 +154,6 @@ export async function handleModalSubmit(interaction) {
     return;
   }
 
-  const playerId = makePlayerKey(interaction.user.id, slot);
   const player = await getPlayer(playerId);
   if (!player) {
     const msg = await editComponentsReply(
@@ -166,6 +171,7 @@ export async function handleModalSubmit(interaction) {
     playerId,
     TRAIN_AP_REWARD,
     TRAIN_COOLDOWN,
+    { guildId: interaction.guildId, channelId: interaction.channelId },
   );
 
   if (!result.success) {
@@ -196,6 +202,7 @@ export async function handleModalSubmit(interaction) {
       multiplier: result.multiplier,
       dynamicBonus: result.dynamicBonus,
       shopBonus: result.shopBonus,
+      locationFactor: result.locationFactor,
       newAP: result.newAP,
       retryAt: result.retryAt,
       activityText: trainingText,
@@ -216,6 +223,7 @@ export async function handleModalSubmit(interaction) {
       character_name: characterName,
       ap_gained: result.gained,
       multiplier: result.multiplier,
+      location_repeats: result.locationRepeats,
     },
   }).catch(err => console.error("[train-ap] logCommand error:", err));
 }

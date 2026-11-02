@@ -23,6 +23,7 @@ import {
   deleteCharacterAvatar
 } from "./avatarStorage.js";
 import { normalizeOrganization } from "./rankSystem.js";
+import { getTrainingLocation } from "./trainingLocation.js";
 
 const PLAYER_DEFAULTS = {
   character_avatar: null,
@@ -601,6 +602,8 @@ async function completeAPActivity(
   cooldownMs,
   timestampField,
   actionType,
+  context = {},
+  attempt = 0,
 ) {
   try {
     const db = getDB();
@@ -629,7 +632,10 @@ async function completeAPActivity(
     const dynamicBonus =
       getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
     const shopBonus = await getShopTrainingBonus(playerId, "ap");
-    const multiplier = baseMultiplier + dynamicBonus + shopBonus;
+    const location = actionType === "train"
+      ? getTrainingLocation(player, context)
+      : getTrainingLocation(player);
+    const multiplier = (baseMultiplier + dynamicBonus + shopBonus) * location.factor;
     const gained = Math.max(
       0,
       Math.round(Number(baseAmount) * (multiplier / 100)),
@@ -639,6 +645,7 @@ async function completeAPActivity(
     const setOperations = {
       [timestampField]: now,
       last_ap_change_at: now,
+      ...location.updates,
     };
     if (multiplierExpired) {
       setOperations.ap_multiplier = 100;
@@ -649,6 +656,7 @@ async function completeAPActivity(
     const updatedPlayer = await db.collection("players").findOneAndUpdate(
       {
         id: playerId,
+        ...location.filter,
         $or: [
           { [timestampField]: { $lte: availableBefore } },
           { [timestampField]: { $exists: false } },
@@ -663,6 +671,11 @@ async function completeAPActivity(
 
     if (!updatedPlayer) {
       const latest = await getPlayer(playerId);
+      if (latest && Number(latest[timestampField] || 0) <= availableBefore) {
+        return attempt < 3
+          ? completeAPActivity(playerId, baseAmount, cooldownMs, timestampField, actionType, context, attempt + 1)
+          : { success: false, reason: "error" };
+      }
       const latestAction = Number(latest?.[timestampField] || now);
       return {
         success: false,
@@ -689,6 +702,8 @@ async function completeAPActivity(
       baseMultiplier,
       dynamicBonus,
       shopBonus,
+      locationFactor: location.factor,
+      locationRepeats: location.repeats,
       retryAt: now + cooldownSeconds,
     };
   } catch (error) {
@@ -697,13 +712,14 @@ async function completeAPActivity(
   }
 }
 
-export function completeAPTraining(playerId, baseAmount, cooldownMs) {
+export function completeAPTraining(playerId, baseAmount, cooldownMs, context = {}) {
   return completeAPActivity(
     playerId,
     baseAmount,
     cooldownMs,
     "last_train_timestamp",
     "train",
+    context,
   );
 }
 
@@ -921,6 +937,8 @@ export async function completeSPTraining(
   styleId,
   baseAmount,
   cooldownMs,
+  context = {},
+  attempt = 0,
 ) {
   let claim = null;
   try {
@@ -959,7 +977,8 @@ export async function completeSPTraining(
     const dynamicBonus =
       getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
     const shopBonus = await getShopTrainingBonus(playerId, "sp");
-    const multiplier = baseMultiplier + dynamicBonus + shopBonus;
+    const location = getTrainingLocation(player, context);
+    const multiplier = (baseMultiplier + dynamicBonus + shopBonus) * location.factor;
     const gained = Math.max(
       0,
       Math.round(Number(baseAmount) * (multiplier / 100)),
@@ -974,6 +993,7 @@ export async function completeSPTraining(
     const setOperations = {
       last_sp_train_timestamp: now,
       last_sp_change_at: now,
+      ...location.updates,
     };
     if (multiplierExpired) {
       setOperations.sp_multiplier = 100;
@@ -983,6 +1003,7 @@ export async function completeSPTraining(
     const claimedPlayer = await db.collection("players").findOneAndUpdate(
       {
         id: playerId,
+        ...location.filter,
         $or: [
           { last_sp_train_timestamp: { $lte: availableBefore } },
           { last_sp_train_timestamp: { $exists: false } },
@@ -994,6 +1015,11 @@ export async function completeSPTraining(
 
     if (!claimedPlayer) {
       const latest = await getPlayer(playerId);
+      if (latest && Number(latest.last_sp_train_timestamp || 0) <= availableBefore) {
+        return attempt < 3
+          ? completeSPTraining(playerId, styleId, baseAmount, cooldownMs, context, attempt + 1)
+          : { success: false, reason: "error" };
+      }
       const latestTraining = Number(latest?.last_sp_train_timestamp || now);
       return {
         success: false,
@@ -1001,7 +1027,7 @@ export async function completeSPTraining(
         retryAt: latestTraining + cooldownSeconds,
       };
     }
-    claim = { db, playerId, now, previousPlayerState };
+    claim = { db, playerId, now, previousPlayerState, location, previousLocation: player.training_location };
 
     const updatedStyle = await db.collection("player_sp").findOneAndUpdate(
       { player_id: playerId, style_id: styleId },
@@ -1010,16 +1036,14 @@ export async function completeSPTraining(
     );
 
     if (!updatedStyle) {
-      await db.collection("players").updateOne(
-        { id: playerId, last_sp_train_timestamp: now },
-        { $set: previousPlayerState },
-      );
+      await rollbackSPTrainingClaim(claim);
       claim = null;
       return { success: false, reason: "style_not_owned" };
     }
 
     const newSP = Number(updatedStyle.sp || 0);
     const oldSP = newSP - gained;
+    claim = null;
     await addProgressionHistory(
       playerId,
       "sp",
@@ -1039,18 +1063,76 @@ export async function completeSPTraining(
       baseMultiplier,
       dynamicBonus,
       shopBonus,
+      locationFactor: location.factor,
+      locationRepeats: location.repeats,
       retryAt: now + cooldownSeconds,
     };
   } catch (error) {
     if (claim) {
-      await claim.db.collection("players").updateOne(
-        { id: claim.playerId, last_sp_train_timestamp: claim.now },
-        { $set: claim.previousPlayerState },
-      ).catch((rollbackError) => {
+      await rollbackSPTrainingClaim(claim).catch((rollbackError) => {
         console.error("Error rolling back SP training cooldown:", rollbackError);
       });
     }
     console.error("Error completing SP training:", error);
+    return { success: false, reason: "error" };
+  }
+}
+
+async function rollbackSPTrainingClaim(claim) {
+  const players = claim.db.collection("players");
+  await players.updateOne(
+    { id: claim.playerId, last_sp_train_timestamp: claim.now },
+    { $set: claim.previousPlayerState },
+  );
+  // Do not restore a streak that a subsequent message already reset.
+  if (claim.location.updates.training_location) {
+    await players.updateOne(
+      { id: claim.playerId, training_location: claim.location.updates.training_location },
+      claim.previousLocation
+        ? { $set: { training_location: claim.previousLocation } }
+        : { $unset: { training_location: "" } },
+    );
+  }
+}
+
+export async function applyRPActivityPenalty(playerId, currency, styleId = null) {
+  try {
+    const db = getDB();
+    const now = Math.floor(Date.now() / 1000);
+    let record;
+    let style = null;
+    if (currency === "sp") {
+      const styles = await getLearnedPlayerStyles(playerId);
+      style = styleId == null ? styles[0] : styles.find(item => item.id === styleId);
+      if (!style) return { success: true, deducted: 0, balance: 0 };
+      record = await db.collection("player_sp").findOneAndUpdate(
+        { player_id: playerId, style_id: style.id },
+        [{ $set: { sp: { $max: [0, { $subtract: [{ $ifNull: ["$sp", 0] }, 10] }] } } }],
+        { returnDocument: "before" },
+      );
+      if (record) {
+        await db.collection("players").updateOne({ id: playerId }, { $set: { last_sp_change_at: now } });
+      }
+    } else if (currency === "ap") {
+      record = await db.collection("players").findOneAndUpdate(
+        { id: playerId },
+        [{ $set: {
+          ap: { $max: [0, { $subtract: [{ $ifNull: ["$ap", 0] }, 10] }] },
+          last_ap_change_at: now,
+        } }],
+        { returnDocument: "before" },
+      );
+    } else {
+      return { success: false, reason: "invalid_currency" };
+    }
+    if (!record) return { success: false, reason: "not_found" };
+    const oldValue = Number(record[currency] || 0);
+    const balance = Math.max(0, oldValue - 10);
+    await addProgressionHistory(playerId, currency, oldValue, balance, "rp-channel-penalty",
+      style ? { style_id: style.id, style_name: style.name } : null);
+    return { success: true, deducted: oldValue - balance, balance, styleName: style?.name };
+  } catch (error) {
+    console.error("Error applying RP activity penalty:", error);
     return { success: false, reason: "error" };
   }
 }

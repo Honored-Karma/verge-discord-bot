@@ -105,6 +105,7 @@ function createAPActivitySuccessComponents({
   multiplier,
   dynamicBonus,
   shopBonus = 0,
+  locationFactor = 1,
   newAP,
   retryAt,
   activityText,
@@ -125,6 +126,9 @@ function createAPActivitySuccessComponents({
   const shopBonusLine = Number(shopBonus) > 0
     ? `\n-# Активный эффект магазина: +${formatNumber(shopBonus)}%`
     : "";
+  const locationLine = locationFactor < 1
+    ? `\n-# Повтор в том же канале: −${formatNumber(Math.round((1 - locationFactor) * 100))}% к множителю. Сообщение в другом канале сервера сбросит снижение.`
+    : "";
 
   const summary = new SectionBuilder()
     .addTextDisplayComponents(
@@ -132,7 +136,7 @@ function createAPActivitySuccessComponents({
         `## ${title}\n` +
         `**${characterName}** получает **+${formatNumber(gained)} AP**\n\n` +
         `Базовая награда: **${formatNumber(baseReward)} AP**\n` +
-        `Множитель: **${formatNumber(multiplier)}%**${bonusLine}${shopBonusLine}`,
+        `Множитель: **${formatNumber(multiplier)}%**${bonusLine}${shopBonusLine}${locationLine}`,
       ),
     )
     .setThumbnailAccessory(

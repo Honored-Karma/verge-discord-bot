@@ -83,6 +83,12 @@ export function hasCommandPermission(member, commandName) {
   // Full admins pass immediately
   if (isAdmin(member)) return true;
 
+  // Moderator roles grant only SP awards among character-management commands.
+  if (commandName === "add-sp" && memberHasAnyRole(member,
+    getEnvRoleIds("MODERATOR_ROLE_IDS", "MODERATOR_ROLE_ID"))) {
+    return true;
+  }
+
   // Commands that Game Masters can use (AP, SP, currency, items, reputation, logs, multipliers)
   const gmCommands = [
     "add-ap",
@@ -109,7 +115,7 @@ export function hasCommandPermission(member, commandName) {
   // Commands that style-giver roles can use
   const styleGiverCommands = ["give-style", "remove-player-style"];
 
-  // Physical stats are managed by profile reviewers, moderators, GMs and admins.
+  // Physical stats are managed by profile reviewers, GMs and admins.
   // LIMITED_ADMIN_ROLE_IDS is kept as a compatibility fallback for existing setups.
   const physicalStatsCommands = ["physical-register", "physical-edit"];
 
@@ -139,10 +145,10 @@ export function hasCommandPermission(member, commandName) {
 
   // 1. Check Anketolog commands (application acceptance and player onboarding)
   if (anketologCommands.includes(commandName)) {
-    const anketologRoleIds = getEnvRoleIds(
+    const anketologRoleIds = [...getEnvRoleIds(
       "ANKETOLOG_ROLE_IDS",
       "ANKETOLOG_ROLE_ID"
-    );
+    ), ...loadAdminConfigFile().anketologRoleIds];
     if (memberHasAnyRole(member, anketologRoleIds)) {
       return true;
     }
@@ -178,8 +184,6 @@ export function hasCommandPermission(member, commandName) {
     const physicalRoleIds = getEnvRoleIds(
       "ANKETOLOG_ROLE_IDS",
       "ANKETOLOG_ROLE_ID",
-      "MODERATOR_ROLE_IDS",
-      "MODERATOR_ROLE_ID",
       "GM_ROLE_IDS",
       "GM_ROLE_ID",
       "LIMITED_ADMIN_ROLE_IDS"

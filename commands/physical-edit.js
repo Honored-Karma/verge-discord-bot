@@ -44,7 +44,7 @@ export async function execute(interaction) {
       embeds: [
         createErrorEmbed(
           "Доступ запрещён",
-          "Команда доступна анкетологам, модераторам, ГМам и администраторам.",
+          "Команда доступна анкетологам, ГМам и администраторам.",
         ),
       ],
       flags: MessageFlags.Ephemeral,
