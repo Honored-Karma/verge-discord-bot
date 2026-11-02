@@ -288,7 +288,7 @@ export async function showTupperAction(interaction, action, state = {}) {
     if (settings.auto === 'fixed' && !profiles.some(p => p._id === settings.profile_id)) status += ' Профиль фиксированного автопрокси удалён: выберите другой в настройках.';
     return interaction.editReply(plain(`${status}\nОтыгрыш: ${settings.proxy ? 'включён' : 'выключен'}. Автопрокси: ${settings.auto}.\nСоздано профилей: ${profiles.length}.`));
   }
-  err('Действие не найдено. Откройте /tupper заново.');
+  err('Действие не найдено. Откройте /vupper заново.');
 }
 
 function requirePublicImageBase() {
@@ -424,7 +424,7 @@ export async function handleTupperModal(interaction) {
           if (results.length === 20) break;
         }
       } finally { await candidates.close(); }
-      return interaction.editReply(plain(results.length ? `Найденные персонажи:\n${results.join('\n')}\nПолный список: /tupper user:участник` : 'Доступные профили с таким началом имени не найдены. Скрытые списки в поиске не участвуют.'));
+      return interaction.editReply(plain(results.length ? `Найденные персонажи:\n${results.join('\n')}\nПолный список: /vupper user:участник` : 'Доступные профили с таким началом имени не найдены. Скрытые списки в поиске не участвуют.'));
     } else if (action === 'prune' || action === 'purge') {
       const preview = pick(interaction, 'mode') === 'preview';
       if (!preview && read(interaction, 'confirm') !== 'УДАЛИТЬ') err('Для удаления введите УДАЛИТЬ. Изменения не внесены.');
@@ -460,7 +460,7 @@ export async function handleTupperModal(interaction) {
       if (read(interaction, 'confirm') !== 'УДАЛИТЬ') err('Введите УДАЛИТЬ, чтобы удалить сообщение.');
       await deleteProxy(interaction.client, interaction.user, target);
       return interaction.editReply(plain('Сообщение удалено.'));
-    } else err('Форма больше не поддерживается. Откройте /tupper заново.');
+    } else err('Форма больше не поддерживается. Откройте /vupper заново.');
     await openTupperPanel(interaction, { selected: saved?._id || null }, action === 'delete' ? 'Профиль удалён.' : 'Изменения сохранены.');
   } catch (e) {
     const message = tupperErrorText(e, 'Не удалось сохранить изменения. Откройте форму заново и повторите попытку.');
@@ -511,7 +511,7 @@ export const tupperInteractionHandler = {
       }
       if (session.state.view_owner) await checkPublicList(interaction, session.state.view_owner);
       if (interaction.customId === 'tp_action') {
-        if (session.state.view_owner) err('Это список другого пользователя. Откройте /tupper для управления своими профилями.');
+        if (session.state.view_owner) err('Это список другого пользователя. Откройте /vupper для управления своими профилями.');
         return await showTupperAction(interaction, interaction.values[0], session.state);
       }
       if (!session.state.view_owner) await ensureTupperAccess(interaction);

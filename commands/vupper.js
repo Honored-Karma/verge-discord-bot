@@ -4,7 +4,7 @@ import { checkGlobalCooldown } from '../utils/cooldowns.js';
 import { tupperErrorText } from '../utils/tupperErrors.js';
 import { profileModal, openTupperPanel, showTupperAction, handlesTupperModal, handleTupperModal, ensureTupperAccess } from '../interactions/tupperSession.js';
 
-export const data = new SlashCommandBuilder().setName('tupper')
+export const data = new SlashCommandBuilder().setName('vupper')
   .setDescription('Профили для отыгрыша: имя, аватар, маркеры и автопрокси через формы')
   .addStringOption(o => o.setName('action').setDescription('Без параметров — форма создания профиля').addChoices(
     { name: 'Создать профиль', value: 'create' }, { name: 'Открыть все профили', value: 'manage' },
