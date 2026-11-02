@@ -9,12 +9,14 @@ process.env.RP_ROLE_ID = ROLE;
 function channelInteraction({
   allowed = true, thread = false, everyoneDenied = true,
   categoryAllowed = allowed, categoryEveryoneDenied = everyoneDenied,
-  parentId = "category", everyonePermissions = PermissionFlagsBits.ViewChannel,
+  parentId = "category", everyonePermissions = PermissionFlagsBits.ViewChannel
+    | PermissionFlagsBits.SendMessages | PermissionFlagsBits.SendMessagesInThreads,
   rpPermissions = 0n, channelOverwrites = null,
+  gatePermission = PermissionFlagsBits.ViewChannel,
 } = {}) {
   const overwrites = (denyEveryone, allowRP) => [
-    { id: "guild", type: 0, deny: denyEveryone ? String(PermissionFlagsBits.ViewChannel) : "0", allow: "0" },
-    { id: ROLE, type: 0, allow: allowRP ? String(PermissionFlagsBits.ViewChannel) : "0", deny: "0" },
+    { id: "guild", type: 0, deny: denyEveryone ? String(gatePermission) : "0", allow: "0" },
+    { id: ROLE, type: 0, allow: allowRP ? String(gatePermission) : "0", deny: "0" },
   ];
   // Use discord.js permission resolution to exercise guild defaults and channel
   // overwrites, rather than reproducing that resolution in a test mock.
@@ -44,7 +46,7 @@ function channelInteraction({
     channelId: thread ? "thread" : "channel",
     user: { id: "user", username: "Игрок" },
     guild,
-    async reply(payload) { this.response = payload; },
+    async reply(payload) { this.response = payload; return { id: `${this.user.id}:response` }; },
     async editReply(payload) { this.response = payload; },
     async deferReply() { this.deferred = true; },
     async showModal() { this.modalShown = true; },
@@ -66,6 +68,25 @@ test("права самого канала имеют приоритет над 
   assert.equal(await isRPActivityChannel(channelInteraction({ ...privateChannel, thread: true })), true);
   assert.equal(await isRPActivityChannel(channelInteraction({ everyoneDenied: false, categoryEveryoneDenied: true })), false);
   assert.equal(await isRPActivityChannel(channelInteraction({ allowed: false, categoryAllowed: true })), false);
+});
+
+test("видимый всем канал отклоняется, даже если писать может только РП-роль", async () => {
+  const options = { gatePermission: PermissionFlagsBits.SendMessages };
+  assert.equal(await isRPActivityChannel(channelInteraction(options)), false);
+  assert.equal(await isRPActivityChannel(channelInteraction({ ...options, thread: true })), false);
+  assert.equal(await isRPActivityChannel(channelInteraction({ ...options, parentId: null })), false);
+  assert.equal(await isRPActivityChannel(channelInteraction({ ...options, allowed: false })), false);
+  assert.equal(await isRPActivityChannel(channelInteraction({ ...options, everyoneDenied: false })), false);
+});
+
+test("видимый всем канал только для чтения не считается РП-каналом", async () => {
+  const interaction = channelInteraction({ gatePermission: PermissionFlagsBits.SendMessages });
+  interaction.guild.channels.cache.get("channel").permissionOverwrites._add({
+    id: ROLE, type: 0,
+    allow: String(PermissionFlagsBits.ViewChannel),
+    deny: String(PermissionFlagsBits.SendMessages),
+  });
+  assert.equal(await isRPActivityChannel(interaction), false);
 });
 
 test("учитываются базовые права ролей, а Administrator не заменяет РП-доступ", async () => {
@@ -200,6 +221,46 @@ test("награды, штрафы и смена канала работают �
         assert.match(JSON.stringify(interaction.response), /РП-каналах/);
         if (commandName === "train-sp") assert.equal(await dm.getSP(commandName, style.id), 10);
         else assert.equal((await dm.getPlayer(commandName)).ap, 10);
+      }
+    });
+
+    await t.test("все три команды открываются и начисляют награды в скрытом РП-канале без штрафа", async () => {
+      const specs = [
+        ["train-ap", "train_ap_modal:1"],
+        ["train-sp", `train_sp_modal:1:${style.id}`],
+        ["social-rp", "social_rp_modal:1"],
+      ];
+      for (const [commandName, customId] of specs) {
+        const command = await import(`../commands/${commandName}.js`);
+        const interaction = channelInteraction();
+        interaction.commandName = commandName;
+        interaction.user.id = `hidden-rp:${commandName}`;
+        await dm.createPlayer(interaction.user.id, commandName, "Персонаж", null, 1, null);
+        await dm.updatePlayer(interaction.user.id, { ap: 20 });
+        await dm.giveStyle(interaction.user.id, style.name, 20, "admin");
+
+        await command.execute(interaction);
+        if (commandName === "train-sp") {
+          assert.match(JSON.stringify(interaction.response), /Выберите стиль/);
+        } else {
+          assert.equal(interaction.modalShown, true);
+        }
+        assert.equal((await dm.getPlayer(interaction.user.id)).ap, 20);
+        assert.equal(await dm.getSP(interaction.user.id, style.id), 20);
+
+        interaction.customId = customId;
+        interaction.user.displayAvatarURL = () => "https://cdn.discordapp.com/embed/avatars/0.png";
+        interaction.fields = { getTextInputValue: () => "Персонаж выполняет упражнения и отрабатывает движения. ".repeat(20) };
+        await command.handleModalSubmit(interaction);
+        assert.match(JSON.stringify(interaction.response), /завершена/);
+        if (commandName === "train-sp") {
+          assert.ok(await dm.getSP(interaction.user.id, style.id) > 20);
+        } else {
+          assert.ok((await dm.getPlayer(interaction.user.id)).ap > 20);
+        }
+        assert.equal(await db.collection("progression_history").countDocuments({
+          player_id: interaction.user.id, source: "rp-channel-penalty",
+        }), 0);
       }
     });
 

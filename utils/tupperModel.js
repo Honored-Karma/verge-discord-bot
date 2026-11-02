@@ -233,6 +233,16 @@ export function displayTupperName(profile, group, now = new Date()) {
   return [profile.nick || profile.name, profile.tag, group?.tag, cake].filter(Boolean).join(' ').slice(0, 80);
 }
 
+function matchProxyPair(content, { prefix, suffix }) {
+  if (!content.startsWith(prefix)) return null;
+  const suffixStart = suffix ? content.lastIndexOf(suffix) : -1;
+  if (suffix && suffixStart === -1) return null;
+  const end = suffix ? suffixStart + suffix.length : Math.max(content.trimEnd().length, prefix.length);
+  // Ignore whitespace after a complete marker, without stripping the marker itself.
+  if (end < prefix.length + suffix.length || content.slice(end).trim()) return null;
+  return content.slice(0, end);
+}
+
 // Longest pair wins. A new speaker starts at the beginning of a new line.
 export function parseProxyMessage(content, profiles, { auto = 'off', profile_id = null, sticky_id = null } = {}) {
   if (content.startsWith('\\')) return { parts: [], escape: true, reset: content.startsWith('\\\\') };
@@ -247,7 +257,7 @@ export function parseProxyMessage(content, profiles, { auto = 'off', profile_id 
     offset += line.length + 1;
   }
   const parts = [];
-  if (!starts.some(s => s.offset === 0) && pairs.some(p => !p.prefix && content.endsWith(p.suffix))) {
+  if (!starts.some(s => s.offset === 0) && pairs.some(p => !p.prefix && matchProxyPair(content, p) !== null)) {
     starts.unshift({ offset: 0 });
   }
   if (starts[0]?.offset === 0) {
@@ -256,9 +266,10 @@ export function parseProxyMessage(content, profiles, { auto = 'off', profile_id 
       const start = starts[index];
       let found = false;
       for (let end = index + 1; end <= starts.length; end++) {
-        const raw = content.slice(start.offset, starts[end]?.offset ?? content.length).trimEnd();
-        const pair = pairs.find(p => raw.startsWith(p.prefix) && raw.endsWith(p.suffix) && raw.length >= p.prefix.length + p.suffix.length);
+        const segment = content.slice(start.offset, starts[end]?.offset ?? content.length);
+        const pair = pairs.find(p => matchProxyPair(segment, p) !== null);
         if (!pair) continue;
+        const raw = matchProxyPair(segment, pair);
         const body = raw.slice(pair.prefix.length, pair.suffix ? -pair.suffix.length : undefined).trim();
         parts.push({ profile: pair.profile, content: pair.profile.show_brackets ? raw : body });
         index = end;
@@ -336,8 +347,9 @@ export async function importTuppers(owner, data) {
     for (const { external_group, external_group_name, ...profile } of parsed.profiles) {
       const previous = old.find(p => p.name_key === profile.name_key);
       const namedGroup = external_group_name && await getDB().collection('tupper_groups').findOne({ owner_id: owner, name_key: nameKey(external_group_name) }, { session });
+      const groupId = external_group === null ? null : groupMap.get(external_group) || previous?.group_id || namedGroup?._id || null;
       await collection.updateOne({ owner_id: owner, name_key: profile.name_key },
-        { $set: { ...profile, group_id: groupMap.get(external_group) || previous?.group_id || namedGroup?._id || null, updated_at: new Date() },
+        { $set: { ...profile, group_id: groupId, updated_at: new Date() },
           $setOnInsert: { _id: newTupperId() }, $inc: { revision: 1 } }, { upsert: true, session });
     }
     const all = await collection.find({ owner_id: owner }, { session }).toArray();

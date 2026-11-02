@@ -83,6 +83,49 @@ export function splitProxyContent(value, limit = 2000) {
   return chunks;
 }
 
+function validateProxyEmbed(data) {
+  const object = value => value && typeof value === 'object' && !Array.isArray(value);
+  if (!object(data)) error('Каждая вставка должна быть объектом JSON.');
+  if (data.type !== undefined && data.type !== 'rich') error('Поддерживаются только rich-вставки.');
+  try {
+    // Constructors/toJSON do not validate raw API data. Setters validate each field.
+    const embed = new EmbedBuilder(data.type === 'rich' ? { type: 'rich' } : {});
+    for (const [key, setter] of [['title', 'setTitle'], ['description', 'setDescription'], ['url', 'setURL'], ['color', 'setColor']]) {
+      if (data[key] !== undefined) embed[setter](data[key]);
+    }
+    if (data.timestamp != null) {
+      if (!['string', 'number'].includes(typeof data.timestamp)) throw new TypeError('timestamp');
+      embed.setTimestamp(new Date(data.timestamp));
+    }
+    for (const [key, setter] of [['image', 'setImage'], ['thumbnail', 'setThumbnail']]) {
+      if (data[key] == null) continue;
+      if (!object(data[key]) || typeof data[key].url !== 'string' || !data[key].url) throw new TypeError(key);
+      embed[setter](data[key].url);
+    }
+    if (data.author != null) {
+      if (!object(data.author) || typeof data.author.name !== 'string' || !data.author.name) throw new TypeError('author');
+      embed.setAuthor({ name: data.author.name, url: data.author.url, iconURL: data.author.icon_url });
+    }
+    if (data.footer != null) {
+      if (!object(data.footer) || typeof data.footer.text !== 'string' || !data.footer.text) throw new TypeError('footer');
+      embed.setFooter({ text: data.footer.text, iconURL: data.footer.icon_url });
+    }
+    if (data.fields !== undefined) {
+      if (!Array.isArray(data.fields)) throw new TypeError('fields');
+      embed.setFields(data.fields);
+      if (data.fields.some(field => !field.name.length || !field.value.length)) throw new TypeError('fields');
+    }
+    const built = embed.toJSON();
+    if (!built.title && !built.description && !built.author && !built.footer && !built.fields?.length && !built.image && !built.thumbnail) {
+      error('Вставка должна содержать текст или изображение.');
+    }
+    return built;
+  } catch (e) {
+    if (e instanceof TupperError) throw e;
+    error('Вставка содержит неверные данные. Проверьте длину полей, ссылки, цвет и дату.');
+  }
+}
+
 export async function expandProxyBlocks(content) {
   const embeds = [];
   let redirect = null;
@@ -111,12 +154,8 @@ export async function expandProxyBlocks(content) {
       try { obj = JSON.parse(`{${raw}}`); } catch { error('Блок вставки содержит неверный JSON.'); }
       const list = obj.embeds || (obj.embed ? [obj.embed] : null);
       if (!Array.isArray(list) || embeds.length + list.length > 10) error('В блоке нужны embed или embeds, не больше 10 вставок.');
-      for (const e of list) {
-        // Builder validates lengths and URL formats. External media are fetched by Discord, never by this process.
-        const built = new EmbedBuilder(e).toJSON();
-        if (built.type && built.type !== 'rich') error('Поддерживаются только rich-вставки.');
-        embeds.push(built);
-      }
+      // External media are fetched by Discord, never by this process.
+      for (const e of list) embeds.push(validateProxyEmbed(e));
     } else if (/^#/.test(raw)) {
       if (redirect) error('Укажите один канал перенаправления.');
       redirect = raw.slice(1).replace(/^<|>$/g, '').replace(/^#/, '');
@@ -149,11 +188,24 @@ async function proxyLog(client, config, record, action) {
     allowedMentions: noMentions }).catch(() => {});
 }
 
+async function proxySourceState(message, snapshot) {
+  let latest = message;
+  if (message.channel.messages?.fetch) {
+    try { latest = await message.channel.messages.fetch({ message: message.id, force: true }); }
+    catch (e) { if (e.code === 10008) return 'deleted'; throw e; }
+  }
+  return latest.content === snapshot.content && latest.author.id === snapshot.owner
+    && (latest.editedTimestamp ?? null) === snapshot.editedTimestamp
+    && latest.attachments.size === snapshot.attachments.size
+    && [...latest.attachments.keys()].every(id => snapshot.attachments.has(id)) ? 'unchanged' : 'changed';
+}
+
 async function processProxyMessage(message, { download = downloadDiscordAttachment, webhookFor = getProxyWebhook } = {}) {
   if (!message.guild || message.author.bot || message.webhookId || message.system || !message.channel?.isTextBased?.()) return false;
   const owner = message.author.id;
   const originalContent = message.content || '';
   const originalAttachments = new Map(message.attachments);
+  const snapshot = { owner, content: originalContent, attachments: originalAttachments, editedTimestamp: message.editedTimestamp ?? null };
   const db = getDB();
   const [profiles, settingsDoc, config] = await Promise.all([getTuppers(owner), db.collection('tupper_settings').findOne({ _id: owner }), getServerConfig(message.guildId)]);
   if (!profiles.length) return false;
@@ -212,16 +264,8 @@ async function processProxyMessage(message, { download = downloadDiscordAttachme
     } });
   }
   if (jobs.length > 30) error('Сообщение после разбиения превышает 30 частей. Сократите текст.');
-  if (message.channel.messages?.fetch) {
-    let latest;
-    try { latest = await message.channel.messages.fetch({ message: message.id, force: true }); }
-    catch (e) { if (e.code === 10008) return true; throw e; }
-    // A user can cancel a slow image download/dice evaluation by deleting or
-    // changing the source. Never proxy an obsolete draft over their edited text.
-    if (latest.content !== originalContent || latest.author.id !== owner
-      || latest.attachments.size !== originalAttachments.size
-      || [...latest.attachments.keys()].some(id => !originalAttachments.has(id))) return true;
-  }
+  // A user can cancel a slow download/dice evaluation by changing the source.
+  if (await proxySourceState(message, snapshot) !== 'unchanged') return true;
   // Reserve once, never retry an ambiguous external send after a crash/network timeout.
   try {
     await db.collection('tupper_sources').insertOne({ _id: message.id, owner_id: owner, status: 'sending', created_at: new Date() });
@@ -240,9 +284,12 @@ async function processProxyMessage(message, { download = downloadDiscordAttachme
       await proxyLog(message.client, config, record, 'Отыгрыш');
     }
     await db.collection('tupper_sources').updateOne({ _id: message.id }, { $set: { status: 'sent', completed } });
-    // Only a fully confirmed proxy can replace the original user message.
-    try { await message.delete(); } catch (e) { if (e.code !== 10008) throw e; }
-    await db.collection('tupper_sources').updateOne({ _id: message.id }, { $set: { status: 'complete' } });
+    // Sends/logging can take time. Preserve edits made after the pre-send check.
+    const sourceState = await proxySourceState(message, snapshot);
+    if (sourceState === 'unchanged') {
+      try { await message.delete(); } catch (e) { if (e.code !== 10008) throw e; }
+    }
+    await db.collection('tupper_sources').updateOne({ _id: message.id }, { $set: { status: 'complete', source_preserved: sourceState === 'changed' } });
     for (const part of parsed.parts) await db.collection('tuppers').updateOne({ _id: part.profile._id, owner_id: owner }, { $inc: { posts: 1 }, $set: { last_used: new Date() } });
     if (settings.auto === 'sticky' && parsed.last_id) await db.collection('tupper_sticky').updateOne({ _id: stickyKey }, { $set: { owner_id: owner, profile_id: parsed.last_id } }, { upsert: true });
     return true;

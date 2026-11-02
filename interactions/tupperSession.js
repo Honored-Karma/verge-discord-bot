@@ -409,18 +409,21 @@ export async function handleTupperModal(interaction) {
       await ensureTupperAccess(interaction, 'queries');
       const query = nameKey(read(interaction, 'query')).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       if (!query) err('Введите начало имени.');
-      const candidates = await getDB().collection('tuppers').find({ name_key: { $regex: `^${query}` } }).limit(100).toArray();
+      const candidates = getDB().collection('tuppers').find({ name_key: { $regex: `^${query}` } },
+        { projection: { name: 1, owner_id: 1 } }).batchSize(100);
       const results = [];
       const checked = new Map();
-      for (const candidate of candidates) {
-        if (!checked.has(candidate.owner_id)) {
-          const settings = await getDB().collection('tupper_settings').findOne({ _id: candidate.owner_id });
-          const visible = !resolveSettings(settings, channelScopes(interaction.channel)).private;
-          checked.set(candidate.owner_id, visible && Boolean(await interaction.guild.members.fetch({ user: candidate.owner_id, force: true }).catch(() => null)));
+      try {
+        for await (const candidate of candidates) {
+          if (!checked.has(candidate.owner_id)) {
+            const settings = await getDB().collection('tupper_settings').findOne({ _id: candidate.owner_id });
+            const visible = !resolveSettings(settings, channelScopes(interaction.channel)).private;
+            checked.set(candidate.owner_id, visible && Boolean(await interaction.guild.members.fetch({ user: candidate.owner_id, force: true }).catch(() => null)));
+          }
+          if (checked.get(candidate.owner_id)) results.push(`**${clean(candidate.name)}** — <@${candidate.owner_id}>`);
+          if (results.length === 20) break;
         }
-        if (checked.get(candidate.owner_id)) results.push(`**${clean(candidate.name)}** — <@${candidate.owner_id}>`);
-        if (results.length === 20) break;
-      }
+      } finally { await candidates.close(); }
       return interaction.editReply(plain(results.length ? `Найденные персонажи:\n${results.join('\n')}\nПолный список: /tupper user:участник` : 'Доступные профили с таким началом имени не найдены. Скрытые списки в поиске не участвуют.'));
     } else if (action === 'prune' || action === 'purge') {
       const preview = pick(interaction, 'mode') === 'preview';
