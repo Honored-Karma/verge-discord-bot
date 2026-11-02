@@ -1,4 +1,5 @@
 import { registerInteractionHandler } from "../utils/interactionRouter.js";
+import { TUPPER_NAMESPACE, tupperInteractionHandler } from './tupperSession.js';
 import {
   LEADERBOARD_NAMESPACE,
   leaderboardInteractionHandler,
@@ -47,6 +48,7 @@ import {
  * MongoDB and the message id is the session key.
  */
 export function registerInteractionHandlers() {
+  registerInteractionHandler(TUPPER_NAMESPACE, tupperInteractionHandler);
   registerInteractionHandler(SHOP_NAMESPACE, shopInteractionHandler);
   registerInteractionHandler(PAY_NAMESPACE, payInteractionHandler);
   registerInteractionHandler(LEADERBOARD_NAMESPACE, leaderboardInteractionHandler);
@@ -61,6 +63,7 @@ export function registerInteractionHandlers() {
   registerInteractionHandler(ANNOUNCE_BUILDER_NAMESPACE, announceInteractionHandler);
   registerInteractionHandler(ACCEPT_APPLICATION_NAMESPACE, acceptApplicationInteractionHandler);
   return [
+    TUPPER_NAMESPACE,
     SHOP_NAMESPACE,
     PAY_NAMESPACE,
     LEADERBOARD_NAMESPACE,

@@ -18,6 +18,7 @@ export const data = new SlashCommandBuilder()
     .setRequired(false)
     .addChoices(
       { name: "🚀 Начало", value: "start" },
+      { name: "🎭 Отыгрыш и профили", value: "roleplay" },
       { name: "⚡ Развитие", value: "growth" },
       { name: "🎲 Броски и миссии", value: "tabletop" },
       { name: "💳 Экономика", value: "economy" },

@@ -17,7 +17,8 @@ export function createHelpSessionState({ pageId }) {
 export function helpPagesFor(client) {
   const commands = [...(client?.commands?.values?.() || [])].map((command) => ({
     name: command?.data?.name,
-    description: command?.data?.description,
+    description: command?.data?.description || command?.description,
+    type: command?.data?.type,
   }));
   const pages = buildHelpPages(commands);
   return { pages, total: countHelpCommands(pages) };

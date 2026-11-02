@@ -12,7 +12,8 @@ async function loadRegistry() {
     if (module?.data?.name) {
       commands.push({
         name: module.data.name,
-        description: module.data.description,
+        description: module.data.description || module.description,
+        type: module.data.type,
       });
     }
   }
@@ -96,7 +97,7 @@ test("панель справки собирается и переключает
     assert.ok(text.includes(String(total)), `${page.id}: нет общего числа команд`);
     // Каждая команда раздела видна на странице.
     for (const command of page.commands.slice(0, 5)) {
-      assert.ok(text.includes(`/${command.name}`), `${page.id}: нет /${command.name}`);
+      assert.ok(text.includes(command.type === 3 ? command.name : `/${command.name}`), `${page.id}: нет ${command.name}`);
     }
 
     const row = json.components.find((component) => component.type === 1);

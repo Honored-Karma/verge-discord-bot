@@ -1,4 +1,4 @@
-import { Client, Collection, Events, GatewayIntentBits, PermissionFlagsBits, REST, Routes } from 'discord.js';
+import { Client, Collection, Events, GatewayIntentBits, Partials, PermissionFlagsBits, REST, Routes } from 'discord.js';
 import { config } from 'dotenv';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
@@ -23,6 +23,8 @@ import { checkGlobalCooldown } from './utils/cooldowns.js';
 import { logCommand } from './utils/logs.js';
 import { isAdmin } from './utils/adminCheck.js';
 import { resetTrainingLocationOnMessage } from './utils/rpActivity.js';
+import { handleTupperMessage } from './services/tupperService.js';
+import { handleTupperReaction } from './interactions/tupperSession.js';
 
 config();
 
@@ -48,8 +50,10 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildMessageReactions,
         GatewayIntentBits.MessageContent
-    ]
+    ],
+    partials: [Partials.Message, Partials.Channel, Partials.Reaction]
 });
 
 client.commands = new Collection();
@@ -209,7 +213,7 @@ client.on(Events.InteractionCreate, async interaction => {
         return;
     }
 
-    if (!interaction.isChatInputCommand()) return;
+    if (!interaction.isChatInputCommand() && !interaction.isMessageContextMenuCommand()) return;
     const command = client.commands.get(interaction.commandName);
     
     if (!command) {
@@ -241,6 +245,8 @@ client.on(Events.MessageCreate, async message => {
     await resetTrainingLocationOnMessage(message).catch(error => {
         logger.error('Failed to reset training location:', error);
     });
+
+    if (await handleTupperMessage(message)) return;
 
     const raw = message.content ? message.content.trim() : '';
     if (!raw.startsWith('!')) return;
@@ -338,6 +344,12 @@ client.on(Events.MessageCreate, async message => {
     } catch (err) {
         logger.error('Error executing message lootbox command:', err);
     }
+});
+
+client.on(Events.MessageReactionAdd, (reaction, user) => {
+    handleTupperReaction(reaction, user).catch(error => {
+        logger.warn('Tupper reaction failed', { code: error.code || error.name });
+    });
 });
 
 client.on(Events.Error, error => {

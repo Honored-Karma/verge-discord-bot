@@ -1,6 +1,7 @@
 import { MongoClient } from 'mongodb';
 import { config } from 'dotenv';
 import { initializeShopCatalog } from './shopCatalog.js';
+import { initializeTuppers } from './tupperModel.js';
 
 config();
 
@@ -341,6 +342,7 @@ async function initializeDatabase() {
         );
 
         await initializeShopCatalog(db);
+        await initializeTuppers(db);
         console.log('✅ Database initialized successfully');
         await backfillPlayerDefaults();
     } catch (error) {

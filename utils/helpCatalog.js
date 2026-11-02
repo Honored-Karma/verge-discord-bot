@@ -15,6 +15,11 @@
 // Команды для игроков распределены вручную: это вопрос смысла, а не данных.
 const PLAYER_GROUPS = [
   {
+    id: 'roleplay', label: 'Отыгрыш', emoji: '🎭',
+    description: 'Профили, аватары, маркеры и автопрокси. Действия с сообщением — в меню «Приложения».',
+    commands: ['tupper', 'Изменить отыгрыш', 'Удалить отыгрыш', 'Кто автор отыгрыша?'],
+  },
+  {
     id: "start",
     label: "Начало",
     emoji: "🚀",
@@ -99,6 +104,7 @@ export function buildHelpPages(commands) {
       .map((command) => [String(command.name), {
         name: String(command.name),
         description: String(command.description || "").trim(),
+        type: command.type || (/\s/.test(command.name) ? 3 : 1),
       }]),
   );
 

@@ -27,7 +27,9 @@ function commandLines(commands) {
   return commands
     .map((command) => {
       const description = clean(command.description, 90) || "без описания";
-      return `**/${command.name}** — ${description}`;
+      return command.type === 3
+        ? `**${command.name}** (меню сообщения → Приложения) — ${description}`
+        : `**/${command.name}** — ${description}`;
     })
     .join("\n");
 }
