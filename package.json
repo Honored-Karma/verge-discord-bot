@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node index.js",
     "deploy": "node deploy-commands.js",
-    "postinstall": "node scripts/ensure-card-font.mjs",
+    "postinstall": "node scripts/check-native-deps.mjs && node scripts/ensure-card-font.mjs",
+    "check:native": "node scripts/check-native-deps.mjs",
     "font": "node scripts/ensure-card-font.mjs",
     "test": "node --test",
     "migrate:public-ids": "node scripts/migrate-public-ids.js",

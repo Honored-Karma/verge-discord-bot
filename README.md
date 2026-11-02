@@ -37,13 +37,19 @@
 ```bash
 git clone https://github.com/your-username/verge-discord-bot.git
 cd verge-discord-bot
-npm install
+npm ci --include=optional
 cp .env.example .env   # заполните своими значениями
 npm run deploy          # зарегистрировать команды в Discord
 npm start               # запустить бота
 ```
 
 Подробнее: [QUICKSTART.md](QUICKSTART.md)
+
+Для Linux-контейнера устанавливайте зависимости из `package-lock.json`:
+`npm ci --omit=dev --include=optional`. Нативная библиотека отрисовки проверяется
+в `postinstall`; вручную проверку можно запустить командой `npm run check:native`.
+Если старый образ падает с `Cannot find module '@napi-rs/canvas-linux-x64-gnu'`,
+пересоберите контейнер с актуальным lock-файлом, чтобы установилась Linux-сборка.
 
 ---
 

@@ -13,7 +13,7 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             web/package-lock.json
-      - run: npm ci
+      - run: npm ci --include=optional
       - run: npm --prefix web ci
       - run: node --test --test-concurrency=2
       - run: npm run web:build
