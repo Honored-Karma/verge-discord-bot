@@ -1,3 +1,6 @@
+import { adjustStat } from './atomicStat.js';
+import { runOnceOperation, OperationRejected } from './operations.js';
+import { randomUUID } from 'node:crypto';
 import { getDB, withTransaction } from "./db.js";
 import { calculateExchange, calculateTransfer } from "./banking.js";
 import { getItemDefinition } from "./itemSystem.js";
@@ -8,11 +11,9 @@ import {
 
 import {
   isTransactionUnsupportedError,
-  transferCurrencyCompensated,
   transferCurrencyInTransaction,
 } from "./currencyTransferStore.js";
 import {
-  transferItemCompensated,
   transferItemInTransaction,
 } from "./itemTransferStore.js";
 import { getShopTrainingBonus } from "./shopStore.js";
@@ -24,6 +25,7 @@ import {
 } from "./avatarStorage.js";
 import { normalizeOrganization } from "./rankSystem.js";
 import { getTrainingLocation } from "./trainingLocation.js";
+import { createPlayerIdentity } from "./publicIdentity.js";
 
 const PLAYER_DEFAULTS = {
   character_avatar: null,
@@ -280,20 +282,21 @@ export function _clearSlot3UnlockedSimulationForTesting() {
   localSlot3UnlockedUsers.clear();
 }
 
-export function logAdminAction(adminId, action, details) {
+export function logAdminAction(adminId, action, details, options = {}) {
   const timestamp = Math.floor(Date.now() / 1000);
   try {
     const db = getDB();
     if (!db) return;
-    db.collection("admin_actions")
+    return db.collection("admin_actions")
       .insertOne({
         admin_id: adminId,
         action,
         details,
         timestamp,
-      })
-      .catch((err) => console.error("Error logging to DB:", err));
+      }, options)
+      .catch((err) => { if (options.session) throw err; console.error("Error logging to DB:", err); });
   } catch (error) {
+    if (options.session) throw error;
     console.error("Error logging admin action:", error);
   }
 }
@@ -305,6 +308,7 @@ async function addProgressionHistory(
   newValue,
   source = "system",
   details = null,
+  options = {},
 ) {
   try {
     const db = getDB();
@@ -317,18 +321,20 @@ async function addProgressionHistory(
       source,
       ...(details && typeof details === "object" ? details : {}),
       changed_at: new Date(),
-    });
+    }, options);
   } catch (error) {
+    if (options.session) throw error;
     console.error("Error adding progression history:", error);
   }
 }
 
-export async function getPlayer(playerId) {
+export async function getPlayer(playerId, options = {}) {
   try {
     const db = getDB();
-    const player = await db.collection("players").findOne({ id: playerId });
+    const player = await db.collection("players").findOne({ id: playerId }, options);
     return normalizePlayerDocument(player);
   } catch (error) {
+    if (options.session) throw error;
     console.error("Error getting player:", error);
     return null;
   }
@@ -477,6 +483,7 @@ export async function createPlayer(
 
     await db.collection("players").insertOne({
       id,
+      ...createPlayerIdentity(id, characterName, slot),
       username,
       character_name: characterName,
       character_avatar: finalAvatar,
@@ -502,7 +509,9 @@ export async function createPlayer(
     // If another process inserted the same id simultaneously, treat as success
     try {
       if (error && error.code === 11000) {
-        return true;
+        return Boolean(await getDB().collection("players").findOne({
+          id: slot === 1 ? playerId : `${playerId}_${slot}`,
+        }));
       }
     } catch (e) {}
     console.error("Error creating player:", error);
@@ -528,64 +537,26 @@ export function getEffectiveAPMultiplier(player) {
   return apMultiplier + dynamicBonus;
 }
 
-export async function addAP(
-  playerId,
-  amount,
-  actionType = "train",
-  applyMultiplier = true,
-) {
+export async function addAP(playerId, amount, actionType = "train", applyMultiplier = true, options = {}) {
   try {
     const db = getDB();
-    const player = await getPlayer(playerId);
+    const player = await getPlayer(playerId, options);
     if (!player) return false;
-
-    let adjustedAmount = amount;
-    if (applyMultiplier) {
-      const now = Math.floor(Date.now() / 1000);
-      let apMultiplier = player.ap_multiplier || 100;
-      if (
-        player.ap_multiplier_expires_at > 0 &&
-        now >= player.ap_multiplier_expires_at
-      ) {
-        apMultiplier = 100;
-        await db
-          .collection("players")
-          .updateOne(
-            { id: playerId },
-            { $set: { ap_multiplier: 100, ap_multiplier_expires_at: 0 } },
-          );
-      }
-      const dynamicBonus =
-        getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
-      const effectiveMultiplier = apMultiplier + dynamicBonus;
-      adjustedAmount = Math.round(amount * (effectiveMultiplier / 100));
-    }
-    // Отрицательный amount — это админская коррекция, но результат ниже нуля
-    // ломает прогресс-бары и пороги, поэтому AP не уходит в минус.
-    const newAP = Math.max(0, player.ap + adjustedAmount);
+    const adjustedAmount = Math.round(Number(amount) * (applyMultiplier ? getEffectiveAPMultiplier(player) / 100 : 1));
     const timestamp = Math.floor(Date.now() / 1000);
-
-    const updateObj = { ap: newAP, last_ap_change_at: timestamp };
-    if (actionType === "train") {
-      updateObj.last_train_timestamp = timestamp;
-    } else if (actionType === "socialrp") {
-      updateObj.last_socialrp_timestamp = timestamp;
-    }
-
-    await db
-      .collection("players")
-      .updateOne({ id: playerId }, { $set: updateObj });
-
-    if (newAP >= 1000 && player.ap < 1000) {
-      await db
-        .collection("players")
-        .updateOne({ id: playerId }, { $set: { unlocked_avatar: 1 } });
-    }
-
-    await addProgressionHistory(playerId, "ap", player.ap, newAP, actionType);
-
-    return newAP;
+    const result = await adjustStat(db.collection("players"), { id: playerId }, "ap", adjustedAmount, {
+      ...options,
+      extra: after => ({ last_ap_change_at: timestamp,
+        ...(actionType === "train" ? { last_train_timestamp: timestamp } : {}),
+        ...(actionType === "socialrp" ? { last_socialrp_timestamp: timestamp } : {}),
+        ...(after >= 1000 ? { unlocked_avatar: 1 } : {}),
+      }),
+    });
+    if (!result) return false;
+    await addProgressionHistory(playerId, "ap", result.before, result.after, actionType, null, options);
+    return result.after;
   } catch (error) {
+    if (options.session) throw error;
     console.error("Error adding AP:", error);
     return false;
   }
@@ -777,18 +748,18 @@ export async function getSP(playerId, styleId) {
   }
 }
 
-export async function getAllPlayerSP(playerId) {
+export async function getAllPlayerSP(playerId, options = {}) {
   try {
     const db = getDB();
     const result = await db
       .collection("player_sp")
-      .find({ player_id: playerId })
+      .find({ player_id: playerId }, options)
       .sort({ sp: -1 })
       .toArray();
 
     const styles = [];
     for (const row of result) {
-      const style = await db.collection("styles").findOne({ id: row.style_id });
+      const style = await db.collection("styles").findOne({ id: row.style_id }, options);
       if (style) {
         styles.push({
           id: row.style_id,
@@ -799,6 +770,7 @@ export async function getAllPlayerSP(playerId) {
     }
     return styles;
   } catch (error) {
+    if (options.session) throw error;
     console.error("Error getting all player SP:", error);
     return [];
   }
@@ -858,70 +830,25 @@ export async function getTotalSP(playerId) {
   }
 }
 
-export async function addSP(
-  playerId,
-  styleId,
-  amount,
-  adminId = null,
-  source = "add-sp",
-  applyMultiplier = true,
-) {
+export async function addSP(playerId, styleId, amount, adminId = null, source = "add-sp", applyMultiplier = true, options = {}) {
   try {
     const db = getDB();
-    const player = await getPlayer(playerId);
+    const player = await getPlayer(playerId, options);
     if (!player) return false;
-
-    let adjustedAmount = amount;
-    let logMultiplierText = "без множителя";
-    if (applyMultiplier) {
-      const now = Math.floor(Date.now() / 1000);
-      let spMultiplier = player.sp_multiplier || 100;
-      if (
-        player.sp_multiplier_expires_at > 0 &&
-        now >= player.sp_multiplier_expires_at
-      ) {
-        spMultiplier = 100;
-        await db
-          .collection("players")
-          .updateOne(
-            { id: playerId },
-            { $set: { sp_multiplier: 100, sp_multiplier_expires_at: 0 } },
-          );
-      }
-      const dynamicBonus =
-        getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
-      const effectiveMultiplier = spMultiplier + dynamicBonus;
-      adjustedAmount = Math.round(amount * (effectiveMultiplier / 100));
-      logMultiplierText = `×${effectiveMultiplier}%`;
-    }
-
-    const currentSP = await getSP(playerId, styleId);
-    // Как и с AP: коррекция вниз разрешена, отрицательный итог — нет.
-    const newSP = Math.max(0, currentSP + adjustedAmount);
-
-    await db
-      .collection("player_sp")
-      .updateOne(
-        { player_id: playerId, style_id: styleId },
-        { $set: { player_id: playerId, style_id: styleId, sp: newSP } },
-        { upsert: true },
-      );
-
-    const timestamp = Math.floor(Date.now() / 1000);
-    await db
-      .collection("players")
-      .updateOne({ id: playerId }, { $set: { last_sp_change_at: timestamp } });
-
-    if (adminId) {
-      logAdminAction(
-        adminId,
-        "ADD_SP",
-        `Добавил ${amount} SP (${logMultiplierText} = ${adjustedAmount}) стиль ${styleId} игроку ${playerId}`,
-      );
-    }
-    await addProgressionHistory(playerId, "sp", currentSP, newSP, source);
-    return newSP;
+    const now = Math.floor(Date.now() / 1000);
+    const multiplier = player.sp_multiplier_expires_at > 0 && now >= player.sp_multiplier_expires_at ? 100 : player.sp_multiplier;
+    const effective = multiplier + getRankBonusPercent(player.rank) + getActivityBonusPercent(player);
+    const delta = Math.round(Number(amount) * (applyMultiplier ? effective / 100 : 1));
+    const query = { player_id: playerId, style_id: styleId };
+    await db.collection("player_sp").updateOne(query, { $setOnInsert: { ...query, sp: 0 } }, { ...options, upsert: true });
+    const result = await adjustStat(db.collection("player_sp"), query, "sp", delta, options);
+    if (!result) return false;
+    await db.collection("players").updateOne({ id: playerId }, { $set: { last_sp_change_at: now } }, options);
+    if (adminId) await logAdminAction(adminId, "ADD_SP", 'Добавил ' + delta + ' SP игроку ' + playerId + ', стиль ' + styleId, options);
+    await addProgressionHistory(playerId, "sp", result.before, result.after, source, { style_id: styleId }, options);
+    return result.after;
   } catch (error) {
+    if (options.session) throw error;
     console.error("Error adding SP:", error);
     return false;
   }
@@ -932,27 +859,41 @@ export async function addSP(
  * The player timestamp is updated in the same transaction-like operation as
  * the SP reward, preventing two open forms from granting duplicate rewards.
  */
-export async function completeSPTraining(
+export async function completeSPTraining(playerId, styleId, baseAmount, cooldownMs, context = {}) {
+  try {
+    return await withTransaction(async session => {
+      const result = await completeSPTrainingInTransaction(playerId, styleId, baseAmount, cooldownMs, context, 0, session);
+      if (!result.success) throw new OperationRejected(result);
+      return result;
+    });
+  } catch (error) {
+    if (error instanceof OperationRejected) return error.result;
+    console.error("Error completing SP training:", error);
+    return { success: false, reason: "error" };
+  }
+}
+
+async function completeSPTrainingInTransaction(
   playerId,
   styleId,
   baseAmount,
   cooldownMs,
   context = {},
   attempt = 0,
+  session,
 ) {
-  let claim = null;
   try {
     const db = getDB();
-    const player = await getPlayer(playerId);
+    const player = await getPlayer(playerId, { session });
     if (!player) return { success: false, reason: "not_found" };
 
-    const style = await db.collection("styles").findOne({ id: styleId });
+    const style = await db.collection("styles").findOne({ id: styleId }, { session });
     if (!style) return { success: false, reason: "style_not_found" };
 
     const learnedStyle = await db.collection("player_sp").findOne({
       player_id: playerId,
       style_id: styleId,
-    });
+    }, { session });
     if (!learnedStyle) return { success: false, reason: "style_not_owned" };
 
     const now = Math.floor(Date.now() / 1000);
@@ -984,12 +925,6 @@ export async function completeSPTraining(
       Math.round(Number(baseAmount) * (multiplier / 100)),
     );
 
-    const previousPlayerState = {
-      last_sp_train_timestamp: lastTraining,
-      last_sp_change_at: Number(player.last_sp_change_at || 0),
-      sp_multiplier: Number(player.sp_multiplier || 100),
-      sp_multiplier_expires_at: Number(player.sp_multiplier_expires_at || 0),
-    };
     const setOperations = {
       last_sp_train_timestamp: now,
       last_sp_change_at: now,
@@ -1010,14 +945,14 @@ export async function completeSPTraining(
         ],
       },
       { $set: setOperations },
-      { returnDocument: "after" },
+      { session, returnDocument: "after" },
     );
 
     if (!claimedPlayer) {
-      const latest = await getPlayer(playerId);
+      const latest = await getPlayer(playerId, { session });
       if (latest && Number(latest.last_sp_train_timestamp || 0) <= availableBefore) {
         return attempt < 3
-          ? completeSPTraining(playerId, styleId, baseAmount, cooldownMs, context, attempt + 1)
+          ? completeSPTrainingInTransaction(playerId, styleId, baseAmount, cooldownMs, context, attempt + 1, session)
           : { success: false, reason: "error" };
       }
       const latestTraining = Number(latest?.last_sp_train_timestamp || now);
@@ -1027,23 +962,19 @@ export async function completeSPTraining(
         retryAt: latestTraining + cooldownSeconds,
       };
     }
-    claim = { db, playerId, now, previousPlayerState, location, previousLocation: player.training_location };
 
     const updatedStyle = await db.collection("player_sp").findOneAndUpdate(
       { player_id: playerId, style_id: styleId },
       { $inc: { sp: gained } },
-      { returnDocument: "after" },
+      { session, returnDocument: "after" },
     );
 
     if (!updatedStyle) {
-      await rollbackSPTrainingClaim(claim);
-      claim = null;
       return { success: false, reason: "style_not_owned" };
     }
 
     const newSP = Number(updatedStyle.sp || 0);
     const oldSP = newSP - gained;
-    claim = null;
     await addProgressionHistory(
       playerId,
       "sp",
@@ -1051,6 +982,7 @@ export async function completeSPTraining(
       newSP,
       `train-sp:${style.id}`,
       { style_id: style.id, style_name: style.name },
+      { session },
     );
 
     return {
@@ -1068,30 +1000,7 @@ export async function completeSPTraining(
       retryAt: now + cooldownSeconds,
     };
   } catch (error) {
-    if (claim) {
-      await rollbackSPTrainingClaim(claim).catch((rollbackError) => {
-        console.error("Error rolling back SP training cooldown:", rollbackError);
-      });
-    }
-    console.error("Error completing SP training:", error);
-    return { success: false, reason: "error" };
-  }
-}
-
-async function rollbackSPTrainingClaim(claim) {
-  const players = claim.db.collection("players");
-  await players.updateOne(
-    { id: claim.playerId, last_sp_train_timestamp: claim.now },
-    { $set: claim.previousPlayerState },
-  );
-  // Do not restore a streak that a subsequent message already reset.
-  if (claim.location.updates.training_location) {
-    await players.updateOne(
-      { id: claim.playerId, training_location: claim.location.updates.training_location },
-      claim.previousLocation
-        ? { $set: { training_location: claim.previousLocation } }
-        : { $unset: { training_location: "" } },
-    );
+    throw error;
   }
 }
 
@@ -1256,7 +1165,7 @@ export async function getPlayerInventory(playerId) {
   }
 }
 
-export async function giveItem(playerId, itemName, qty, adminId) {
+export async function giveItem(playerId, itemName, qty, adminId, options = {}) {
   try {
     const db = getDB();
     const safeName = String(itemName || "").trim();
@@ -1268,7 +1177,7 @@ export async function giveItem(playerId, itemName, qty, adminId) {
 
     const playerExists = await db.collection("players").findOne(
       { id: playerId },
-      { projection: { id: 1 } },
+      { ...options, projection: { id: 1 } },
     );
     if (!playerExists) return { success: false, reason: "player_not_found" };
 
@@ -1276,14 +1185,16 @@ export async function giveItem(playerId, itemName, qty, adminId) {
       playerId,
       itemName: safeName,
       quantity: safeQuantity,
+      session: options.session,
     });
     if (!result.success) return result;
 
     if (adminId !== "system") {
-      logAdminAction(
+      await logAdminAction(
         adminId,
         "GIVE_ITEM",
         `Выдал ${safeQuantity}x ${safeName} игроку ${playerId}`,
+        options,
       );
     }
     return {
@@ -1294,6 +1205,7 @@ export async function giveItem(playerId, itemName, qty, adminId) {
       totalQuantity: result.totalQuantity,
     };
   } catch (error) {
+    if (options.session) throw error;
     console.error("Error giving item:", error);
     return {
       success: false,
@@ -1353,39 +1265,20 @@ export async function removeItem(playerId, itemName, qty = 1, adminId, { removeA
   }
 }
 
-export async function transferItem(fromId, toId, itemName, qty) {
+export async function transferItem(fromId, toId, itemName, qty, operationId = 'item-transfer:' + randomUUID()) {
+  const quantity = Number(qty);
+  const name = String(itemName || '').trim();
+  if (!Number.isSafeInteger(quantity) || quantity < 1) return { success: false, reason: "invalid_quantity" };
+  if (!name || name.length > 100) return { success: false, reason: "invalid_item" };
+  if (fromId === toId) return { success: false, reason: "same_player" };
   try {
-    const safeName = String(itemName || "").trim();
-    const quantity = Number(qty);
-    if (!safeName || safeName.length > 100
-      || !Number.isSafeInteger(quantity) || quantity < 1) {
-      return { success: false, reason: "invalid_item" };
-    }
-    if (fromId === toId) return { success: false, reason: "same_player" };
-
     const db = getDB();
-    const collections = {
-      players: db.collection("players"),
-      inventory: db.collection("inventory"),
-    };
-    try {
-      return await withTransaction((session) => transferItemInTransaction(
-        collections,
-        { fromId, toId, itemName: safeName, quantity, session },
-      ));
-    } catch (transactionError) {
-      if (!isTransactionUnsupportedError(transactionError)) throw transactionError;
-      console.warn("MongoDB transactions are unavailable; using compensated item transfer.");
-      return await transferItemCompensated(collections, {
-        fromId,
-        toId,
-        itemName: safeName,
-        quantity,
-      });
-    }
+    return await runOnceOperation(operationId, { kind: "item_transfer", fromId, toId, itemName: name, quantity },
+      session => transferItemInTransaction({ players: db.collection("players"), inventory: db.collection("inventory") },
+        { fromId, toId, itemName: name, quantity, session }));
   } catch (error) {
     console.error("Error transferring item:", error);
-    return { success: false, reason: "error" };
+    return { success: false, reason: isTransactionUnsupportedError(error) ? "transactions_required" : "operation_unknown" };
   }
 }
 
@@ -1455,171 +1348,54 @@ export async function getLeaderboard(sortBy = "ap", limit = 10) {
   }
 }
 
-export async function useItem(playerId, itemName, qty) {
+export async function useItem(playerId, itemName, qty, operationId = 'use:' + randomUUID()) {
+  const quantity = Number(qty);
+  if (!Number.isSafeInteger(quantity) || quantity < 1) return { success: false, reason: "invalid_quantity" };
+  const definition = getItemDefinition(itemName);
+  if (!definition.usable) return { success: false, reason: "not_usable", definition };
+  const reward = definition.amount * quantity;
+  if (!Number.isSafeInteger(reward) || reward < 1) return { success: false, reason: "amount_too_large", definition };
   try {
-    const db = getDB();
-    const amountUsed = Number(qty);
-    if (!Number.isSafeInteger(amountUsed) || amountUsed < 1) {
-      return { success: false, reason: "invalid_quantity" };
-    }
-
-    const player = await getPlayer(playerId);
-    if (!player) return { success: false, reason: "player_not_found" };
-
-    const definition = getItemDefinition(itemName);
-    if (!definition.usable) {
-      return { success: false, reason: "not_usable", definition };
-    }
-
-    let style = null;
-    let learnedStyle = null;
-    if (definition.kind === "sp") {
-      style = await db.collection("styles").findOne({ name: definition.styleName });
-      if (!style) {
-        return { success: false, reason: "style_not_found", definition };
+    return await runOnceOperation(operationId, { kind: "use_item", playerId, itemName, quantity }, async session => {
+      const db = getDB();
+      const options = { session };
+      const player = await getPlayer(playerId, options);
+      if (!player) return { success: false, reason: "player_not_found" };
+      let style = null;
+      if (definition.kind === "sp") {
+        style = await db.collection("styles").findOne({ name: definition.styleName }, options);
+        if (!style) return { success: false, reason: "style_not_found", definition };
+        if (!await db.collection("player_sp").findOne({ player_id: playerId, style_id: style.id }, options)) {
+          return { success: false, reason: "style_not_owned", definition, style };
+        }
       }
-      learnedStyle = await db.collection("player_sp").findOne({
-        player_id: playerId,
-        style_id: style.id,
+      const stack = await db.collection("inventory").findOneAndUpdate({
+        player_id: playerId, item_name: itemName, qty: { $gte: quantity, $lte: Number.MAX_SAFE_INTEGER },
+      }, { $inc: { qty: -quantity } }, { session, returnDocument: "before" });
+      if (!stack) {
+        const current = await db.collection("inventory").findOne({ player_id: playerId, item_name: itemName }, options);
+        return { success: false, reason: current ? "insufficient_quantity" : "not_found", available: Number(current?.qty || 0), definition };
+      }
+      const now = Math.floor(Date.now() / 1000);
+      const target = definition.kind === "ap" ? db.collection("players") : db.collection("player_sp");
+      const query = definition.kind === "ap" ? { id: playerId } : { player_id: playerId, style_id: style.id };
+      const field = definition.kind;
+      const result = await adjustStat(target, query, field, reward, {
+        session, extra: after => definition.kind === "ap" ? { last_ap_change_at: now, ...(after >= 1000 ? { unlocked_avatar: 1 } : {}) } : {},
       });
-      if (!learnedStyle) {
-        return { success: false, reason: "style_not_owned", definition, style };
-      }
-    }
-
-    const reward = definition.amount * amountUsed;
-    if (!Number.isSafeInteger(reward) || reward < 1) {
-      return { success: false, reason: "amount_too_large", definition };
-    }
-    const currentValue = definition.kind === "ap"
-      ? Number(player.ap || 0)
-      : Number(learnedStyle?.sp || 0);
-    if (!Number.isSafeInteger(currentValue)
-      || !Number.isSafeInteger(currentValue + reward)) {
-      return { success: false, reason: "amount_too_large", definition };
-    }
-
-    const claimedItem = await db.collection("inventory").findOneAndUpdate(
-      {
-        player_id: playerId,
-        item_name: itemName,
-        qty: { $gte: amountUsed },
-      },
-      { $inc: { qty: -amountUsed } },
-      { returnDocument: "before" },
-    );
-
-    if (!claimedItem) {
-      const existing = await db.collection("inventory").findOne({
-        player_id: playerId,
-        item_name: itemName,
-      });
-      return {
-        success: false,
-        reason: existing ? "insufficient_quantity" : "not_found",
-        available: Number(existing?.qty || 0),
-        definition,
-      };
-    }
-
-    const previousQuantity = Number(claimedItem.qty || 0);
-    const remainingQuantity = previousQuantity - amountUsed;
-    const now = Math.floor(Date.now() / 1000);
-    let appliedEffect = null;
-
-    try {
-      let oldValue;
-      let newValue;
-      if (definition.kind === "ap") {
-        const updatedPlayer = await db.collection("players").findOneAndUpdate(
-          {
-            id: playerId,
-            ap: { $lte: Number.MAX_SAFE_INTEGER - reward },
-          },
-          {
-            $inc: { ap: reward },
-            $set: {
-              last_ap_change_at: now,
-              ...(Number(player.ap || 0) + reward >= 1000 ? { unlocked_avatar: 1 } : {}),
-            },
-          },
-          { returnDocument: "after" },
-        );
-        if (!updatedPlayer) throw new Error("Player AP could not be safely updated");
-        appliedEffect = { kind: "ap" };
-        newValue = Number(updatedPlayer.ap || 0);
-        oldValue = newValue - reward;
-        await addProgressionHistory(playerId, "ap", oldValue, newValue, "item", {
-          item_name: itemName,
-          quantity: amountUsed,
-        });
-      } else {
-        const updatedStyle = await db.collection("player_sp").findOneAndUpdate(
-          {
-            player_id: playerId,
-            style_id: style.id,
-            sp: { $lte: Number.MAX_SAFE_INTEGER - reward },
-          },
-          { $inc: { sp: reward } },
-          { returnDocument: "after" },
-        );
-        if (!updatedStyle) throw new Error("Style SP could not be safely updated");
-        appliedEffect = { kind: "sp", styleId: style.id };
-        newValue = Number(updatedStyle.sp || 0);
-        oldValue = newValue - reward;
-        await db.collection("players").updateOne(
-          { id: playerId },
-          { $set: { last_sp_change_at: now } },
-        );
-        await addProgressionHistory(playerId, "sp", oldValue, newValue, "item", {
-          item_name: itemName,
-          quantity: amountUsed,
-          style_id: style.id,
-          style_name: style.name,
-        });
-      }
-
-      if (remainingQuantity === 0) {
-        await db.collection("inventory").deleteOne({
-          _id: claimedItem._id,
-          qty: 0,
-        }).catch((cleanupError) => {
-          console.error("Error cleaning up an empty inventory item:", cleanupError);
-        });
-      }
-
-      return {
-        success: true,
-        itemName,
-        quantity: amountUsed,
-        remainingQuantity,
-        definition,
-        reward,
-        oldValue,
-        newValue,
-        style: style ? { id: style.id, name: style.name } : null,
-      };
-    } catch (effectError) {
-      if (appliedEffect?.kind === "ap") {
-        await db.collection("players").updateOne(
-          { id: playerId },
-          { $inc: { ap: -reward } },
-        ).catch(() => {});
-      } else if (appliedEffect?.kind === "sp") {
-        await db.collection("player_sp").updateOne(
-          { player_id: playerId, style_id: appliedEffect.styleId },
-          { $inc: { sp: -reward } },
-        ).catch(() => {});
-      }
-      await db.collection("inventory").updateOne(
-        { _id: claimedItem._id },
-        { $inc: { qty: amountUsed } },
-      );
-      throw effectError;
-    }
+      if (!result) throw new Error("Item effect target disappeared");
+      if (definition.kind === "sp") await db.collection("players").updateOne({ id: playerId }, { $set: { last_sp_change_at: now } }, options);
+      const remainingQuantity = Number(stack.qty) - quantity;
+      if (remainingQuantity === 0) await db.collection("inventory").deleteOne({ _id: stack._id, qty: 0 }, options);
+      await addProgressionHistory(playerId, field, result.before, result.after, "item", {
+        item_name: itemName, quantity, ...(style ? { style_id: style.id, style_name: style.name } : {}),
+      }, options);
+      return { success: true, itemName, quantity, remainingQuantity, definition, reward,
+        oldValue: result.before, newValue: result.after, style: style ? { id: style.id, name: style.name } : null };
+    });
   } catch (error) {
     console.error("Error using item:", error);
-    return { success: false, reason: "error" };
+    return { success: false, reason: isTransactionUnsupportedError(error) ? "transactions_required" : "operation_unknown" };
   }
 }
 
@@ -1781,7 +1557,7 @@ export async function getPlayerLeaderboardRank(playerId, sortBy = "ap") {
  * a debit only applies when the money is actually there, and a credit only when
  * the result stays a safe integer.
  */
-export async function addCurrency(playerId, currency, amount, adminId) {
+export async function addCurrency(playerId, currency, amount, adminId, options = {}) {
   try {
     const db = getDB();
     if (currency !== "krw" && currency !== "yen") return false;
@@ -1804,18 +1580,20 @@ export async function addCurrency(playerId, currency, amount, adminId) {
       .findOneAndUpdate(
         filter,
         { $inc: { [currency]: delta } },
-        { returnDocument: "after" },
+        { ...options, returnDocument: "after" },
       );
 
     if (!updated) return false;
 
-    logAdminAction(
+    await logAdminAction(
       adminId,
       "ADD_CURRENCY",
       `Добавил ${amount} ${currency.toUpperCase()} игроку ${playerId}`,
+      options,
     );
     return Number(updated[currency]);
   } catch (error) {
+    if (options.session) throw error;
     console.error("Error adding currency:", error);
     return false;
   }
@@ -1845,37 +1623,17 @@ export async function setCurrency(playerId, currency, amount, adminId) {
   }
 }
 
-export async function transferCurrency(fromId, toId, currency, amount) {
+export async function transferCurrency(fromId, toId, currency, amount, operationId = 'pay:' + randomUUID()) {
+  if (!["krw", "yen"].includes(currency)) return { success: false, reason: "invalid_currency" };
+  if (fromId === toId) return { success: false, reason: "same_player" };
+  const calculation = calculateTransfer(amount);
+  if (!calculation.valid) return { success: false, reason: calculation.reason };
   try {
-    const db = getDB();
-    if (currency !== "krw" && currency !== "yen") {
-      return { success: false, reason: "invalid_currency" };
-    }
-    if (fromId === toId) return { success: false, reason: "same_player" };
-    const calculation = calculateTransfer(amount);
-    if (!calculation.valid) {
-      return { success: false, reason: calculation.reason };
-    }
-
-    const players = db.collection("players");
-    try {
-      return await withTransaction((session) => transferCurrencyInTransaction(
-        players,
-        { fromId, toId, currency, calculation, session },
-      ));
-    } catch (transactionError) {
-      if (!isTransactionUnsupportedError(transactionError)) throw transactionError;
-      console.warn("MongoDB transactions are unavailable; using compensated transfer.");
-      return await transferCurrencyCompensated(players, {
-        fromId,
-        toId,
-        currency,
-        calculation,
-      });
-    }
+    return await runOnceOperation(operationId, { kind: "currency_transfer", fromId, toId, currency, amount: calculation.sent },
+      session => transferCurrencyInTransaction(getDB().collection("players"), { fromId, toId, currency, calculation, session }));
   } catch (error) {
     console.error("Error transferring currency:", error);
-    return { success: false, reason: "error" };
+    return { success: false, reason: isTransactionUnsupportedError(error) ? "transactions_required" : "operation_unknown" };
   }
 }
 
@@ -2355,6 +2113,7 @@ async function addReputationHistory(
   source,
   reason,
   adminId,
+  options = {},
 ) {
   try {
     const db = getDB();
@@ -2367,8 +2126,9 @@ async function addReputationHistory(
       reason: reason || null,
       admin_id: adminId || null,
       changed_at: new Date(),
-    });
+    }, options);
   } catch (error) {
+    if (options.session) throw error;
     console.error("Error adding reputation history:", error);
   }
 }
@@ -2384,37 +2144,20 @@ export async function getReputation(playerId) {
   }
 }
 
-export async function addReputation(playerId, amount, adminId, reason = null) {
+export async function addReputation(playerId, amount, adminId, reason = null, options = {}) {
   try {
     const db = getDB();
-    const player = await getPlayer(playerId);
-    if (!player) return false;
-
-    const oldRep = Number(player.reputation || 0);
-    const newRep = oldRep + Number(amount);
-
-    await db
-      .collection("players")
-      .updateOne({ id: playerId }, { $set: { reputation: newRep } });
-
-    const action = Number(amount) >= 0 ? "ADD_REPUTATION" : "DEDUCT_REPUTATION";
-    const verb = Number(amount) >= 0 ? "Добавил" : "Списал";
-    const absAmount = Math.abs(Number(amount));
-    logAdminAction(
-      adminId,
-      action,
-      `${verb} ${absAmount} Rtg игроку ${playerId}${reason ? ` (причина: ${reason})` : ""}`,
-    );
-    await addReputationHistory(
-      playerId,
-      oldRep,
-      newRep,
-      action.toLowerCase(),
-      reason,
-      adminId,
-    );
-    return newRep;
+    const delta = Number(amount);
+    const result = await adjustStat(db.collection("players"), { id: playerId }, "reputation", delta, {
+      ...options, minimum: -Number.MAX_SAFE_INTEGER, defaultValue: REPUTATION_DEFAULT,
+    });
+    if (!result) return false;
+    const action = delta >= 0 ? "ADD_REPUTATION" : "DEDUCT_REPUTATION";
+    await logAdminAction(adminId, action, 'Изменил Rtg игрока ' + playerId + ' на ' + delta + (reason ? ' (' + reason + ')' : ''), options);
+    await addReputationHistory(playerId, result.before, result.after, action.toLowerCase(), reason, adminId, options);
+    return result.after;
   } catch (error) {
+    if (options.session) throw error;
     console.error("Error adding reputation:", error);
     return false;
   }

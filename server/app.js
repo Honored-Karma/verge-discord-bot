@@ -20,6 +20,7 @@ import { createSeoRouter } from './routes/seo.js';
 import { createAvatarRouter } from './routes/avatar.js';
 import { createMetaInjectorMiddleware } from './middlewares/metaInjector.js';
 import { errorHandler } from './middlewares/errorHandler.js';
+import { createSessionAuthorization } from './middlewares/sessionAuthorization.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -134,6 +135,8 @@ export function createExpressApp(discordClient) {
             path: '/'
         }
     }));
+
+    app.use('/api', createSessionAuthorization());
 
     // 7. SEO Routes (robots.txt & sitemap.xml)
     app.use('/', createSeoRouter());

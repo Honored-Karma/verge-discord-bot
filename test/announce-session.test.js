@@ -175,6 +175,7 @@ test("announce session: handleModal updates state for text and style", async () 
   setDB(db);
 
   const session = {
+    status: "open",
     message_id: "msg_announce_edit",
     owner_id: "admin_1",
     state: createAnnounceState(),
@@ -254,6 +255,7 @@ test("announce session: send announcement delivers to channel and completes sess
   };
 
   const session = {
+    status: "open",
     message_id: "msg_announce_send",
     owner_id: "admin_1",
     state: createAnnounceState({

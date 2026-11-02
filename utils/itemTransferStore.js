@@ -7,10 +7,8 @@ function safeQuantity(value) {
 
 async function participantsExist(players, fromId, toId, session = null) {
   const options = session ? { session, projection: { id: 1 } } : { projection: { id: 1 } };
-  const [sender, recipient] = await Promise.all([
-    players.findOne({ id: fromId }, options),
-    players.findOne({ id: toId }, options),
-  ]);
+  const sender = await players.findOne({ id: fromId }, options);
+  const recipient = await players.findOne({ id: toId }, options);
   if (!sender) return { success: false, reason: "sender_not_found" };
   if (!recipient) return { success: false, reason: "recipient_not_found" };
   return { success: true };
@@ -24,10 +22,8 @@ export async function transferItemInTransaction(
   if (!participants.success) return participants;
 
   const options = { session };
-  const [senderStack, recipientStack] = await Promise.all([
-    inventory.findOne({ player_id: fromId, item_name: itemName }, options),
-    inventory.findOne({ player_id: toId, item_name: itemName }, options),
-  ]);
+  const senderStack = await inventory.findOne({ player_id: fromId, item_name: itemName }, options);
+  const recipientStack = await inventory.findOne({ player_id: toId, item_name: itemName }, options);
   const senderQuantity = safeQuantity(senderStack?.qty);
   const recipientQuantity = safeQuantity(recipientStack?.qty ?? 0);
   if (!senderStack || senderQuantity === null || senderQuantity < quantity) {

@@ -13,7 +13,7 @@ import {
 } from "discord.js";
 import { isAdmin } from "../utils/adminCheck.js";
 import { resolveMember } from "../utils/memberHelper.js";
-import { resolveShopOrder } from "../utils/shopStore.js";
+import { resolveShopOrder, getShopOrderDetails } from "../utils/shopStore.js";
 import {
   claimInteractionSession,
   closeInteractionSession,
@@ -187,14 +187,24 @@ async function finish({ interaction, session, action, reason }) {
   });
 
   if (!result.success) {
-    await releaseInteractionSession(session.message_id, state);
+    if (result.reason === "already_resolved") {
+      const details = await getShopOrderDetails(state.public_id);
+      if (details?.order) {
+        await closeInteractionSession(session.message_id, { claimToken: claimed.claim_token });
+        return interaction.editReply({ components: createResolutionComponents(state, {
+          result: { ...result, success: true }, adminId: details.order.resolved_by,
+          reason: details.order.resolution_reason,
+        }) }).catch(() => {});
+      }
+    }
+    await releaseInteractionSession(session.message_id, state, { claimToken: claimed.claim_token });
     return interaction.followUp({
       content: failureMessage(result.reason),
       flags: MessageFlags.Ephemeral,
     }).catch(() => {});
   }
 
-  await closeInteractionSession(session.message_id);
+  await closeInteractionSession(session.message_id, { claimToken: claimed.claim_token });
 
   await interaction.editReply({
     components: createResolutionComponents(state, {

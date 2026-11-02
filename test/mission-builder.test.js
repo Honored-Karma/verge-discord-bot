@@ -640,7 +640,7 @@ test("mission builder allows selecting Korean and Japanese minimum ranks and per
     owner_id: "user_gm_rank",
     guild_id: "guild_rank",
     channel_id: "chan_rank",
-    status: "active",
+    status: "open",
     expires_at: new Date(Date.now() + 600000),
     state: draftState,
   };

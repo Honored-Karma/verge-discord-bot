@@ -1,3 +1,4 @@
+import { isSafeImageUrl, requestPublicImage } from './remoteImage.js';
 import { getDB } from './db.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
@@ -70,54 +71,18 @@ export function sanitizePlayerStorageId(playerId) {
 /**
  * Strictly validates image URL to prevent SSRF against loopback, cloud metadata, or private intranet
  */
-export function isSafeRemoteImageUrl(urlString) {
-  if (!urlString || typeof urlString !== 'string') return false;
-  try {
-    const parsed = new URL(urlString.trim());
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return false;
-    }
-    // Block embedded credentials
-    if (parsed.username || parsed.password) {
-      return false;
-    }
-    const hostname = parsed.hostname.toLowerCase();
-    // Block localhost, loopback, zero-IP, and cloud metadata
-    if (
-      hostname === 'localhost' ||
-      hostname === '127.0.0.1' ||
-      hostname === '::1' ||
-      hostname === '0.0.0.0' ||
-      hostname === '169.254.169.254' ||
-      hostname === 'metadata.google.internal'
-    ) {
-      return false;
-    }
-    // Block internal and private domain suffixes
-    if (hostname.endsWith('.internal') || hostname.endsWith('.local') || hostname.endsWith('.localhost')) {
-      return false;
-    }
-    // Block private IPv4 ranges (RFC 1918 + RFC 3927 loopback/link-local)
-    if (/^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3}|0\.0\.0\.0)$/.test(hostname)) {
-      return false;
-    }
-    // Block IPv6 formats
-    if (hostname.includes(':') || /^\[?[0-9a-fA-F:]+\]?$/.test(hostname)) {
-      return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
+export const isSafeRemoteImageUrl = isSafeImageUrl;
 
 /**
  * Checks if a string is a Discord CDN attachment URL
  */
 export function isDiscordCdnUrl(url) {
   if (!url || typeof url !== 'string') return false;
-  return url.includes('cdn.discordapp.com/attachments/') ||
-         url.includes('media.discordapp.net/attachments/');
+  try {
+    const parsed = new URL(url);
+    return ['cdn.discordapp.com', 'media.discordapp.net'].includes(parsed.hostname)
+      && parsed.protocol === 'https:' && parsed.pathname.startsWith('/attachments/');
+  } catch { return false; }
 }
 
 /**
@@ -205,12 +170,7 @@ export async function fetchImageBuffer(source, client = null) {
     }
   }
 
-  let response = await fetch(url, {
-    signal: AbortSignal.timeout(10000),
-    headers: {
-      'User-Agent': 'Verge-Discord-Bot/2.0'
-    }
-  }).catch(err => ({ ok: false, status: 0, statusText: err.message }));
+  let response = await requestPublicImage(url);
 
   // If failed and is a Discord CDN URL, attempt a force refresh via Discord API
   if (!response.ok && isDiscordCdnUrl(url)) {
@@ -218,12 +178,7 @@ export async function fetchImageBuffer(source, client = null) {
       const refreshed = await refreshDiscordAttachmentUrl(url, client);
       if (refreshed && refreshed !== url) {
         url = refreshed;
-        response = await fetch(url, {
-          signal: AbortSignal.timeout(10000),
-          headers: {
-            'User-Agent': 'Verge-Discord-Bot/2.0'
-          }
-        }).catch(err => ({ ok: false, status: 0, statusText: err.message }));
+        response = await requestPublicImage(url);
       }
     } catch {}
   }
@@ -232,8 +187,7 @@ export async function fetchImageBuffer(source, client = null) {
     throw new Error(`Не удалось загрузить изображение (HTTP ${response.status} ${response.statusText})`);
   }
 
-  const arrayBuf = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuf);
+  const buffer = response.buffer;
 
   if (buffer.length > MAX_AVATAR_BYTES) {
     throw new Error('Размер изображения превышает лимит 8 МБ');

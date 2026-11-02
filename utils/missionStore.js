@@ -1,3 +1,4 @@
+import { runOnceOperation } from './operations.js';
 import crypto from "crypto";
 import { getDB } from "./db.js";
 import {
@@ -804,6 +805,11 @@ export async function deliverMissionRewards({
   activeDeliveries.add(normPublicId);
   try {
     const target = collection(db);
+    const database = db || getDB();
+    const deliverOnce = async (key, details, work) => {
+      const result = await runOnceOperation(key, details, work, { database });
+      return result?.success === false ? false : result;
+    };
     const mission = await target.findOne({ public_id: normPublicId });
 
     if (!mission) {
@@ -838,11 +844,14 @@ export async function deliverMissionRewards({
     // Pre-resolve or preserve random winners for items with distribution: 'random'
     const participants = mission.participants || [];
     if (participants.length > 0) {
-      items.forEach((item, itemIdx) => {
+      for (const [itemIdx, item] of items.entries()) {
         if (item.distribution === "random") {
           const winnerKey = `mission:${mission.public_id}:item:${itemIdx}:winner`;
           if (!deliveries[winnerKey]?.winner_player_id) {
-            const chosen = participants[Math.floor(Math.random() * participants.length)];
+            const chosen = await runOnceOperation(winnerKey,
+              { kind: "mission_winner", mission: mission.public_id, item: itemIdx },
+              async () => ({ ...participants[crypto.randomInt(participants.length)], success: true }),
+              { database });
             deliveries[winnerKey] = {
               winner_player_id: chosen.player_id,
               winner_character_name: chosen.character_name,
@@ -851,7 +860,7 @@ export async function deliverMissionRewards({
             };
           }
         }
-      });
+      }
     }
 
     for (const participant of participants) {
@@ -873,12 +882,8 @@ export async function deliverMissionRewards({
           };
         } else {
           try {
-            const res = await addCurrency(
-              playerId,
-              "krw",
-              mission.reward.krw,
-              actorId
-            );
+            const res = await deliverOnce(krwKey, { kind: "mission_krw", playerId, amount: mission.reward.krw },
+              session => addCurrency(playerId, "krw", mission.reward.krw, actorId, { session }));
             if (res !== false) {
               deliveries[krwKey] = {
                 status: "delivered",
@@ -916,12 +921,8 @@ export async function deliverMissionRewards({
           };
         } else {
           try {
-            const res = await addCurrency(
-              playerId,
-              "yen",
-              mission.reward.yen,
-              actorId
-            );
+            const res = await deliverOnce(yenKey, { kind: "mission_yen", playerId, amount: mission.reward.yen },
+              session => addCurrency(playerId, "yen", mission.reward.yen, actorId, { session }));
             if (res !== false) {
               deliveries[yenKey] = {
                 status: "delivered",
@@ -956,7 +957,8 @@ export async function deliverMissionRewards({
           participantReport.rewards.ap = { status: "already_delivered", amount: mission.reward.ap };
         } else {
           try {
-            const res = await addAP(playerId, mission.reward.ap, "mission", true);
+            const res = await deliverOnce(apKey, { kind: "mission_ap", playerId, amount: mission.reward.ap },
+              session => addAP(playerId, mission.reward.ap, "mission", true, { session }));
             if (res !== false) {
               deliveries[apKey] = {
                 status: "delivered",
@@ -979,62 +981,30 @@ export async function deliverMissionRewards({
         }
       }
 
-      // 2. SP Delivery
+      // Store the selected style in the receipt: its order may change before a retry.
       if (mission.reward?.sp > 0) {
         const spKey = `mission:${mission.public_id}:${playerId}:sp`;
-        if (deliveries[spKey]?.status === "delivered") {
-          participantReport.rewards.sp = { status: "already_delivered", amount: mission.reward.sp };
-        } else if (deliveries[spKey]?.status === "skipped") {
-          participantReport.rewards.sp = { status: "skipped", error: deliveries[spKey].error };
+        if (["delivered", "skipped"].includes(deliveries[spKey]?.status)) {
+          participantReport.rewards.sp = { ...deliveries[spKey], status: deliveries[spKey].status === "delivered" ? "already_delivered" : "skipped" };
         } else {
           try {
-            const styles = await getAllPlayerSP(playerId);
-            if (styles && styles.length > 0) {
-              // Apply SP to the participant's highest/primary learned style
-              const targetStyle = styles[0];
-              const res = await addSP(
-                playerId,
-                targetStyle.id,
-                mission.reward.sp,
-                actorId,
-                `mission:${mission.public_id}`,
-                true
-              );
-              if (res !== false) {
-                deliveries[spKey] = {
-                  status: "delivered",
-                  amount: mission.reward.sp,
-                  style_id: targetStyle.id,
-                  style_name: targetStyle.name,
-                  delivered_at: new Date(),
-                };
-                participantReport.rewards.sp = {
-                  status: "delivered",
-                  amount: mission.reward.sp,
-                  style: targetStyle.name,
-                };
-              } else {
-                deliveries[spKey] = { status: "failed", error: "Не удалось начислить SP в базу" };
-                participantReport.rewards.sp = { status: "failed", error: "Не удалось начислить SP в базу" };
-                allDelivered = false;
-                hasFailures = true;
-              }
-            } else {
-              // Player has no learned martial styles - skip SP gracefully so mission can complete
-              deliveries[spKey] = {
-                status: "skipped",
-                error: "У персонажа нет изученных боевых стилей",
-              };
-              participantReport.rewards.sp = {
-                status: "skipped",
-                error: "У персонажа нет изученных боевых стилей",
-              };
-            }
-          } catch (err) {
-            deliveries[spKey] = { status: "failed", error: err.message };
-            participantReport.rewards.sp = { status: "failed", error: err.message };
-            allDelivered = false;
+            const result = await deliverOnce(spKey, { kind: "mission_sp", playerId, amount: mission.reward.sp }, async session => {
+              if (!await getPlayer(playerId, { session })) return false;
+              const styles = await getAllPlayerSP(playerId, { session });
+              if (!styles.length) return { success: true, status: "skipped", error: "У персонажа нет изученных боевых стилей" };
+              const style = styles[0];
+              const value = await addSP(playerId, style.id, mission.reward.sp, actorId, `mission:${mission.public_id}`, true, { session });
+              if (value === false) return false;
+              return { success: true, status: "delivered", amount: mission.reward.sp, style_id: style.id, style_name: style.name, style: style.name, delivered_at: new Date() };
+            });
+            if (result === false) throw new Error("Не удалось начислить SP");
+            deliveries[spKey] = result;
+            participantReport.rewards.sp = result;
+          } catch (error) {
+            deliveries[spKey] = { status: "failed", error: error.message };
+            participantReport.rewards.sp = deliveries[spKey];
             hasFailures = true;
+            allDelivered = false;
           }
         }
       }
@@ -1049,12 +1019,9 @@ export async function deliverMissionRewards({
           };
         } else {
           try {
-            const res = await addReputation(
-              playerId,
-              mission.reward.reputation,
-              actorId,
-              `Завершение миссии: ${mission.title} [${mission.public_id}]`
-            );
+            const res = await deliverOnce(repKey, { kind: "mission_reputation", playerId, amount: mission.reward.reputation },
+              session => addReputation(playerId, mission.reward.reputation, actorId,
+                `Завершение миссии: ${mission.title} [${mission.public_id}]`, { session }));
             if (res !== false) {
               deliveries[repKey] = {
                 status: "delivered",
@@ -1118,12 +1085,8 @@ export async function deliverMissionRewards({
           }
         } else {
           try {
-            const res = await giveItem(
-              playerId,
-              item.item_name,
-              item.quantity,
-              actorId
-            );
+            const res = await deliverOnce(itemKey, { kind: "mission_item", playerId, item: item.item_name, quantity: item.quantity },
+              session => giveItem(playerId, item.item_name, item.quantity, actorId, { session }));
             if (res && res.success) {
               const deliveredData = {
                 status: "delivered",

@@ -142,12 +142,12 @@ test('requireAdmin middleware blocks staff who are not full admins', async () =>
     assert.equal(resAllowed.data.ok, true);
 });
 
-test('isCharacterOwner accurately detects ownership across slots 1 and 2', () => {
+test('isCharacterOwner accurately detects ownership across slots 1, 2 and 3', () => {
     const sessionUser = { id: '555111' };
 
     assert.equal(isCharacterOwner(sessionUser, '555111'), true); // Slot 1
     assert.equal(isCharacterOwner(sessionUser, '555111_2'), true); // Slot 2
-    assert.equal(isCharacterOwner(sessionUser, '555111_3'), false);
+    assert.equal(isCharacterOwner(sessionUser, '555111_3'), true);
     assert.equal(isCharacterOwner(sessionUser, '999999'), false);
     assert.equal(isCharacterOwner(null, '555111'), false);
 });

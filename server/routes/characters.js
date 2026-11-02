@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth } from '../middlewares/auth.js';
 import { getPlayerByPublicIdentifier, getUserCharacters, isCharacterOwner, sanitizeCharacter } from '../../services/playerService.js';
 import { getCharacterInventory } from '../../services/inventoryService.js';
+import { calculateUserCapabilities } from '../../services/permissionService.js';
 
 export function createCharactersRouter() {
     const router = Router();
@@ -58,7 +59,7 @@ export function createCharactersRouter() {
             // Check if requester is owner or staff
             const currentUser = req.session?.user;
             const isOwner = isCharacterOwner(currentUser, rawCharacter);
-            const isStaff = Boolean(currentUser?.permissions?.isStaff);
+            const isStaff = calculateUserCapabilities(currentUser).canViewPrivateCharacters;
 
             const character = sanitizeCharacter(rawCharacter, isOwner, isStaff);
 
@@ -95,7 +96,7 @@ export function createCharactersRouter() {
 
             // Ownership and Staff permission check
             const isOwner = isCharacterOwner(currentUser, rawCharacter);
-            const isStaff = Boolean(currentUser.permissions?.isStaff);
+            const isStaff = calculateUserCapabilities(currentUser).canViewInventories;
 
             if (!isOwner && !isStaff) {
                 return res.status(403).json({

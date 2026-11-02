@@ -79,13 +79,14 @@ export function createAdminRouter(discordClient) {
             let wikiCounts = { total: 0, published: 0, draft: 0, archived: 0 };
             let totalApplications = 0;
             let recentAuditLogs = [];
+            const canViewAudit = hasCapability(req.session.user, 'canViewAuditLog');
 
             if (db) {
                 const [playersCount, wikiDocs, appCount, auditDocs] = await Promise.all([
                     db.collection('players').countDocuments().catch(() => 0),
                     db.collection('wiki_articles').find({}, { projection: { status: 1 } }).toArray().catch(() => []),
                     db.collection('applications').countDocuments({ status: 'accepted' }).catch(() => 0),
-                    db.collection('admin_actions').find({}).sort({ created_at: -1 }).limit(6).toArray().catch(() => [])
+                    canViewAudit ? db.collection('admin_actions').find({}).sort({ created_at: -1 }).limit(6).toArray().catch(() => []) : []
                 ]);
 
                 totalPlayers = playersCount;
@@ -109,8 +110,10 @@ export function createAdminRouter(discordClient) {
                 };
                 totalPlayers = 2;
                 totalApplications = 2;
-                const logs = await getAuditLogs({ limit: 6 });
-                recentAuditLogs = logs.items;
+                if (canViewAudit) {
+                    const logs = await getAuditLogs({ limit: 6 });
+                    recentAuditLogs = logs.items;
+                }
             }
 
             const systemStatus = {

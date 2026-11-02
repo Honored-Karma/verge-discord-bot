@@ -115,6 +115,8 @@ export async function execute(interaction) {
         return;
     }
 
+    await interaction.deferReply({ flags: 64 });
+
     const playerId = interaction.user.id;
     const username = interaction.user.username;
 
@@ -141,10 +143,8 @@ export async function execute(interaction) {
     });
 
     if (!slotResolution.ok) {
-        const msg = await interaction.reply({
+        const msg = await interaction.editReply({
             embeds: [createErrorEmbed(slotResolution.title, slotResolution.message)],
-            flags: 64,
-            fetchReply: true
         });
         autoDeleteMessageShort(msg);
         return;
@@ -157,20 +157,16 @@ export async function execute(interaction) {
     const existingPlayer = await getPlayer(checkId);
 
     if (existingPlayer) {
-        const msg = await interaction.reply({
+        const msg = await interaction.editReply({
             embeds: [createErrorEmbed('Уже зарегистрирован', `В слоте ${slot} уже есть персонаж (${existingPlayer.character_name || existingPlayer.username}). Переключитесь на другой слот или удалите персонажа.`)],
-            flags: 64,
-            fetchReply: true
         });
         autoDeleteMessageShort(msg);
         return;
     }
 
     if (characterName.length < 2 || characterName.length > 32) {
-        const msg = await interaction.reply({
+        const msg = await interaction.editReply({
             embeds: [createErrorEmbed('Некорректное имя', 'Имя персонажа должно быть от 2 до 32 символов.')],
-            flags: 64,
-            fetchReply: true
         });
         autoDeleteMessageShort(msg);
         return;
@@ -189,18 +185,14 @@ export async function execute(interaction) {
         // Active slot is always set to 1 upon registration
         await setActiveSlot(playerId, 1);
 
-        const msg = await interaction.reply({
+        const msg = await interaction.editReply({
             embeds: [createRegisterEmbed('Регистрация завершена', 
                 `Добро пожаловать, **${characterName}**! Создан персонаж в слоте **${slot}**.\nАктивным слотом установлен **Слот 1**.\n\nУдачи в приключениях! 🚀`)],
-            flags: 64,
-            fetchReply: true
         });
         autoDeleteMessageShort(msg);
     } else {
-        const msg = await interaction.reply({
+        const msg = await interaction.editReply({
             embeds: [createErrorEmbed('Ошибка регистрации', 'Произошла ошибка при регистрации. Попробуйте снова.')],
-            flags: 64,
-            fetchReply: true
         });
         autoDeleteMessageShort(msg);
     }

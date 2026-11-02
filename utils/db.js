@@ -257,6 +257,12 @@ async function initializeDatabase() {
             { name: 'economy_ledger_player_history' }
         );
 
+        // Durable operation receipts intentionally have no TTL: deleting one
+        // would make a delayed retry capable of applying the effect again.
+        if (!collectionNames.includes('operation_receipts')) {
+            await db.createCollection('operation_receipts');
+        }
+
         if (!collectionNames.includes('training_blocks')) {
             await db.createCollection('training_blocks');
         }
@@ -387,9 +393,10 @@ async function normalizeInventory() {
     );
 }
 
-export async function withTransaction(work) {
-    if (!client || !db) throw new Error('Database is not connected');
-    const session = client.startSession();
+export async function withTransaction(work, { database = db } = {}) {
+    const transactionClient = database?.client || (database === db ? client : null);
+    if (!database || !transactionClient) throw new Error('Database is not connected');
+    const session = transactionClient.startSession();
     try {
         let result;
         await session.withTransaction(async () => {

@@ -142,13 +142,13 @@ test("claiming a session is exclusive and survives release", async () => {
   assert.equal(await claimSession(sessions, "message-2", created.session.revision), null);
   assert.equal(await claimSession(sessions, "message-2", claimed.revision), null);
 
-  const released = await releaseSession(sessions, "message-2", { amount: 100 });
+  const released = await releaseSession(sessions, "message-2", { amount: 100 }, { claimToken: claimed.claim_token });
   assert.equal(released.status, "open");
 
   const reclaimed = await claimSession(sessions, "message-2", released.revision);
   assert.ok(reclaimed);
 
-  const closed = await closeSession(sessions, "message-2");
+  const closed = await closeSession(sessions, "message-2", { claimToken: reclaimed.claim_token });
   assert.equal(closed.status, "closed");
   assert.equal(sessionClosed(closed), true);
   assert.equal(await claimSession(sessions, "message-2", closed.revision), null);
@@ -322,7 +322,7 @@ test("pay session state carries a stored confirmation deadline", () => {
   assert.equal(sessionExpired(state && { state }, now + 1), false);
   assert.equal(sessionExpired({ state }, now + PAY_CONFIRM_WINDOW_MS + 1), true);
   assert.match(transferError({ reason: "insufficient_funds", available: 10 }, "yen"), /10/);
-  assert.match(transferError({ reason: "unknown" }, "krw"), /не изменены/);
+  assert.match(transferError({ reason: "unknown" }, "krw"), /не будет выполнена дважды/);
 });
 
 test("leaderboard actions change only what the click implies", async () => {

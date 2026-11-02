@@ -15,6 +15,7 @@ import {
   SESSION_STATUS,
 } from "../utils/interactionSessions.js";
 import { logCommand } from "../utils/logs.js";
+import { getOperationResult } from "../utils/operations.js";
 
 export const PAY_NAMESPACE = "pay";
 
@@ -70,7 +71,7 @@ export function transferError(result, currency) {
     case "rollback_failed":
       return "Перевод остановлен из-за ошибки синхронизации. Обратитесь к администратору для проверки баланса.";
     default:
-      return "Не удалось провести перевод. Балансы не изменены — попробуйте ещё раз.";
+      return "Не удалось подтвердить результат перевода. Повторите подтверждение в этой квитанции: операция не будет выполнена дважды.";
   }
 }
 
@@ -119,7 +120,7 @@ async function handleConfirm({ interaction, session }) {
   const state = claimed.state;
   const calculation = calculateTransfer(state.amount);
   if (!calculation.valid) {
-    await closeInteractionSession(session.message_id);
+    await closeInteractionSession(session.message_id, { claimToken: claimed.claim_token });
     return interaction.update({
       components: createBankStatusComponents(
         "Перевод недоступен",
@@ -137,10 +138,11 @@ async function handleConfirm({ interaction, session }) {
       state.recipient_id,
       state.currency,
       calculation.sent,
+      `pay:${session.message_id}`,
     );
 
     if (!result.success) {
-      await releaseInteractionSession(session.message_id, state);
+      await releaseInteractionSession(session.message_id, state, { claimToken: claimed.claim_token });
       const freshSender = await getPlayer(state.sender_id);
       const freshBalance = Number(freshSender?.[state.currency] || 0);
       const retryable = Number.isSafeInteger(freshBalance)
@@ -164,7 +166,7 @@ async function handleConfirm({ interaction, session }) {
     }
 
     transferCompleted = true;
-    await closeInteractionSession(session.message_id);
+    await closeInteractionSession(session.message_id, { claimToken: claimed.claim_token });
     await interaction.editReply({
       components: createPayReceiptComponents({
         senderName: state.sender_name,
@@ -194,7 +196,7 @@ async function handleConfirm({ interaction, session }) {
   } catch (error) {
     console.error("Error handling pay confirmation:", error);
     if (transferCompleted) {
-      await closeInteractionSession(session.message_id);
+      await closeInteractionSession(session.message_id, { claimToken: claimed.claim_token });
       await interaction.followUp({
         components: createBankStatusComponents(
           "Перевод выполнен",
@@ -205,14 +207,14 @@ async function handleConfirm({ interaction, session }) {
       }).catch(() => {});
       return;
     }
-    await releaseInteractionSession(session.message_id, state);
+    await releaseInteractionSession(session.message_id, state, { claimToken: claimed.claim_token });
     await interaction.editReply({
       components: await renderPayComponents(state),
     }).catch(() => {});
     await interaction.followUp({
       components: createBankStatusComponents(
         "Перевод не выполнен",
-        "Не удалось связаться с хранилищем. Баланс не списан — повторите перевод.",
+        "Результат пока не подтверждён. Повторите подтверждение в этой квитанции, чтобы проверить ту же операцию.",
       ),
       flags: EPHEMERAL_V2,
     }).catch(() => {});
@@ -240,11 +242,19 @@ async function handleComponent({ interaction, session }) {
   return interaction.deferUpdate().catch(() => {});
 }
 
-async function renderExpired({ interaction }) {
+async function renderExpired({ interaction, session }) {
+  if (session?.message_id && session.state) {
+    const result = await getOperationResult(`pay:${session.message_id}`);
+    if (result?.success) return interaction.reply({
+      components: createPayReceiptComponents({ senderName: session.state.sender_name,
+        senderAvatarUrl: session.state.sender_avatar_url, recipientName: session.state.recipient_name,
+        currency: session.state.currency, result }), flags: EPHEMERAL_V2,
+    }).catch(() => {});
+  }
   return interaction.reply({
     components: createBankStatusComponents(
       "Время подтверждения истекло",
-      "Деньги не списаны. Запустите `/pay` ещё раз, если перевод всё ещё нужен.",
+      "Откройте новую квитанцию через `/pay`, предварительно проверив баланс и историю предыдущего перевода.",
       "warning",
     ),
     flags: EPHEMERAL_V2,

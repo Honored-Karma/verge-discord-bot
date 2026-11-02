@@ -163,31 +163,39 @@ async function handleUse({ interaction, session }) {
     }).catch(() => {});
   }
 
-  // Использование предмета расходует его, поэтому двойной клик защищаем
-  // атомарным захватом сессии, а не флагом в памяти процесса.
-  const claimed = await claimInteractionSession(session.message_id, session.revision);
+  let pending = session.state.pending_use;
+  if (!pending) {
+    const inventory = visibleInventory(await getPlayerInventory(session.state.player_id));
+    const item = inventory.find(entry => entry.item_name === session.state.selected_item);
+    const quantity = useAll ? Number(item?.qty || 0) : 1;
+    if (!item || quantity < 1) {
+      return interaction.reply({ content: "Предмет больше недоступен. Обновите инвентарь.", flags: MessageFlags.Ephemeral });
+    }
+    pending = { operation_id: `use:${session.message_id}:${session.revision}`, item_name: item.item_name, quantity };
+  }
+  const claimed = await claimInteractionSession(session.message_id, session.revision, {
+    state: { ...session.state, pending_use: pending },
+  });
   if (!claimed) {
-    return interaction.reply({
-      content: "Предмет уже применяется — одну секунду.",
-      flags: MessageFlags.Ephemeral,
-    }).catch(() => {});
+    return interaction.reply({ content: "Предмет уже применяется — одну секунду.", flags: MessageFlags.Ephemeral }).catch(() => {});
   }
 
   const state = { ...claimed.state };
   await interaction.deferUpdate();
 
   try {
-    const inventory = visibleInventory(await getPlayerInventory(state.player_id));
-    const item = inventory.find((entry) => entry.item_name === state.selected_item);
-    const quantity = useAll ? Number(item?.qty || 0) : 1;
-    const result = item && quantity > 0
-      ? await useItem(state.player_id, state.selected_item, quantity)
-      : { success: false, reason: "not_found" };
+    const quantity = state.pending_use.quantity;
+    const result = await useItem(state.player_id, state.pending_use.item_name, quantity, state.pending_use.operation_id);
+    if (result.reason === "operation_unknown") {
+      await releaseInteractionSession(session.message_id, state, { claimToken: claimed.claim_token });
+      return interaction.followUp({ content: "Результат пока не подтверждён. Нажмите использование ещё раз: повтор проверит ту же операцию.", flags: MessageFlags.Ephemeral }).catch(() => {});
+    }
+    delete state.pending_use;
 
     if (!result.success) {
       state.view = "list";
       state.selected_item = null;
-      await releaseInteractionSession(session.message_id, state);
+      await releaseInteractionSession(session.message_id, state, { claimToken: claimed.claim_token });
       await interaction.followUp({
         content: useErrorMessage(result),
         flags: MessageFlags.Ephemeral,
@@ -198,7 +206,7 @@ async function handleUse({ interaction, session }) {
 
     state.view = "list";
     state.selected_item = null;
-    await releaseInteractionSession(session.message_id, state);
+    await releaseInteractionSession(session.message_id, state, { claimToken: claimed.claim_token });
 
     await interaction.editReply({
       components: createItemUsedComponents({
@@ -224,7 +232,7 @@ async function handleUse({ interaction, session }) {
     }).catch((error) => console.error("Error logging item use:", error));
   } catch (error) {
     console.error("Error using inventory item:", error);
-    await releaseInteractionSession(session.message_id, state);
+    await releaseInteractionSession(session.message_id, state, { claimToken: claimed.claim_token });
     await interaction.followUp({
       content: "Не удалось применить предмет. Проверьте инвентарь перед повторной попыткой.",
       flags: MessageFlags.Ephemeral,
@@ -245,6 +253,9 @@ async function handleComponent({ interaction, session }) {
     }).catch(() => {});
   }
 
+  if (session.state.pending_use) {
+    return interaction.reply({ content: "Сначала повторите использование, чтобы проверить результат предыдущей операции.", flags: MessageFlags.Ephemeral }).catch(() => {});
+  }
   const state = { ...session.state };
   const inventory = visibleInventory(await getPlayerInventory(state.player_id));
   const outcome = await applyNavigation(interaction, state, inventory);

@@ -10,7 +10,7 @@ export function getOAuthConfig() {
     const clientSecret = process.env.DISCORD_CLIENT_SECRET;
     const redirectUri = process.env.DISCORD_REDIRECT_URI || `${process.env.WEB_BASE_URL || 'http://localhost:3000'}/api/auth/discord/callback`;
     const guildId = process.env.GUILD_ID;
-    const botToken = process.env.DISCORD_TOKEN || process.env.TOKEN;
+    const botToken = process.env.DISCORD_TOKEN || process.env.BOT_TOKEN || process.env.TOKEN;
 
     return {
         clientId,
@@ -95,14 +95,16 @@ export async function fetchDiscordUser(accessToken) {
 /**
  * Fetch guild member roles for the user (using bot token for highest reliability)
  */
-export async function fetchGuildMember(userId) {
+export async function fetchGuildMember(userId, { strict = false } = {}) {
     const { guildId, botToken } = getOAuthConfig();
     if (!guildId || !botToken) {
+        if (strict) throw new Error('Discord membership verification is not configured');
         return null;
     }
 
     try {
         const response = await fetch(`${DISCORD_API_ENDPOINT}/guilds/${guildId}/members/${userId}`, {
+            signal: AbortSignal.timeout(5000),
             headers: {
                 Authorization: `Bot ${botToken}`
             }
@@ -113,12 +115,14 @@ export async function fetchGuildMember(userId) {
                 // User is not in the guild
                 return null;
             }
+            if (strict) throw new Error(`Guild member fetch returned ${response.status}`);
             console.warn(`[OAuth] Guild member fetch returned ${response.status}`);
             return null;
         }
 
         return await response.json();
     } catch (error) {
+        if (strict) throw error;
         console.error('[OAuth] Error fetching guild member:', error.message);
         return null;
     }

@@ -67,7 +67,7 @@ export function createAuthRouter() {
             const discordUser = await fetchDiscordUser(tokenData.access_token);
 
             // 3. Fetch server member info to resolve roles
-            const guildMember = await fetchGuildMember(discordUser.id);
+            const guildMember = await fetchGuildMember(discordUser.id, { strict: true });
 
             // 4. Resolve permissions
             const permissions = resolveUserPermissions(discordUser.id, guildMember);
@@ -91,6 +91,8 @@ export function createAuthRouter() {
                         : `https://cdn.discordapp.com/embed/avatars/${Number(discordUser.discriminator || 0) % 5}.png`,
                     permissions: permissions,
                     roles: permissions?.roles || [],
+                    is_member_of_guild: Boolean(guildMember),
+                    authorization_checked_at: Date.now(),
                     is_admin: Boolean(permissions?.isAdmin),
                     is_staff: Boolean(permissions?.isStaff)
                 };

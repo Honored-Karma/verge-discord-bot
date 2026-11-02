@@ -1,3 +1,4 @@
+import { attachMockTransactions } from '../test-support/mockTransactions.js';
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -93,7 +94,8 @@ function createMockDatabase() {
                   if (!matchAny) return false;
                   continue;
                 }
-                if (doc[k] !== v) return false;
+                if (v && typeof v === "object" && "$exists" in v) { if (Object.hasOwn(doc, k) !== v.$exists) return false; continue; }
+              if (doc[k] !== v) return false;
               }
               return true;
             }) || null
@@ -103,6 +105,7 @@ function createMockDatabase() {
         find(query = {}) {
           let docs = list.filter((doc) => {
             for (const [k, v] of Object.entries(query)) {
+              if (v && typeof v === "object" && "$exists" in v) { if (Object.hasOwn(doc, k) !== v.$exists) return false; continue; }
               if (doc[k] !== v) return false;
             }
             return true;
@@ -138,6 +141,7 @@ function createMockDatabase() {
           const idx = list.findIndex((doc) => {
             for (const [k, v] of Object.entries(filter)) {
               if (k === "_id" && String(doc._id) === String(v)) continue;
+              if (v && typeof v === "object" && "$exists" in v) { if (Object.hasOwn(doc, k) !== v.$exists) return false; continue; }
               if (doc[k] !== v) return false;
             }
             return true;
@@ -219,6 +223,7 @@ function createMockDatabase() {
                 continue;
               }
 
+              if (v && typeof v === "object" && "$exists" in v) { if (Object.hasOwn(doc, k) !== v.$exists) return false; continue; }
               if (doc[k] !== v) return false;
             }
             return true;
@@ -282,6 +287,7 @@ function createMockDatabase() {
         async deleteOne(filter) {
           const idx = list.findIndex((doc) => {
             for (const [k, v] of Object.entries(filter)) {
+              if (v && typeof v === "object" && "$exists" in v) { if (Object.hasOwn(doc, k) !== v.$exists) return false; continue; }
               if (doc[k] !== v) return false;
             }
             return true;
@@ -296,6 +302,7 @@ function createMockDatabase() {
     },
   };
 
+  attachMockTransactions(db);
   setDB(db);
   return db;
 }
@@ -417,6 +424,7 @@ test("6. handleModal parses multiple items and distribution, maintaining legacy 
   const db = createMockDatabase();
   setDB(db);
   const session = {
+    status: "open",
     message_id: "msg_session_test",
     owner_id: "gm_user_1",
     state: createDraftState(),
@@ -596,6 +604,7 @@ test("8. currency rewards are parsed separately and never given as inventory ite
   const db = createMockDatabase();
   setDB(db);
   const session = {
+    status: "open",
     message_id: "msg_session_currency",
     owner_id: "gm_currency",
     state: createDraftState(),

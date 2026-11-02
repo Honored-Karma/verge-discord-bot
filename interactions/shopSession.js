@@ -310,6 +310,7 @@ async function applyNavigation(interaction, state) {
       return { changed: true };
     }
     state.operation_id = `shop:${randomUUID()}`;
+    state.item_snapshot = { ...item };
     state.view = "confirm";
     return { changed: true };
   }
@@ -331,12 +332,12 @@ async function handleConfirm({ interaction, session }) {
   }
 
   const state = { ...claimed.state };
-  const item = state.item_id ? getShopItem(state.item_id) : null;
+  const item = (state.item_id ? getShopItem(state.item_id) : null) || (state.operation_pending ? state.item_snapshot : null);
 
   if (!item || !state.operation_id) {
     state.operation_id = null;
     state.view = item ? "item" : "category";
-    await releaseInteractionSession(session.message_id, state);
+    await releaseInteractionSession(session.message_id, state, { claimToken: claimed.claim_token });
     return interaction.update({
       components: await renderShopComponents(state),
     }).catch(() => {});
@@ -358,6 +359,14 @@ async function handleConfirm({ interaction, session }) {
     });
 
     if (!result.success) {
+      if (["error", "operation_unknown", "rollback_failed"].includes(result.reason) || ["processing", "rollback_failed"].includes(result.status)) {
+        state.operation_pending = true;
+        await releaseInteractionSession(session.message_id, state, { claimToken: claimed.claim_token });
+        return interaction.followUp({
+          content: "Результат покупки пока не подтверждён. Нажмите подтверждение ещё раз, чтобы проверить ту же покупку.",
+          flags: MessageFlags.Ephemeral,
+        }).catch(() => {});
+      }
       const refreshedItem = getShopItem(item.id);
       state.operation_id = null;
       if (refreshedItem) {
@@ -366,7 +375,7 @@ async function handleConfirm({ interaction, session }) {
         state.item_id = null;
         state.view = "category";
       }
-      await releaseInteractionSession(session.message_id, state);
+      await releaseInteractionSession(session.message_id, state, { claimToken: claimed.claim_token });
       await interaction.editReply({
         components: await renderShopComponents(state),
       });
@@ -380,7 +389,7 @@ async function handleConfirm({ interaction, session }) {
       return;
     }
 
-    await closeInteractionSession(session.message_id);
+    await closeInteractionSession(session.message_id, { claimToken: claimed.claim_token });
     await interaction.editReply({
       components: createShopReceiptComponents({ item, result }),
     });
@@ -416,7 +425,8 @@ async function handleConfirm({ interaction, session }) {
     }).catch((error) => console.error("Error logging shop purchase:", error));
   } catch (error) {
     console.error("Error handling shop confirmation:", error);
-    await releaseInteractionSession(session.message_id, state);
+    state.operation_pending = true;
+    await releaseInteractionSession(session.message_id, state, { claimToken: claimed.claim_token });
     await interaction.followUp({
       components: createShopStatusComponents(
         "Покупка не подтверждена",
@@ -445,6 +455,9 @@ async function handleComponent({ interaction, session }) {
     }).catch(() => {});
   }
 
+  if (session.state.operation_pending) {
+    return interaction.reply({ content: "Сначала повторите подтверждение, чтобы проверить результат покупки.", flags: MessageFlags.Ephemeral }).catch(() => {});
+  }
   const state = { ...session.state };
   const outcome = await applyNavigation(interaction, state);
 

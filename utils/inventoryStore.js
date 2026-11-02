@@ -8,12 +8,13 @@ function quantityMatch(document) {
 
 export async function incrementInventoryStack(
   inventory,
-  { playerId, itemName, quantity },
+  { playerId, itemName, quantity, session = null },
 ) {
+  const options = session ? { session } : {};
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
     const current = await inventory.findOne(
       { player_id: playerId, item_name: itemName },
-      { projection: { _id: 1, qty: 1 } },
+      { ...options, projection: { _id: 1, qty: 1 } },
     );
 
     if (!current) {
@@ -22,10 +23,10 @@ export async function incrementInventoryStack(
           player_id: playerId,
           item_name: itemName,
           qty: quantity,
-        });
+        }, options);
         return { success: true, previousQuantity: 0, totalQuantity: quantity };
       } catch (error) {
-        if (error?.code === 11000) continue;
+        if (error?.code === 11000 && !session) continue;
         throw error;
       }
     }
@@ -41,6 +42,7 @@ export async function incrementInventoryStack(
     const update = await inventory.updateOne(
       { _id: current._id, ...quantityMatch(current) },
       { $set: { qty: totalQuantity } },
+      options,
     );
     if (update.matchedCount === 1) {
       return { success: true, previousQuantity, totalQuantity };

@@ -19,7 +19,7 @@ export function requireStaff(req, res, next) {
     }
 
     const caps = calculateUserCapabilities(req.session.user);
-    if (!caps.canAccessAdmin && !req.session.user.permissions?.isStaff) {
+    if (!caps.canAccessAdmin) {
         return res.status(403).json({
             error: 'Forbidden',
             message: 'Недостаточно прав доступа'
@@ -40,9 +40,7 @@ export function requireAdmin(req, res, next) {
     const caps = calculateUserCapabilities(req.session.user);
     const isFullAdmin = Boolean(
         caps.canManageEconomy ||
-        caps.canManageRoles ||
-        req.session.user.is_admin ||
-        req.session.user.permissions?.isAdmin
+        caps.canManageRoles
     );
     if (!isFullAdmin) {
         return res.status(403).json({

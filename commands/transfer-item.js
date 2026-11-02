@@ -21,6 +21,7 @@ import {
 } from "../utils/itemTransferComponents.js";
 import { logCommand } from "../utils/logs.js";
 import { makePlayerKey } from "../utils/playerKey.js";
+import { randomUUID } from "node:crypto";
 
 const SESSION_DURATION = 3 * 60 * 1000;
 
@@ -154,6 +155,8 @@ export async function execute(interaction) {
   let completed = false;
   let currentView = "list";
   let lastResult = null;
+  let operationId = null;
+  let uncertain = false;
 
   const selectedItem = () => inventory.find((item) => item.item_name === selectedItemName);
   const list = (disabled = false) => createItemTransferListComponents({
@@ -206,6 +209,10 @@ export async function execute(interaction) {
     }
     let transferCompleted = false;
     try {
+      if (uncertain && componentInteraction.customId !== ITEM_TRANSFER_CONFIRM_ID) {
+        return componentInteraction.reply({ content: "Сначала повторите подтверждение, чтобы проверить результат передачи.",
+          flags: MessageFlags.Ephemeral }).catch(() => {});
+      }
       if (componentInteraction.customId === ITEM_TRANSFER_PREV_ID) {
         page = Math.max(0, page - 1);
         await componentInteraction.update({ components: list() });
@@ -231,6 +238,7 @@ export async function execute(interaction) {
           return;
         }
         selectedItemName = null;
+        operationId = null;
         lastResult = null;
         currentView = "list";
         page = Math.min(page, getItemTransferPageCount(inventory) - 1);
@@ -263,6 +271,7 @@ export async function execute(interaction) {
           return;
         }
         selectedItemName = item.item_name;
+        operationId = `item-transfer:${randomUUID()}`;
         currentView = "preview";
         await componentInteraction.update({ components: preview() });
         return;
@@ -272,9 +281,17 @@ export async function execute(interaction) {
 
       busy = true;
       await componentInteraction.deferUpdate();
-      const result = await transferItem(senderId, recipientId, selectedItemName, quantity);
+      operationId ||= `item-transfer:${randomUUID()}`;
+      const result = await transferItem(senderId, recipientId, selectedItemName, quantity, operationId);
       if (!result.success) {
         busy = false;
+        if (result.reason === "operation_unknown") {
+          uncertain = true;
+          return componentInteraction.followUp({ content: "Результат пока не подтверждён. Нажмите подтверждение ещё раз: повтор проверит ту же передачу.",
+            flags: MessageFlags.Ephemeral }).catch(() => {});
+        }
+        uncertain = false;
+        operationId = null;
         inventory = visibleInventory(await getPlayerInventory(senderId), quantity);
         if (inventory.length === 0) {
           completed = true;
@@ -302,6 +319,7 @@ export async function execute(interaction) {
       }
 
       lastResult = result;
+      uncertain = false;
       transferCompleted = true;
       currentView = "receipt";
       await interaction.editReply({ components: receipt() });
@@ -339,10 +357,11 @@ export async function execute(interaction) {
         }).catch(() => {});
         return;
       }
+      uncertain = true;
       await componentInteraction.followUp({
         components: createItemTransferStatusComponents(
-          "Предмет не передан",
-          "Не удалось завершить операцию. Инвентарь не изменён — повторите действие.",
+          "Результат передачи не подтверждён",
+          "Повторите подтверждение в этой панели, чтобы проверить ту же операцию.",
         ),
         flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
       }).catch(() => {});

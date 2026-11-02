@@ -56,15 +56,6 @@ export function isAdmin(member) {
   const allAdminIds = Array.from(new Set([...envAdminIds, ...fileConfig.adminUserIds]));
   if (allAdminIds.includes(member.id)) return true;
 
-  // Check if has role with name "Game Master"
-  if (
-    member.roles?.cache &&
-    typeof member.roles.cache.some === "function" &&
-    member.roles.cache.some((role) => (role.name || role) === "Game Master")
-  ) {
-    return true;
-  }
-
   // Check ADMIN_ROLE_IDS (admin role without owner permissions)
   const envAdminRoleIds = getEnvRoleIds("ADMIN_ROLE_IDS", "ADMIN_ROLE_ID");
   const allAdminRoleIds = Array.from(new Set([...envAdminRoleIds, ...fileConfig.adminRoleIds]));

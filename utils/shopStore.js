@@ -1,6 +1,5 @@
 import { getDB, withTransaction } from "./db.js";
 import { isTransactionUnsupportedError } from "./currencyTransferStore.js";
-import { incrementInventoryStack } from "./inventoryStore.js";
 import {
   getShopItem,
   refreshShopCatalog,
@@ -340,228 +339,6 @@ async function purchaseInTransaction(collections, context, session) {
   return normalizePurchase({ ...purchaseDocument, ...update });
 }
 
-async function rollbackCompensatedDelivery(collections, context, deliveryState) {
-  if (!deliveryState) return;
-  if (deliveryState.kind === "inventory") {
-    const updated = await collections.inventory.findOneAndUpdate(
-      {
-        player_id: context.playerId,
-        item_name: deliveryState.itemName,
-        qty: { $gte: 1 },
-      },
-      { $inc: { qty: -1 } },
-      { returnDocument: "after" },
-    );
-    if (updated && Number(updated.qty) === 0) {
-      await collections.inventory.deleteOne({ _id: updated._id, qty: 0 });
-    }
-  } else if (deliveryState.kind === "active_effect") {
-    if (deliveryState.previous) {
-      await collections.activeEffects.replaceOne(
-        { player_id: context.playerId, effect_key: context.delivery.effect_key },
-        deliveryState.previous,
-        { upsert: true },
-      );
-    } else {
-      await collections.activeEffects.deleteOne({
-        player_id: context.playerId,
-        effect_key: context.delivery.effect_key,
-      });
-    }
-  } else if (deliveryState.kind === "order") {
-    await collections.orders.deleteOne({ operation_id: context.operationId });
-  }
-}
-
-async function deliverCompensated(collections, context) {
-  if (context.delivery.kind === "inventory") {
-    const result = await incrementInventoryStack(collections.inventory, {
-      playerId: context.playerId,
-      itemName: context.delivery.item_name,
-      quantity: 1,
-    });
-    if (!result.success) throw new Error(`Inventory delivery failed: ${result.reason}`);
-    return { kind: "inventory", itemName: context.delivery.item_name };
-  }
-
-  if (context.delivery.kind === "active_effect") {
-    const previous = await collections.activeEffects.findOne({
-      player_id: context.playerId,
-      effect_key: context.delivery.effect_key,
-    });
-    const result = await deliverWithSession(collections, context, null);
-    return { ...result, previous };
-  }
-
-  return deliverWithSession(collections, context, null);
-}
-
-async function purchaseCompensated(collections, context) {
-  const existing = await collections.purchases.findOne({
-    operation_id: context.operationId,
-  });
-  if (existing) return normalizePurchase(existing, true);
-
-  const count = await completedPurchaseCount(
-    collections.purchases,
-    context.playerId,
-    context.item.id,
-    context.periodKey,
-    null,
-  );
-  if (count >= context.weeklyLimit) {
-    return { success: false, reason: "weekly_limit", limit: context.weeklyLimit };
-  }
-
-  const cooldownLeft = await purchaseCooldownRemaining(collections.purchases, context, null);
-  if (cooldownLeft > 0) {
-    return {
-      success: false,
-      reason: "cooldown",
-      cooldownHours: context.cooldownHours,
-      retryAt: Math.floor((context.createdAt.getTime() + cooldownLeft) / 1000),
-    };
-  }
-
-  const playerBefore = await collections.players.findOne({ id: context.playerId });
-  if (!playerBefore) return { success: false, reason: "player_not_found" };
-  if (Number(playerBefore[context.currency] || 0) < context.price) {
-    return {
-      success: false,
-      reason: "insufficient_funds",
-      available: Number(playerBefore[context.currency] || 0),
-    };
-  }
-
-  const limitKey = `${context.playerId}:${context.item.id}:${context.periodKey}:${count + 1}`;
-  const purchaseDocument = {
-    operation_id: context.operationId,
-    limit_key: limitKey,
-    guild_id: context.guildId,
-    user_id: context.userId,
-    player_id: context.playerId,
-    item_id: context.item.id,
-    item_name: context.item.name,
-    currency: context.currency,
-    amount: context.price,
-    period_key: context.periodKey,
-    status: "processing",
-    created_at: context.createdAt,
-    updated_at: context.createdAt,
-  };
-  try {
-    await collections.purchases.insertOne(purchaseDocument);
-  } catch (error) {
-    if (error?.code === 11000) {
-      const duplicate = await collections.purchases.findOne({
-        operation_id: context.operationId,
-      });
-      if (duplicate) return normalizePurchase(duplicate, true);
-      return { success: false, reason: "weekly_limit", limit: context.weeklyLimit };
-    }
-    throw error;
-  }
-
-  const reservation = await reserveCatalogStock(collections, context, null);
-  if (!reservation.success) {
-    await collections.purchases.updateOne(
-      { operation_id: context.operationId },
-      {
-        $set: { status: "failed", reason: reservation.reason, updated_at: new Date() },
-        $unset: { limit_key: "" },
-      },
-    );
-    return reservation;
-  }
-  await collections.purchases.updateOne(
-    { operation_id: context.operationId },
-    { $set: { stock_limited: reservation.finite } },
-  );
-
-  const updatedPlayer = await collections.players.findOneAndUpdate(
-    { id: context.playerId, [context.currency]: { $gte: context.price } },
-    { $inc: { [context.currency]: -context.price } },
-    { returnDocument: "after" },
-  );
-  if (!updatedPlayer) {
-    const player = await collections.players.findOne({ id: context.playerId });
-    await releaseCatalogStock(collections, context, reservation, null).catch(() => {});
-    await collections.purchases.updateOne(
-      { operation_id: context.operationId },
-      {
-        $set: {
-          status: "failed",
-          reason: player ? "insufficient_funds" : "player_not_found",
-          updated_at: new Date(),
-        },
-        $unset: { limit_key: "" },
-      },
-    );
-    return player
-      ? {
-          success: false,
-          reason: "insufficient_funds",
-          available: Number(player[context.currency] || 0),
-        }
-      : { success: false, reason: "player_not_found" };
-  }
-
-  let deliveryState = null;
-  try {
-    deliveryState = await deliverCompensated(collections, context);
-    const status = purchaseStatus(context.delivery);
-    const balanceAfter = Number(updatedPlayer[context.currency] || 0);
-    const update = {
-      status,
-      balance_after: balanceAfter,
-      delivery: deliveryState.kind,
-      updated_at: new Date(),
-    };
-    if (deliveryState.orderId) update.order_id = deliveryState.orderId;
-    if (deliveryState.itemName) update.delivered_item_name = deliveryState.itemName;
-    if (deliveryState.expiresAt) update.effect_expires_at = deliveryState.expiresAt;
-    await collections.ledger.insertOne({
-      operation_id: context.operationId,
-      player_id: context.playerId,
-      type: "shop_purchase",
-      currency: context.currency,
-      amount: -context.price,
-      balance_after: balanceAfter,
-      item_id: context.item.id,
-      item_name: context.item.name,
-      created_at: context.createdAt,
-    });
-    await collections.purchases.updateOne(
-      { operation_id: context.operationId },
-      { $set: update },
-    );
-    return normalizePurchase({ ...purchaseDocument, ...update });
-  } catch (error) {
-    await rollbackCompensatedDelivery(collections, context, deliveryState).catch(() => {});
-    const refund = await collections.players.updateOne(
-      { id: context.playerId },
-      { $inc: { [context.currency]: context.price } },
-    ).catch(() => ({ modifiedCount: 0 }));
-    await releaseCatalogStock(collections, context, reservation, null).catch(() => {});
-    await collections.purchases.updateOne(
-      { operation_id: context.operationId },
-      {
-        $set: {
-          status: refund.modifiedCount === 1 ? "failed" : "rollback_failed",
-          reason: refund.modifiedCount === 1 ? "delivery_failed" : "rollback_failed",
-          updated_at: new Date(),
-        },
-        $unset: { limit_key: "" },
-      },
-    ).catch(() => {});
-    if (refund.modifiedCount !== 1) {
-      console.error("Critical shop purchase rollback failure:", error);
-      return { success: false, reason: "rollback_failed" };
-    }
-    return { success: false, reason: "delivery_failed" };
-  }
-}
-
 export async function purchaseShopItem({
   operationId,
   playerId,
@@ -577,6 +354,21 @@ export async function purchaseShopItem({
   const safePlayerId = safeId(playerId);
   const safeUserId = safeId(userId);
   const safeGuildId = safeId(guildId);
+  if (!safeOperationId || !safePlayerId || !safeUserId || !safeGuildId) {
+    return { success: false, reason: "invalid_purchase" };
+  }
+  const db = getDB();
+  const collections = purchaseCollections(db);
+  // A committed purchase remains replayable even after its catalog entry was
+  // edited or archived. Never turn an uncertain retry into a new purchase.
+  const existing = await collections.purchases.findOne({ operation_id: safeOperationId });
+  if (existing) {
+    if (existing.player_id !== safePlayerId || existing.user_id !== safeUserId
+      || existing.guild_id !== safeGuildId || existing.item_id !== itemId || existing.currency !== currency) {
+      return { success: false, reason: "invalid_purchase" };
+    }
+    return normalizePurchase(existing, true);
+  }
   const item = getShopItem(itemId);
   const delivery = resolveShopDelivery(item, { styleName });
   const price = shopPrice(item, currency);
@@ -607,8 +399,6 @@ export async function purchaseShopItem({
     periodKey: shopPeriodKey(),
     createdAt: new Date(),
   };
-  const db = getDB();
-  const collections = purchaseCollections(db);
   try {
     const result = await withTransaction((session) => purchaseInTransaction(
       collections,
@@ -618,16 +408,7 @@ export async function purchaseShopItem({
     if (result?.success) await refreshShopCatalog(db).catch(() => {});
     return result;
   } catch (error) {
-    if (isTransactionUnsupportedError(error)) {
-      try {
-        const result = await purchaseCompensated(collections, context);
-        if (result?.success) await refreshShopCatalog(db).catch(() => {});
-        return result;
-      } catch (fallbackError) {
-        console.error("Error purchasing shop item without transactions:", fallbackError);
-        return { success: false, reason: "error" };
-      }
-    }
+    if (isTransactionUnsupportedError(error)) return { success: false, reason: "transactions_required" };
     if (error?.code === 11000) {
       const existing = await collections.purchases.findOne({
         operation_id: context.operationId,
@@ -840,131 +621,6 @@ async function resolveOrderInTransaction(collections, context, session) {
   };
 }
 
-async function resolveOrderCompensated(collections, context) {
-  const order = await collections.orders.findOne({ public_id: context.publicId });
-  if (!order) return { success: false, reason: "order_not_found" };
-  if (order.status !== "pending_review") {
-    return { success: false, reason: "already_resolved", status: order.status };
-  }
-  const purchase = await collections.purchases.findOne({ operation_id: order.operation_id });
-  if (!purchase) return { success: false, reason: "purchase_not_found" };
-
-  if (context.action === "fulfill") {
-    const updated = await collections.orders.updateOne(
-      { _id: order._id, status: "pending_review" },
-      {
-        $set: {
-          status: "fulfilled",
-          resolution_reason: context.reason,
-          resolved_by: context.adminId,
-          resolved_at: context.now,
-          updated_at: context.now,
-        },
-      },
-    );
-    if (updated.modifiedCount !== 1) {
-      return { success: false, reason: "already_resolved" };
-    }
-    return {
-      success: true,
-      status: "fulfilled",
-      publicId: order.public_id,
-      userId: order.user_id,
-      itemName: order.item_name,
-      currency: purchase.currency,
-      price: Number(purchase.amount || 0),
-    };
-  }
-
-  const claimed = await collections.orders.updateOne(
-    { _id: order._id, status: "pending_review" },
-    { $set: { status: "refund_processing", updated_at: context.now } },
-  );
-  if (claimed.modifiedCount !== 1) {
-    return { success: false, reason: "already_resolved" };
-  }
-
-  const amount = Number(purchase.amount || 0);
-  const refundMarker = `shop_refunds.${order.public_id}`;
-  let updatedPlayer = await collections.players.findOneAndUpdate(
-    {
-      id: order.player_id,
-      [refundMarker]: { $ne: true },
-      [purchase.currency]: { $lte: Number.MAX_SAFE_INTEGER - amount },
-    },
-    {
-      $inc: { [purchase.currency]: amount },
-      $set: { [refundMarker]: true },
-    },
-    { returnDocument: "after" },
-  );
-  if (!updatedPlayer) {
-    const player = await collections.players.findOne({ id: order.player_id });
-    if (player?.shop_refunds?.[order.public_id] === true) updatedPlayer = player;
-  }
-  if (!updatedPlayer) {
-    await collections.orders.updateOne(
-      { _id: order._id, status: "refund_processing" },
-      { $set: { status: "pending_review", updated_at: new Date() } },
-    );
-    return { success: false, reason: "refund_failed" };
-  }
-
-  await collections.ledger.updateOne(
-    { operation_id: `shop_refund:${order.public_id}` },
-    {
-      $setOnInsert: {
-        operation_id: `shop_refund:${order.public_id}`,
-        player_id: order.player_id,
-        type: "shop_refund",
-        currency: purchase.currency,
-        amount,
-        balance_after: Number(updatedPlayer[purchase.currency] || 0),
-        item_id: order.item_id,
-        item_name: order.item_name,
-        order_id: order.public_id,
-        created_at: context.now,
-      },
-    },
-    { upsert: true },
-  );
-  await collections.purchases.updateOne(
-    { operation_id: order.operation_id },
-    {
-      $set: {
-        status: "refunded",
-        reason: "order_rejected",
-        refunded_at: context.now,
-        updated_at: context.now,
-      },
-      $unset: { limit_key: "" },
-    },
-  );
-  await restoreRejectedOrderStock(collections, order, purchase, null);
-  await collections.orders.updateOne(
-    { _id: order._id, status: "refund_processing" },
-    {
-      $set: {
-        status: "rejected",
-        resolution_reason: context.reason,
-        resolved_by: context.adminId,
-        resolved_at: context.now,
-        updated_at: context.now,
-      },
-    },
-  );
-  return {
-    success: true,
-    status: "rejected",
-    publicId: order.public_id,
-    userId: order.user_id,
-    itemName: order.item_name,
-    currency: purchase.currency,
-    price: amount,
-    balance: Number(updatedPlayer[purchase.currency] || 0),
-  };
-}
-
 export async function resolveShopOrder({ publicId, action, adminId, reason = "" }) {
   const context = {
     publicId: safeId(publicId, 20)?.toUpperCase(),
@@ -988,18 +644,7 @@ export async function resolveShopOrder({ publicId, action, adminId, reason = "" 
     }
     return result;
   } catch (error) {
-    if (isTransactionUnsupportedError(error)) {
-      try {
-        const result = await resolveOrderCompensated(collections, context);
-        if (result?.success && result.status === "rejected") {
-          await refreshShopCatalog(getDB()).catch(() => {});
-        }
-        return result;
-      } catch (fallbackError) {
-        console.error("Error resolving shop order without transactions:", fallbackError);
-        return { success: false, reason: "error" };
-      }
-    }
+    if (isTransactionUnsupportedError(error)) return { success: false, reason: "transactions_required" };
     console.error("Error resolving shop order:", error);
     return { success: false, reason: "error" };
   }

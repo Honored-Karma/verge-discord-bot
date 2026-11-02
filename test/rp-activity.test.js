@@ -1,31 +1,49 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ChannelType, PermissionsBitField, PermissionFlagsBits } from "discord.js";
+import { ChannelType, Client, Guild, PermissionFlagsBits } from "discord.js";
 import { isRPActivityChannel, enforceRPActivityChannel, resetTrainingLocationOnMessage } from "../utils/rpActivity.js";
 
 const ROLE = "1431761095319879892";
 process.env.RP_ROLE_ID = ROLE;
 
-function channelInteraction({ allowed = true, thread = false, everyoneDenied = true } = {}) {
-  const overwrites = new Map([
-    ["guild", { deny: new PermissionsBitField(everyoneDenied ? [PermissionFlagsBits.ViewChannel] : []) }],
-    [ROLE, { allow: new PermissionsBitField(allowed ? [PermissionFlagsBits.ViewChannel] : []) }],
-  ]);
-  const category = { type: ChannelType.GuildCategory, permissionOverwrites: { cache: overwrites } };
-  const channels = new Map([
-    ["channel", { parentId: "category", isThread: () => false }],
-    ["thread", { parentId: "channel", isThread: () => true }],
-    ["category", category],
-  ]);
+function channelInteraction({
+  allowed = true, thread = false, everyoneDenied = true,
+  categoryAllowed = allowed, categoryEveryoneDenied = everyoneDenied,
+  parentId = "category", everyonePermissions = PermissionFlagsBits.ViewChannel,
+  rpPermissions = 0n, channelOverwrites = null,
+} = {}) {
+  const overwrites = (denyEveryone, allowRP) => [
+    { id: "guild", type: 0, deny: denyEveryone ? String(PermissionFlagsBits.ViewChannel) : "0", allow: "0" },
+    { id: ROLE, type: 0, allow: allowRP ? String(PermissionFlagsBits.ViewChannel) : "0", deny: "0" },
+  ];
+  // Use discord.js permission resolution to exercise guild defaults and channel
+  // overwrites, rather than reproducing that resolution in a test mock.
+  const guild = new Guild(new Client({ intents: [] }), {
+    id: "guild",
+    name: "Тестовый сервер",
+    roles: [
+      { id: "guild", name: "@everyone", permissions: String(everyonePermissions) },
+      { id: ROLE, name: "РП", permissions: String(rpPermissions) },
+    ],
+    channels: [
+      { id: "category", type: ChannelType.GuildCategory, permission_overwrites: overwrites(categoryEveryoneDenied, categoryAllowed) },
+      { id: "channel", type: ChannelType.GuildText, parent_id: parentId, permission_overwrites: channelOverwrites ?? overwrites(everyoneDenied, allowed) },
+      { id: "thread", type: ChannelType.PublicThread, parent_id: "channel" },
+    ],
+  });
+  guild.roles.fetch = async (id, options) => {
+    assert.equal(options?.force, true, "роли должны обновляться перед проверкой");
+    return guild.roles.cache.get(id) ?? null;
+  };
+  guild.channels.fetch = async (id, options) => {
+    assert.equal(options?.force, true, "права канала должны обновляться перед проверкой");
+    return guild.channels.cache.get(id) ?? null;
+  };
   return {
     guildId: "guild",
     channelId: thread ? "thread" : "channel",
     user: { id: "user", username: "Игрок" },
-    guild: {
-      id: "guild",
-      roles: { fetch: async id => id === ROLE ? { id } : null },
-      channels: { fetch: async id => channels.get(id) },
-    },
+    guild,
     async reply(payload) { this.response = payload; },
     async editReply(payload) { this.response = payload; },
     async deferReply() { this.deferred = true; },
@@ -33,20 +51,52 @@ function channelInteraction({ allowed = true, thread = false, everyoneDenied = t
   };
 }
 
-test("РП-категория определяется по запрету everyone и разрешению РП-роли, в том числе в ветке", async () => {
+test("РП-канал определяется по доступу everyone и РП-роли, включая ветки и каналы без категории", async () => {
   assert.equal(await isRPActivityChannel(channelInteraction()), true);
   assert.equal(await isRPActivityChannel(channelInteraction({ thread: true })), true);
   assert.equal(await isRPActivityChannel(channelInteraction({ allowed: false })), false);
   assert.equal(await isRPActivityChannel(channelInteraction({ everyoneDenied: false })), false);
   assert.equal(await isRPActivityChannel({ guildId: null }), false);
-  const noCategory = channelInteraction();
-  noCategory.guild.channels.fetch = async () => ({ isThread: () => false, parentId: null });
-  assert.equal(await isRPActivityChannel(noCategory), false);
+  assert.equal(await isRPActivityChannel(channelInteraction({ parentId: null })), true);
+});
+
+test("права самого канала имеют приоритет над отличающимися правами категории", async () => {
+  const privateChannel = { categoryAllowed: false, categoryEveryoneDenied: false };
+  assert.equal(await isRPActivityChannel(channelInteraction(privateChannel)), true);
+  assert.equal(await isRPActivityChannel(channelInteraction({ ...privateChannel, thread: true })), true);
+  assert.equal(await isRPActivityChannel(channelInteraction({ everyoneDenied: false, categoryEveryoneDenied: true })), false);
+  assert.equal(await isRPActivityChannel(channelInteraction({ allowed: false, categoryAllowed: true })), false);
+});
+
+test("учитываются базовые права ролей, а Administrator не заменяет РП-доступ", async () => {
+  assert.equal(await isRPActivityChannel(channelInteraction({
+    everyonePermissions: 0n,
+    rpPermissions: PermissionFlagsBits.ViewChannel,
+    channelOverwrites: [],
+  })), true);
+  assert.equal(await isRPActivityChannel(channelInteraction({
+    allowed: false,
+    rpPermissions: PermissionFlagsBits.Administrator,
+  })), false);
+});
+
+test("отсутствующие роли, канал или родитель ветки вызывают ошибку проверки", async () => {
+  for (const missing of ["guild", ROLE]) {
+    const interaction = channelInteraction();
+    interaction.guild.roles.cache.delete(missing);
+    await assert.rejects(isRPActivityChannel(interaction), /не найдена/);
+  }
+  const missingChannel = channelInteraction();
+  missingChannel.guild.channels.cache.delete("channel");
+  await assert.rejects(isRPActivityChannel(missingChannel), /Канал не найден/);
+  const missingParent = channelInteraction({ thread: true });
+  missingParent.guild.channels.cache.delete("channel");
+  await assert.rejects(isRPActivityChannel(missingParent), /Родительский канал ветки не найден/);
 });
 
 test("награды, штрафы и смена канала работают на настоящей MongoDB", async t => {
-  const { MongoMemoryServer } = await import("mongodb-memory-server");
-  const server = await MongoMemoryServer.create();
+  const { MongoMemoryReplSet } = await import("mongodb-memory-server");
+  const server = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   process.env.MONGODB_URI = server.getUri();
   const { connectDatabase, closeDatabase, getDB } = await import("../utils/db.js");
   const dm = await import("../utils/dataManager.js");
@@ -147,13 +197,13 @@ test("награды, штрафы и смена канала работают �
         await dm.giveStyle(commandName, style.name, 20, "admin");
         await command.execute(interaction);
         assert.equal(interaction.modalShown, undefined);
-        assert.match(JSON.stringify(interaction.response), /РП-категориях/);
+        assert.match(JSON.stringify(interaction.response), /РП-каналах/);
         if (commandName === "train-sp") assert.equal(await dm.getSP(commandName, style.id), 10);
         else assert.equal((await dm.getPlayer(commandName)).ap, 10);
       }
     });
 
-    await t.test("открытая форма перепроверяет категорию и не начисляет награду после изменения прав", async () => {
+    await t.test("открытая форма перепроверяет права канала и не начисляет награду после их изменения", async () => {
       const specs = [
         ["train-ap", "train_ap_modal:1"],
         ["train-sp", `train_sp_modal:1:${style.id}`],
@@ -165,13 +215,13 @@ test("награды, штрафы и смена канала работают �
         interaction.customId = customId;
         interaction.user.id = commandName;
         await command.handleModalSubmit(interaction);
-        assert.match(JSON.stringify(interaction.response), /РП-категориях/);
+        assert.match(JSON.stringify(interaction.response), /РП-каналах/);
         if (commandName === "train-sp") assert.equal(await dm.getSP(commandName, style.id), 0);
         else assert.equal((await dm.getPlayer(commandName)).ap, 0);
       }
     });
 
-    await t.test("разрешённые формы начисляют награды и показывают снижение множителя", async () => {
+    await t.test("формы в РП-канале с отдельными правами начисляют награды без штрафа", async () => {
       const specs = [
         ["train-ap", "train_ap_modal:1"],
         ["train-sp", `train_sp_modal:1:${style.id}`],
@@ -182,7 +232,7 @@ test("награды, штрафы и смена канала работают �
       await db.collection("players").updateOne({ id: "user" }, { $unset: { training_location: "" } });
       for (const [commandName, customId] of specs) {
         const command = await import(`../commands/${commandName}.js`);
-        const interaction = channelInteraction();
+        const interaction = channelInteraction({ categoryAllowed: false, categoryEveryoneDenied: false });
         interaction.customId = customId;
         interaction.user.displayAvatarURL = () => "https://cdn.discordapp.com/embed/avatars/0.png";
         interaction.fields = { getTextInputValue: () => "Персонаж выполняет упражнения и отрабатывает движения. ".repeat(20) };

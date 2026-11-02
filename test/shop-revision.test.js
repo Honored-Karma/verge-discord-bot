@@ -10,8 +10,8 @@ import { createPurchaseNotice, shopLogChannelId } from "../utils/shopNotifier.js
  */
 async function startMongo() {
   try {
-    const { MongoMemoryServer } = await import("mongodb-memory-server");
-    return await MongoMemoryServer.create();
+    const { MongoMemoryReplSet } = await import("mongodb-memory-server");
+    return await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   } catch {
     return null;
   }

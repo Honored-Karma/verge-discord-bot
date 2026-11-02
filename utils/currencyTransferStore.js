@@ -92,10 +92,8 @@ export async function transferCurrencyInTransaction(
   players,
   { fromId, toId, currency, calculation, session },
 ) {
-  const [from, to] = await Promise.all([
-    players.findOne({ id: fromId }, options(session)),
-    players.findOne({ id: toId }, options(session)),
-  ]);
+  const from = await players.findOne({ id: fromId }, options(session));
+  const to = await players.findOne({ id: toId }, options(session));
   if (!from) return { success: false, reason: "sender_not_found" };
   if (!to) return { success: false, reason: "recipient_not_found" };
 

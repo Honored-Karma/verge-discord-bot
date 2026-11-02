@@ -1,0 +1,21 @@
+name: Validate bot and portal
+on: [push, pull_request]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+      - run: npm ci
+      - run: npm --prefix web ci
+      - run: node --test --test-concurrency=2
+      - run: npm run web:build
+      - run: npm audit
+      - run: npm --prefix web audit

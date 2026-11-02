@@ -3,47 +3,8 @@ import { getWeeklySalary, normalizeOrganization, normalizeRank } from '../utils/
 import { isValidSafeUrl } from '../utils/urlHelper.js';
 import { isDiscordCdnUrl } from '../utils/avatarStorage.js';
 import { isSlot3Unlocked } from '../utils/dataManager.js';
-import crypto from 'crypto';
-
-// Cyrillic transliteration map for clean slugs
-const RU_TO_LATIN_MAP = {
-    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
-    'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
-    'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
-    'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch',
-    'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
-    ' ': '-', '_': '-'
-};
-
-export function slugifyCharacterName(name) {
-    if (!name || typeof name !== 'string') return 'unnamed-character';
-    
-    const cleaned = name.trim().toLowerCase();
-    let result = '';
-    
-    for (const char of cleaned) {
-        if (RU_TO_LATIN_MAP[char] !== undefined) {
-            result += RU_TO_LATIN_MAP[char];
-        } else if (/[a-z0-9\-]/.test(char)) {
-            result += char;
-        }
-    }
-    
-    const slug = result.replace(/-+/g, '-').replace(/^-|-$/g, '');
-    return slug || 'character';
-}
-
-/**
- * Generate a deterministic or random opaque public ID (e.g. "ch_kF82xP9q")
- */
-export function generatePublicId(internalId = '', slot = 1) {
-    if (internalId) {
-        // Deterministic hash to keep ID stable across restarts if not yet saved in DB
-        const hash = crypto.createHash('sha256').update(`${internalId}_${slot}_verge_salt`).digest('hex').slice(0, 10);
-        return `ch_${hash}`;
-    }
-    return `ch_${crypto.randomBytes(5).toString('hex')}`;
-}
+import { slugifyCharacterName, generatePublicId } from '../utils/publicIdentity.js';
+export { slugifyCharacterName, generatePublicId } from '../utils/publicIdentity.js';
 
 const PLAYER_DEFAULTS = {
     character_avatar: null,
@@ -167,11 +128,11 @@ export function isCharacterOwner(user, characterOrPlayerId) {
     
     if (typeof characterOrPlayerId === 'object') {
         const internalId = String(characterOrPlayerId.player_id || characterOrPlayerId.id || '').trim();
-        return internalId === userId || internalId === `${userId}_2`;
+        return [userId, `${userId}_2`, `${userId}_3`].includes(internalId);
     }
 
     const normalizedTarget = String(characterOrPlayerId).trim();
-    return normalizedTarget === userId || normalizedTarget === `${userId}_2`;
+    return [userId, `${userId}_2`, `${userId}_3`].includes(normalizedTarget);
 }
 
 /**
@@ -182,11 +143,15 @@ export function normalizePlayer(doc, slotNumber = 1) {
 
     const base = { ...PLAYER_DEFAULTS, ...doc };
     const internalId = String(base.id);
-    const punchKg = base.punch_strength_kg !== null && base.punch_strength_kg !== undefined ? Number(base.punch_strength_kg) : null;
-    const liftKg = base.lifting_strength_kg !== null && base.lifting_strength_kg !== undefined ? Number(base.lifting_strength_kg) : null;
-    const speedKmh = base.speed_kmh !== null && base.speed_kmh !== undefined ? Number(base.speed_kmh) : null;
-    const reactionMs = base.reaction_ms !== null && base.reaction_ms !== undefined ? Number(base.reaction_ms) : null;
-    const staminaPercent = base.stamina_percent !== null && base.stamina_percent !== undefined ? Number(base.stamina_percent) : 100;
+    // New commands store a complete nested snapshot. Fall back to the old flat
+    // schema only when that snapshot does not exist, so edits cannot reveal stale values.
+    const physical = doc.physical_stats || base;
+    const numberOrNull = value => value === null || value === undefined ? null : Number(value);
+    const punchKg = numberOrNull(physical.punch_strength_kg);
+    const liftKg = numberOrNull(physical.lifting_strength_kg);
+    const speedKmh = numberOrNull(physical.speed_kmh);
+    const reactionMs = numberOrNull(physical.reaction_ms);
+    const staminaPercent = physical.stamina_percent == null ? 100 : Number(physical.stamina_percent);
     
     // Lore calculation: durability is 3x punch strength
     const durabilityKg = punchKg !== null ? punchKg * 3 : null;
@@ -231,7 +196,7 @@ export function normalizePlayer(doc, slotNumber = 1) {
         sp_multiplier: Number(base.sp_multiplier || 100),
         salary_multiplier: Number(base.salary_multiplier ?? 100),
         physical_stats: {
-            is_registered: Boolean(base.physical_stats_registered || punchKg !== null),
+            is_registered: Boolean(doc.physical_stats || base.physical_stats_registered || punchKg !== null),
             punch_kg: punchKg,
             lifting_kg: liftKg,
             speed_kmh: speedKmh,

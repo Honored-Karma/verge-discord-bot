@@ -1,9 +1,11 @@
 import { getDB } from "./db.js";
+import { randomUUID } from "node:crypto";
 
 export const INTERACTION_SESSIONS_COLLECTION = "interaction_sessions";
 
 export const DEFAULT_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const CLOSED_RETENTION_MS = 10 * 60 * 1000;
+export const SESSION_LEASE_MS = 2 * 60 * 1000;
 
 export const SESSION_STATUS = {
   open: "open",
@@ -82,7 +84,20 @@ export async function insertSession(collection, {
 export async function findSession(collection, messageId) {
   const message_id = safeId(messageId);
   if (!message_id) return null;
-  return collection.findOne({ message_id });
+  const current = await collection.findOne({ message_id });
+  if (current?.status !== SESSION_STATUS.working) return current;
+  const expiry = new Date(current.lease_expires_at || new Date(current.updated_at).getTime() + SESSION_LEASE_MS).getTime();
+  if (expiry > Date.now()) return current;
+  // Only the current protocol has durable receipts. Never replay an operation
+  // started by an older version whose outcome cannot be reconstructed.
+  const recoverable = current.operation_protocol === 1;
+  return await collection.findOneAndUpdate(
+    { message_id, revision: current.revision, status: SESSION_STATUS.working },
+    { $set: { status: recoverable ? SESSION_STATUS.open : SESSION_STATUS.closed,
+      ...(recoverable && current.namespace === 'shop' ? { state: { ...current.state, operation_pending: true } } : {}),
+      claim_token: null, lease_expires_at: null, updated_at: new Date() }, $inc: { revision: 1 } },
+    { returnDocument: "after" },
+  ) || collection.findOne({ message_id });
 }
 
 /**
@@ -108,7 +123,7 @@ export async function saveSessionState(collection, messageId, revision, state, {
   if (ttlMs) update.$set.expires_at = ttlDate(ttlMs, now);
 
   const updated = await collection.findOneAndUpdate(
-    { message_id, revision },
+    { message_id, revision, status: SESSION_STATUS.open },
     update,
     { returnDocument: "after" },
   );
@@ -126,13 +141,16 @@ export async function saveSessionState(collection, messageId, revision, state, {
  * replacement for the in-memory `busy` flag: it survives a restart and it is
  * safe when several bot replicas run at once.
  */
-export async function claimSession(collection, messageId, revision) {
+export async function claimSession(collection, messageId, revision, { state } = {}) {
   const message_id = safeId(messageId);
   if (!message_id) return null;
   const claimed = await collection.findOneAndUpdate(
     { message_id, revision, status: SESSION_STATUS.open },
     {
-      $set: { status: SESSION_STATUS.working, updated_at: new Date() },
+      $set: { status: SESSION_STATUS.working, updated_at: new Date(),
+        lease_expires_at: new Date(Date.now() + SESSION_LEASE_MS), claim_token: randomUUID(), operation_protocol: 1,
+        ...(state ? { state } : {}),
+      },
       $inc: { revision: 1 },
     },
     { returnDocument: "after" },
@@ -140,31 +158,33 @@ export async function claimSession(collection, messageId, revision) {
   return claimed || null;
 }
 
-export async function releaseSession(collection, messageId, state = null) {
+export async function releaseSession(collection, messageId, state = null, { claimToken } = {}) {
   const message_id = safeId(messageId);
   if (!message_id) return null;
   const update = {
-    $set: { status: SESSION_STATUS.open, updated_at: new Date() },
+    $set: { status: SESSION_STATUS.open, updated_at: new Date(), claim_token: null, lease_expires_at: null },
     $inc: { revision: 1 },
   };
   if (state) update.$set.state = state;
   const released = await collection.findOneAndUpdate(
-    { message_id },
+    { message_id, ...(claimToken ? { claim_token: claimToken } : { status: SESSION_STATUS.open }) },
     update,
     { returnDocument: "after" },
   );
   return released || null;
 }
 
-export async function closeSession(collection, messageId) {
+export async function closeSession(collection, messageId, { claimToken } = {}) {
   const message_id = safeId(messageId);
   if (!message_id) return null;
   const now = Date.now();
   const closed = await collection.findOneAndUpdate(
-    { message_id },
+    { message_id, ...(claimToken ? { claim_token: claimToken } : { status: SESSION_STATUS.open }) },
     {
       $set: {
         status: SESSION_STATUS.closed,
+        claim_token: null,
+        lease_expires_at: null,
         updated_at: new Date(now),
         expires_at: new Date(now + CLOSED_RETENTION_MS),
       },
@@ -186,9 +206,9 @@ export const createInteractionSession = (payload) => insertSession(sessions(), p
 export const getInteractionSession = (messageId) => findSession(sessions(), messageId);
 export const saveInteractionSession = (messageId, revision, state, options) =>
   saveSessionState(sessions(), messageId, revision, state, options);
-export const claimInteractionSession = (messageId, revision) =>
-  claimSession(sessions(), messageId, revision);
-export const releaseInteractionSession = (messageId, state) =>
-  releaseSession(sessions(), messageId, state);
-export const closeInteractionSession = (messageId) => closeSession(sessions(), messageId);
+export const claimInteractionSession = (messageId, revision, options) =>
+  claimSession(sessions(), messageId, revision, options);
+export const releaseInteractionSession = (messageId, state, options) =>
+  releaseSession(sessions(), messageId, state, options);
+export const closeInteractionSession = (messageId, options) => closeSession(sessions(), messageId, options);
 export const deleteInteractionSession = (messageId) => dropSession(sessions(), messageId);

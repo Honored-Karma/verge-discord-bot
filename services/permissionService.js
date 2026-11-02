@@ -36,7 +36,7 @@ export function getConfiguredAdminRoleIds() {
  * @returns {Object} Granular capabilities map
  */
 export function calculateUserCapabilities(user) {
-    if (!user || !user.id) {
+    if (!user || !user.id || user.is_member_of_guild === false) {
         return {
             canAccessAdmin: false,
             canManageWiki: false,
@@ -76,10 +76,11 @@ export function calculateUserCapabilities(user) {
     const isAnketolog = isFullAdmin || userRoles.some(r => anketologRoleIds.includes(r)) || Boolean(user.permissions?.isAnketolog);
     const isLoreMaster = isFullAdmin || userRoles.some(r => loreMasterRoleIds.includes(r));
     const isModerator = isFullAdmin || userRoles.some(r => moderatorRoleIds.includes(r)) || Boolean(user.permissions?.isModerator);
-    const isStaff = isFullAdmin || isModerator || isAnketolog || userRoles.some(r => staffRoleIds.includes(r)) || Boolean(user.is_staff) || Boolean(user.permissions?.isStaff);
+    const isGM = userRoles.some(r => parseEnvIds(process.env.GM_ROLE_IDS).includes(r));
+    const isStaff = isFullAdmin || isGM || isModerator || isAnketolog || userRoles.some(r => staffRoleIds.includes(r)) || Boolean(user.is_staff) || Boolean(user.permissions?.isStaff);
 
     const capabilities = {
-        canAccessAdmin: isStaff || isFullAdmin,
+        canAccessAdmin: isStaff || isLoreMaster,
         canManageWiki: isFullAdmin || isLoreMaster,
         canManageApplications: isFullAdmin || isAnketolog,
         canViewPrivateCharacters: isStaff || isFullAdmin,
