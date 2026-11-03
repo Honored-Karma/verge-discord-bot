@@ -1,3 +1,4 @@
+import { insufficientFundsText } from "../utils/bankingComponents.js";
 import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import { calculateTransfer, CURRENCIES } from "../utils/banking.js";
 import { createBankStatusComponents } from "../utils/bankingComponents.js";
@@ -117,7 +118,7 @@ export async function execute(interaction) {
     return interaction.reply({
       components: createBankStatusComponents(
         "Недостаточно средств",
-        `На балансе доступно **${senderBalance.toLocaleString("ru-RU")} ${CURRENCIES[currency].symbol}**. Укажите меньшую сумму.`,
+        `${insufficientFundsText(calculation.sent, senderBalance, currency)} Укажите меньшую сумму в /pay.`,
       ),
       flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
     });

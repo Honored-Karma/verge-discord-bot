@@ -2,6 +2,7 @@ import { MessageFlags } from "discord.js";
 import { getPlayer, getPlayerInventory, useItem } from "../utils/dataManager.js";
 import {
   createInventoryComponents,
+  createInventoryErrorComponents,
   createInventoryEmptyComponents,
   createInventoryItemComponents,
   createItemUsedComponents,
@@ -72,14 +73,17 @@ export function createInventorySessionState({
  * за сутки жизни панели предметы могли уйти на передачу или в использование.
  */
 export async function renderInventory(state, { disabled = false } = {}) {
+  const player = await getPlayer(state.player_id);
+  if (!player) return { components: createInventoryErrorComponents("Персонаж не найден",
+    "Проверьте слот и откройте `/inventory` ещё раз."), inventory: [] };
   const inventory = visibleInventory(await getPlayerInventory(state.player_id));
   const identity = {
-    characterName: state.character_name,
-    avatarUrl: state.avatar_url,
+    characterName: player.character_name || player.username || state.character_name,
+    avatarUrl: player.character_avatar || state.avatar_url,
   };
 
   if (inventory.length === 0) {
-    return { components: createInventoryEmptyComponents(state.character_name, state.avatar_url), inventory };
+    return { components: createInventoryEmptyComponents(identity.characterName, identity.avatarUrl, disabled), inventory };
   }
 
   const pageCount = getInventoryPageCount(inventory);

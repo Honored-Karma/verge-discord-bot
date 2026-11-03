@@ -1,3 +1,4 @@
+import { markdownText } from "../utils/responseStyle.js";
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, addAP, getActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
@@ -88,7 +89,7 @@ export async function execute(interaction) {
         const multiplierNote = applyMultiplier ? '(с учётом множителя)' : '(без множителя)';
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('AP обновлено', 
-                `Запрошено: **${amount > 0 ? '+' : ''}${amount} AP**\nФактически начислено: **${sign}${actualGained} AP** ${multiplierNote}\n\nНовый баланс: **${newAP} AP**`, 'addAp')],
+                `**${markdownText(player.character_name || player.username, 100)}** · слот ${usedSlot}\n\nЗапрошено: **${amount > 0 ? '+' : ''}${amount} AP**\nФактически начислено: **${sign}${actualGained} AP** ${multiplierNote}\n\nНовый баланс: **${newAP} AP**`, 'addAp')],
             fetchReply: true
         });
         autoDeleteMessageShort(msg);

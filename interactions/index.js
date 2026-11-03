@@ -1,3 +1,4 @@
+import { EXCHANGE_NAMESPACE, exchangeInteractionHandler } from "./exchangeSession.js";
 import { registerInteractionHandler } from "../utils/interactionRouter.js";
 import { TUPPER_NAMESPACE, tupperInteractionHandler } from './tupperSession.js';
 import {
@@ -51,6 +52,7 @@ export function registerInteractionHandlers() {
   registerInteractionHandler(TUPPER_NAMESPACE, tupperInteractionHandler);
   registerInteractionHandler(SHOP_NAMESPACE, shopInteractionHandler);
   registerInteractionHandler(PAY_NAMESPACE, payInteractionHandler);
+  registerInteractionHandler(EXCHANGE_NAMESPACE, exchangeInteractionHandler);
   registerInteractionHandler(LEADERBOARD_NAMESPACE, leaderboardInteractionHandler);
   registerInteractionHandler(PROFILE_NAMESPACE, profileInteractionHandler);
   registerInteractionHandler(INVENTORY_NAMESPACE, inventoryInteractionHandler);
@@ -66,6 +68,7 @@ export function registerInteractionHandlers() {
     TUPPER_NAMESPACE,
     SHOP_NAMESPACE,
     PAY_NAMESPACE,
+    EXCHANGE_NAMESPACE,
     LEADERBOARD_NAMESPACE,
     PROFILE_NAMESPACE,
     INVENTORY_NAMESPACE,

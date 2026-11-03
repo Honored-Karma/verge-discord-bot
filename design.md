@@ -2,6 +2,10 @@
 
 A locked design system for the Verge TRP bot and web portal. Every page redesign reads this file before emitting code. Do not regenerate per page — extend or amend this file when the system needs to grow.
 
+## Discord surface
+
+Discord uses native components, typography and spacing. Its existing purple accent (`#b209d4`) remains the brand color for panels and generated character dossiers. The portal's Crimson Ember palette below remains unchanged. State colors, response structure and interaction rules for bot commands are documented in [docs/DISCORD_UI.md](docs/DISCORD_UI.md); shared tokens live in `utils/responseStyle.js`. CSS and web layout rules below apply to the portal, not Discord messages.
+
 ## Genre
 atmospheric
 

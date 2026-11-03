@@ -1,4 +1,5 @@
 import { MessageFlags } from "discord.js";
+import { createStatusComponents } from "./modernResponses.js";
 import {
   getInteractionSession,
   sessionClosed,
@@ -65,10 +66,12 @@ async function refuse(interaction, handler, session, kind) {
   if (typeof custom === "function") {
     return custom({ interaction, session });
   }
-  const text = kind === "renderForeign"
-    ? "Эта панель принадлежит другому игроку. Откройте свою командой заново."
-    : "Панель больше не активна. Запустите команду ещё раз.";
-  return notice(interaction, { content: text });
+  const foreign = kind === "renderForeign";
+  return notice(interaction, { components: createStatusComponents(
+    foreign ? "Действие недоступно" : "Панель закрыта",
+    foreign ? "Эта панель принадлежит другому игроку. Откройте свою командой заново."
+      : "Сессия завершена. Запустите команду ещё раз. Это не повторит прежнюю операцию.",
+    foreign ? "unavailable" : "expired"), flags: MessageFlags.IsComponentsV2 });
 }
 
 /**
@@ -83,7 +86,19 @@ export async function routeComponentInteraction(interaction, {
   if (!messageId) return false;
 
   const session = await loadSession(messageId);
-  if (!session) return false;
+  if (!session) {
+    // Only persistent panels: legacy collectors must continue to receive their clicks.
+    const namespace = /^profile_/.test(interaction.customId) ? "profile"
+      : /^inventory_/.test(interaction.customId) ? "inventory"
+      : /^bank_pay_/.test(interaction.customId) ? "pay"
+      : /^bank_exchange_/.test(interaction.customId) ? "exchange"
+      : /^shop_(category(_(prev|next))?|item|currency|style|back|buy|confirm|cancel|orders|inventory|change_style)$/.test(interaction.customId) ? "shop"
+      : /^train_sp_(style|prev|next)$/.test(interaction.customId) ? "train_sp"
+      : interaction.customId === "help_page_select" ? "help" : null;
+    if (!namespace || !handlers.has(namespace)) return false;
+    await refuse(interaction, handlers.get(namespace), null, "renderExpired");
+    return true;
+  }
 
   const handler = handlers.get(session.namespace);
   if (!handler || typeof handler.handleComponent !== "function") {
@@ -114,6 +129,8 @@ export async function routeComponentInteraction(interaction, {
  * объявляет свою проверку `authorize`, и владелец становится справочным полем.
  */
 async function allowed(interaction, handler, session) {
+  if (session.guild_id && interaction.guildId && session.guild_id !== interaction.guildId) return false;
+  if (session.channel_id && interaction.channelId && session.channel_id !== interaction.channelId) return false;
   if (typeof handler.authorize === "function") {
     try {
       return Boolean(await handler.authorize({ interaction, session }));
@@ -136,6 +153,10 @@ export async function routeModalInteraction(interaction, {
 
   const session = await loadSession(parsed.messageId);
   if (!session) {
+    await refuse(interaction, handler, null, "renderExpired");
+    return true;
+  }
+  if (session.namespace !== parsed.namespace) {
     await refuse(interaction, handler, null, "renderExpired");
     return true;
   }

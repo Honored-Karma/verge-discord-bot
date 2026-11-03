@@ -1,3 +1,4 @@
+import { TRAINING_RULES } from "../utils/trainingRules.js";
 import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import {
   completeSPTraining,
@@ -36,8 +37,8 @@ import {
 } from "../interactions/trainSpSession.js";
 import { createInteractionSession } from "../utils/interactionSessions.js";
 
-const SP_TRAINING_COOLDOWN = 5 * 60 * 60 * 1000;
-const SP_TRAINING_REWARD = 10;
+const SP_TRAINING_COOLDOWN = TRAINING_RULES.sp.cooldownMs;
+const SP_TRAINING_REWARD = TRAINING_RULES.sp.reward;
 
 export const modalCustomIdPrefix = SP_TRAINING_MODAL_PREFIX;
 

@@ -7,6 +7,7 @@ import {
 import { getReputationTier } from "./dataManager.js";
 import { isValidCharacterUrl, physicalStatsSummary } from "./physicalStats.js";
 import { getAdaptiveProgressScale } from "./progressScale.js";
+import { RESPONSE_COLORS, setResponseState, statusHeading, truncateText } from "./responseStyle.js";
 import { getSPMastery } from "./spMastery.js";
 
 const BANNERS = {
@@ -121,42 +122,28 @@ export function getProfileMultipliers(player) {
   };
 }
 
+export function createResponseEmbed(title, description, state = "info") {
+  return setResponseState(new EmbedBuilder()
+    .setTitle(truncateText(statusHeading(title, state), 256))
+    .setDescription(truncateText(description, 4096)), state);
+}
+
+// bannerKey remains accepted for source compatibility; routine responses need no image.
 export function createSuccessEmbed(title, description, bannerKey = "default") {
-  return new EmbedBuilder()
-    .setColor(0xb209d4)
-    .setTitle(`<:37plus:1497656766459281428>  ${title}`)
-    .setDescription(description)
-    .setImage(BANNERS[bannerKey] || BANNERS.default)
-    .setTimestamp();
+  return createResponseEmbed(title, description, "success");
 }
 
 export function createErrorEmbed(title, description) {
-  return new EmbedBuilder()
-    .setColor(0xb209d4)
-    .setTitle(`<:38minus:1497656812772655154>  ${title}`)
-    .setDescription(description)
-    .setImage(BANNERS.error)
-    .setTimestamp();
+  return createResponseEmbed(title, description, "error");
 }
 
 export function createInfoEmbed(title, description, bannerKey = "default") {
-  return new EmbedBuilder()
-    .setColor(0xb209d4)
-    .setTitle(title)
-    .setDescription(description)
-    .setImage(BANNERS[bannerKey] || BANNERS.default)
-    .setTimestamp();
+  return createResponseEmbed(title, description, "info");
 }
 
 export function createCooldownEmbed(actionName, unixTimestamp) {
-  return new EmbedBuilder()
-    .setColor(0xb209d4)
-    .setTitle(`⏳ ${actionName}: кулдаун`)
-    .setDescription(
-      `Следующее действие будет доступно <t:${unixTimestamp}:R>.\nТочное время: <t:${unixTimestamp}:F>`,
-    )
-    .setImage(BANNERS.cooldown)
-    .setTimestamp();
+  return createResponseEmbed(`${actionName}: пока недоступно`,
+    `Следующее действие будет доступно <t:${unixTimestamp}:R>.\nТочное время: <t:${unixTimestamp}:F>`, "unavailable");
 }
 
 export function createModernProfileEmbed(player, user, history = []) {
@@ -181,7 +168,7 @@ export function createModernProfileEmbed(player, user, history = []) {
       : "Изменений пока нет";
 
   return new EmbedBuilder()
-    .setColor(0xb209d4)
+    .setColor(RESPONSE_COLORS.brand)
     .setTitle(`🧬 Профиль: ${player.character_name || player.username}`)
     .setThumbnail(
       resolveAvatar(player, user),
@@ -230,7 +217,7 @@ export function createModernProfileEmbed(player, user, history = []) {
 
 export function createLeaderboardEmbed(title, description, sortBy) {
   const embed = new EmbedBuilder()
-    .setColor(0xb209d4)
+    .setColor(RESPONSE_COLORS.brand)
     .setTitle(title)
     .setDescription(description)
     .setTimestamp();
@@ -250,7 +237,7 @@ export function createLeaderboardEmbed(title, description, sortBy) {
 
 export function createTrainEmbed(title, description) {
   return new EmbedBuilder()
-    .setColor(0xb209d4)
+    .setColor(RESPONSE_COLORS.brand)
     .setTitle(`<:37plus:1497656766459281428>  ${title}`)
     .setDescription(description)
     .setImage(BANNERS.train)
@@ -259,7 +246,7 @@ export function createTrainEmbed(title, description) {
 
 export function createSocialRPEmbed(title, description) {
   return new EmbedBuilder()
-    .setColor(0xb209d4)
+    .setColor(RESPONSE_COLORS.brand)
     .setTitle(`<:37plus:1497656766459281428>  ${title}`)
     .setDescription(description)
     .setImage(BANNERS.social)
@@ -268,7 +255,7 @@ export function createSocialRPEmbed(title, description) {
 
 export function createPayEmbed(title, description) {
   return new EmbedBuilder()
-    .setColor(0xb209d4)
+    .setColor(RESPONSE_COLORS.brand)
     .setTitle(`<:37plus:1497656766459281428>  ${title}`)
     .setDescription(description)
     .setImage(BANNERS.pay)
@@ -277,7 +264,7 @@ export function createPayEmbed(title, description) {
 
 export function createInventoryEmbed(title, description) {
   return new EmbedBuilder()
-    .setColor(0xb209d4)
+    .setColor(RESPONSE_COLORS.brand)
     .setTitle(title)
     .setDescription(description)
     .setImage(BANNERS.inventory)
@@ -286,7 +273,7 @@ export function createInventoryEmbed(title, description) {
 
 export function createRegisterEmbed(title, description) {
   return new EmbedBuilder()
-    .setColor(0xb209d4)
+    .setColor(RESPONSE_COLORS.brand)
     .setTitle(`<:37plus:1497656766459281428>  ${title}`)
     .setDescription(description)
     .setImage(BANNERS.register)
@@ -300,7 +287,7 @@ export function createStylesListEmbed(
   totalPages = 1,
 ) {
   const embed = new EmbedBuilder()
-    .setColor(0xb209d4)
+    .setColor(RESPONSE_COLORS.brand)
     .setTitle(title)
     .setDescription(description)
     .setImage(BANNERS.stylesList)
@@ -349,7 +336,7 @@ export function createProfileMainPage(player, user) {
     }
   }
   const embed = new EmbedBuilder()
-    .setColor(0xb209d4)
+    .setColor(RESPONSE_COLORS.brand)
     .setTitle(`🧬 Профиль — ${player.character_name || player.username}`)
     .setThumbnail(
       resolveAvatar(player, user),
@@ -432,7 +419,7 @@ export function createProfileMainPage(player, user) {
 
 export function createProfileAPSPPage(player, user, totalSP = 0, renderedCard = false) {
   const embed = new EmbedBuilder()
-    .setColor(0xb209d4)
+    .setColor(RESPONSE_COLORS.brand)
     .setTitle(`📊 Прогресс — ${player.character_name || player.username}`)
     .setThumbnail(
       resolveAvatar(player, user),
@@ -490,7 +477,7 @@ export function createProfileAPSPPage(player, user, totalSP = 0, renderedCard = 
 
 export function createProfileBalancePage(player, user) {
   const embed = new EmbedBuilder()
-    .setColor(0xb209d4)
+    .setColor(RESPONSE_COLORS.brand)
     .setTitle(
       `<:38126donatorpurple:1456772668572434443>  Баланс — ${player.character_name || player.username}`,
     )
@@ -521,7 +508,7 @@ export function createProfileBalancePage(player, user) {
 
 export function createProfileStylesPage(player, styles, user, page = 0) {
   const embed = new EmbedBuilder()
-    .setColor(0xb209d4)
+    .setColor(RESPONSE_COLORS.brand)
     .setTitle(`🥋 Боевые стили — ${player.character_name || player.username}`)
     .setThumbnail(
       resolveAvatar(player, user),
@@ -618,7 +605,7 @@ function getSPRankInfo(sp) {
 
 export function createProfilePhysicalPage(player, user, renderedCard = false) {
   const embed = new EmbedBuilder()
-    .setColor(0xb209d4)
+    .setColor(RESPONSE_COLORS.brand)
     .setTitle(`⚠️ | Физические показатели — ${player.character_name || player.username}`)
     .setThumbnail(resolveAvatar(player, user))
     .setImage(renderedCard ? "attachment://physical-stats.png" : BANNERS.progress)
@@ -681,7 +668,7 @@ export function createProfileHistoryPage(player, user, history = []) {
       : "Изменений пока нет";
 
   return new EmbedBuilder()
-    .setColor(0xb209d4)
+    .setColor(RESPONSE_COLORS.brand)
     .setTitle(
       `🕓 История изменений — ${player.character_name || player.username}`,
     )
@@ -720,11 +707,10 @@ export function createTrainingBlockedEmbed(blockInfo) {
       ? `Слот ${blockInfo.slot}`
       : "Все слоты (аккаунт)";
 
-  const embed = new EmbedBuilder()
-    .setColor(0xed4245)
-    .setTitle(`🚫 ${trainingName}: доступ заблокирован`)
-    .setDescription(
+  const embed = createResponseEmbed(
+      `${trainingName}: доступ заблокирован`,
       "Администрация ограничила для вас проведение данной тренировки.",
+      "unavailable",
     )
     .addFields(
       { name: "🎯 Тренировка", value: trainingName, inline: true },

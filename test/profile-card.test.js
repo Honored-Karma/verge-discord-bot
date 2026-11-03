@@ -150,7 +150,7 @@ test("текстовый вид профиля читается закончен
   })[0].toJSON();
 
   const text = JSON.stringify(json);
-  for (const fragment of ["Аяко", "TENRYU", "Тень Пепла", "AP", "SP", "репутация"]) {
+  for (const fragment of ["Аяко", "TENRYU", "Тень Пепла", "AP", "SP", "Репутация"]) {
     assert.ok(text.includes(fragment), `в текстовом виде нет «${fragment}»`);
   }
 });

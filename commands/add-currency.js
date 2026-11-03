@@ -1,3 +1,4 @@
+import { markdownText } from "../utils/responseStyle.js";
 import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, addCurrency, getActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
@@ -90,7 +91,7 @@ export async function execute(interaction) {
         const currencySymbol = currency === 'krw' ? '₩' : '¥';
         const msg = await interaction.reply({
             embeds: [createSuccessEmbed('Валюта добавлена',
-                `Добавлено **${amount.toLocaleString('ru-RU')} ${currencySymbol}** игроку **${player.character_name || player.username}**.\n\n` +
+                `**${markdownText(player.character_name || player.username, 100)}** · слот ${slot}\n\nДобавлено **${amount.toLocaleString('ru-RU')} ${currencySymbol}**.\n\n` +
                 `Новый баланс: **${newAmount.toLocaleString('ru-RU')} ${currencySymbol}**`, 'addCurrency')],
             fetchReply: true
         });

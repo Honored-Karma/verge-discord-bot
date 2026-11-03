@@ -1,3 +1,5 @@
+import { RESPONSE_COLORS, setResponseState, cleanText, markdownText, truncateText } from "./responseStyle.js";
+import { createStatusComponents } from "./modernResponses.js";
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -20,12 +22,13 @@ import { formatRankRequirement } from "./rankSystem.js";
 import { getReputationTier } from "./dataManager.js";
 
 const STATUS_COLORS = {
-  [MISSION_STATUS.recruiting]: 0x22c55e, // Green
-  [MISSION_STATUS.active]: 0x3b82f6,     // Blue
-  [MISSION_STATUS.completed]: 0xa855f7,  // Purple
-  [MISSION_STATUS.cancelled]: 0xef4444,  // Red
+  [MISSION_STATUS.recruiting]: RESPONSE_COLORS.brand,
+  [MISSION_STATUS.active]: RESPONSE_COLORS.brand,
+  [MISSION_STATUS.completed]: RESPONSE_COLORS.success,
+  [MISSION_STATUS.cancelled]: RESPONSE_COLORS.closed,
 };
 
+export const MISSION_BTN_DETAILS = "mission_details";
 export const MISSION_BTN_JOIN = "mission_join";
 export const MISSION_BTN_LEAVE = "mission_leave";
 export const MISSION_BTN_PARTY = "mission_party";
@@ -41,36 +44,7 @@ export const MISSION_SELECT_MEMBER = "mission_member_select";
 export const MISSION_SELECT_KICK = "mission_select_kick";
 export const MISSION_SELECT_UNKICK = "mission_select_unkick";
 
-/**
- * Creates the main interactive mission card embed.
- */
-export function createMissionCardEmbed(mission, client = null) {
-  const rawTypeIcon = TYPE_ICONS[mission.type] || "📜";
-  const typeIcon = resolveCustomEmoji(rawTypeIcon, client);
-  const typeLabel = TYPE_LABELS[mission.type] || "Миссия";
-  const statusIcon = STATUS_ICONS[mission.status] || "ℹ️";
-  const statusLabel = STATUS_LABELS[mission.status] || mission.status;
-  const color = STATUS_COLORS[mission.status] || 0xb209d4;
-
-  const partyIcon = resolveCustomEmoji(MISSION_EMOJIS.party, client);
-  const objectiveIcon = resolveCustomEmoji(MISSION_EMOJIS.objective, client);
-  const rewardsIcon = resolveCustomEmoji(MISSION_EMOJIS.rewards, client);
-
-  const orgDisplay = mission.organization_name
-    ? mission.organization_name
-    : "Открытая миссия";
-
-  // Format party roster
-  const partyLines = [];
-  if (mission.participants && mission.participants.length > 0) {
-    for (const p of mission.participants) {
-      const orgRank = [p.organization_name, p.rank].filter(Boolean).join(" / ");
-      partyLines.push(`• **${p.character_name}** — ${orgRank || "вольный"}`);
-    }
-  } else {
-    partyLines.push("*Пока никто не вступил в пати.*");
-  }
-
+function missionRewardLines(mission) {
   // Format rewards
   const rewardLines = [];
   if (mission.reward?.krw > 0) {
@@ -103,26 +77,73 @@ export function createMissionCardEmbed(mission, client = null) {
     rewardLines.push("• Без автоматических наград");
   }
 
+  return { rewardLines, items };
+}
+
+export function createMissionDetailsComponents(mission) {
+  const { rewardLines } = missionRewardLines(mission);
+  return createStatusComponents(`Условия • ${cleanText(mission.title, 120)}`,
+    `${mission.description || "Цель не указана."}\n\n### Награды\n${rewardLines.join("\n")}\n\n` +
+    "Исход сцены и канонические последствия определяют игроки и ГМ. Бот учитывает участников и выдаёт настроенные награды.", "info");
+}
+
+/**
+ * Creates the main interactive mission card embed.
+ */
+export function createMissionCardEmbed(mission, client = null) {
+  const rawTypeIcon = TYPE_ICONS[mission.type] || "📜";
+  const typeIcon = resolveCustomEmoji(rawTypeIcon, client);
+  const typeLabel = TYPE_LABELS[mission.type] || "Миссия";
+  const statusIcon = STATUS_ICONS[mission.status] || "ℹ️";
+  const statusLabel = STATUS_LABELS[mission.status] || mission.status;
+  const color = STATUS_COLORS[mission.status] || 0xb209d4;
+
+  const partyIcon = resolveCustomEmoji(MISSION_EMOJIS.party, client);
+  const objectiveIcon = resolveCustomEmoji(MISSION_EMOJIS.objective, client);
+  const rewardsIcon = resolveCustomEmoji(MISSION_EMOJIS.rewards, client);
+
+  const orgDisplay = mission.organization_name
+    ? mission.organization_name
+    : "Открытая миссия";
+
+  // Format party roster
+  const partyLines = [];
+  if (mission.participants && mission.participants.length > 0) {
+    for (const p of mission.participants.slice(0, 4)) {
+      const orgRank = [p.organization_name, p.rank].filter(Boolean).join(" / ");
+      partyLines.push(`• **${markdownText(p.character_name, 70)}** — ${markdownText(orgRank || "вольный", 70)}`);
+    }
+  } else {
+    partyLines.push("Пока нет участников. Выберите «Вступить в миссию», если условия подходят.");
+  }
+
+  const { rewardLines, items } = missionRewardLines(mission);
+
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(`${typeIcon} ${mission.title}`)
+    .setTitle(truncateText(`${typeIcon} ${cleanText(mission.title, 200)}`, 256))
     .setDescription(
       [
-        `**Организация:** ${orgDisplay}`,
+        `**Организация:** ${markdownText(orgDisplay, 120)}`,
         `**Тип:** ${typeLabel}`,
         `**Статус:** ${statusIcon} ${statusLabel}`,
         mission.min_rank ? `**Требуемый ранг:** ${formatRankRequirement(mission.min_rank)}` : null,
         "",
         `### ${objectiveIcon} Краткая цель:`,
-        mission.description,
+        truncateText(mission.description, 1000),
         "",
-        `### ${partyIcon} Состав пати: ${mission.participants?.length || 0} / ${mission.max_players}`,
+        `### ${partyIcon} Участники: ${mission.participants?.length || 0} / ${mission.max_players}`,
         partyLines.join("\n"),
+        (mission.participants?.length > 4 ? `Ещё ${mission.participants.length - 4}. Полный список — «Участники».` : null),
         "",
-        `### ${rewardsIcon} Награды каждому завершившему миссию:`,
-        rewardLines.join("\n"),
+        `### ${rewardsIcon} Награды:`,
+        truncateText(rewardLines.join("\n"), 1000),
         "",
-        `**ГМ:** ${mission.created_by?.username || "Не указан"}`,
+        `**ГМ:** ${markdownText(mission.created_by?.username || "Не указан", 80)}`,
+        mission.status === MISSION_STATUS.recruiting
+          ? ((mission.participants?.length || 0) >= mission.max_players ? "Набор заполнен. Вступление станет доступно, если освободится место." : "Набор открыт. Вступление и выход доступны до начала миссии.")
+          : "Набор закрыт. Участие и выход больше недоступны.",
+        "-# Полные условия и награды — «Условия миссии». Управление миссией доступно ГМу и администраторам.",
       ].filter((line) => line !== null).join("\n")
     );
 
@@ -150,13 +171,13 @@ export function createMissionCardEmbed(mission, client = null) {
 
     embed.addFields({
       name: "🏆 Завершение",
-      value: completedLines.join("\n"),
+      value: truncateText(completedLines.join("\n"), 1024),
       inline: false,
     });
   } else if (mission.status === MISSION_STATUS.cancelled) {
     embed.addFields({
       name: "❌ Отмена",
-      value: `Миссия отменена.\nПричина: *${mission.cancel_reason || "не указана"}*`,
+      value: `Миссия отменена.\nПричина: *${markdownText(mission.cancel_reason || "не указана", 400)}*`,
       inline: false,
     });
   }
@@ -178,7 +199,8 @@ export function createMissionCardEmbed(mission, client = null) {
   embed.setFooter({ text: `ID: ${mission.public_id} • Verge RPG` });
   embed.setTimestamp(mission.created_at ? new Date(mission.created_at) : new Date());
 
-  return embed;
+  return setResponseState(embed, mission.status === MISSION_STATUS.completed ? "success"
+    : mission.status === MISSION_STATUS.cancelled ? "closed" : "info");
 }
 
 /**
@@ -198,27 +220,28 @@ export function createMissionActionRows(mission, client = null) {
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(MISSION_BTN_JOIN)
-      .setLabel("Вступить")
+      .setLabel("Вступить в миссию")
       .setStyle(ButtonStyle.Success)
       .setEmoji("➕")
       .setDisabled(!isRecruiting || isFull),
     new ButtonBuilder()
       .setCustomId(MISSION_BTN_LEAVE)
-      .setLabel("Покинуть")
+      .setLabel("Покинуть миссию")
       .setStyle(ButtonStyle.Secondary)
       .setEmoji("🚪")
       .setDisabled(!isRecruiting),
     new ButtonBuilder()
       .setCustomId(MISSION_BTN_PARTY)
-      .setLabel("Состав пати")
-      .setStyle(ButtonStyle.Primary)
+      .setLabel("Участники")
+      .setStyle(ButtonStyle.Secondary)
       .setEmoji(partyButtonEmoji),
     new ButtonBuilder()
       .setCustomId(MISSION_BTN_PROFILES)
       .setLabel("Профили участников")
-      .setStyle(ButtonStyle.Primary)
+      .setStyle(ButtonStyle.Secondary)
       .setEmoji("🧬")
-      .setDisabled(!mission.participants || mission.participants.length === 0)
+      .setDisabled(!mission.participants || mission.participants.length === 0),
+    new ButtonBuilder().setCustomId(MISSION_BTN_DETAILS).setLabel("Условия миссии").setStyle(ButtonStyle.Secondary)
   );
 
   // Row 2: GM / Admin Actions
@@ -244,7 +267,7 @@ export function createMissionActionRows(mission, client = null) {
       .setDisabled(!isRecruiting || !hasParticipants),
     new ButtonBuilder()
       .setCustomId(MISSION_BTN_CANCEL)
-      .setLabel("Отменить")
+      .setLabel("Отменить миссию")
       .setStyle(ButtonStyle.Danger)
       .setEmoji("✖️")
       .setDisabled(isCompleted || isCancelled)
@@ -282,7 +305,7 @@ export function createPartyListEmbed(mission, client = null) {
   }
 
   return new EmbedBuilder()
-    .setColor(0x3b82f6)
+    .setColor(RESPONSE_COLORS.info)
     .setTitle(`${partyIcon} Состав пати: ${mission.title}`)
     .setDescription(
       `**ID миссии:** \`${mission.public_id}\`\n` +
@@ -451,7 +474,7 @@ export function createCompletionConfirmationEmbed(mission) {
   const memberNames = participants.map((p) => `• ${p.character_name}`).join("\n");
 
   return new EmbedBuilder()
-    .setColor(0xf59e0b)
+    .setColor(RESPONSE_COLORS.confirm)
     .setTitle(`🏁 Подтверждение завершения: ${mission.title}`)
     .setDescription(
       [
@@ -495,7 +518,7 @@ export function createCompletionActionRows() {
  */
 export function createRewardReportEmbed(mission, result) {
   const { allDelivered, deliveryReport = [] } = result;
-  const color = allDelivered ? 0x22c55e : 0xef4444;
+  const color = allDelivered ? RESPONSE_COLORS.success : RESPONSE_COLORS.warning;
   const title = allDelivered
     ? `✅ Награды успешно выданы: ${mission.title}`
     : `⚠️ Частичная выдача наград: ${mission.title}`;
@@ -547,7 +570,7 @@ export function createRewardReportEmbed(mission, result) {
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(title)
+    .setTitle(truncateText(title, 256))
     .setDescription(
       [
         `**ID миссии:** \`${mission.public_id}\``,
@@ -560,7 +583,7 @@ export function createRewardReportEmbed(mission, result) {
     )
     .setTimestamp();
 
-  return embed;
+  return setResponseState(embed, allDelivered ? "success" : "warning");
 }
 
 /**

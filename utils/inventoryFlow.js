@@ -1,7 +1,6 @@
 import { MessageFlags } from "discord.js";
-import { getPlayer, getPlayerInventory } from "./dataManager.js";
+import { getPlayer } from "./dataManager.js";
 import {
-  createInventoryEmptyComponents,
   createInventoryErrorComponents,
 } from "./inventoryComponents.js";
 import {
@@ -9,7 +8,6 @@ import {
   INVENTORY_NAMESPACE,
   INVENTORY_SESSION_TTL_MS,
   renderInventory,
-  visibleInventory,
 } from "../interactions/inventorySession.js";
 import { createInteractionSession } from "./interactionSessions.js";
 
@@ -49,15 +47,6 @@ export async function openInventory({
 
   const characterName = player.character_name || player.username || targetUser.username;
   const avatarUrl = resolveAvatar(player, targetUser);
-  const inventory = visibleInventory(await getPlayerInventory(playerId));
-
-  if (inventory.length === 0) {
-    return interaction.reply({
-      components: createInventoryEmptyComponents(characterName, avatarUrl),
-      flags: responseFlags,
-    });
-  }
-
   const state = createInventorySessionState({
     playerId,
     characterName,

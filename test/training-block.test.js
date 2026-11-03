@@ -10,6 +10,7 @@ import {
   getTrainingBlocksList,
 } from "../utils/trainingBlocks.js";
 import { createTrainingBlockedEmbed } from "../utils/embeds.js";
+import { RESPONSE_COLORS } from "../utils/responseStyle.js";
 import { hasCommandPermission } from "../utils/adminCheck.js";
 
 test("TRAINING_TYPES contains valid constants", () => {
@@ -50,7 +51,7 @@ test("createTrainingBlockedEmbed correctly populates embed fields", () => {
   assert.ok(embed);
   const json = embed.toJSON();
   assert.ok(json.title.includes("Тренировка AP"));
-  assert.equal(json.color, 0xed4245);
+  assert.equal(json.color, RESPONSE_COLORS.unavailable);
 
   const slotField = json.fields.find((f) => f.name.includes("Слот"));
   assert.ok(slotField);

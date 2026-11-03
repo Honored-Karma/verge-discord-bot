@@ -1,3 +1,4 @@
+import { openInventory } from "../utils/inventoryFlow.js";
 import { randomUUID } from "node:crypto";
 import { MessageFlags } from "discord.js";
 import {
@@ -27,6 +28,8 @@ import {
   createShopStyleComponents,
   cooldownLabel,
   SHOP_BACK_ID,
+  SHOP_INVENTORY_ID,
+  SHOP_CHANGE_STYLE_ID,
   SHOP_BUY_ID,
   SHOP_CANCEL_ID,
   SHOP_CATEGORY_NEXT_ID,
@@ -276,18 +279,24 @@ async function applyNavigation(interaction, state) {
   }
 
   if (customId === SHOP_ORDERS_ID) {
+    state.return_view = state.view;
     state.view = "orders";
     return { changed: true };
   }
 
   if (customId === SHOP_BACK_ID) {
-    state.view = backView(state.view);
+    state.view = state.view === "orders" ? (state.return_view || "home") : backView(state.view);
     return { changed: true };
   }
 
   if (customId === SHOP_CANCEL_ID) {
     state.operation_id = null;
     state.view = "item";
+    return { changed: true };
+  }
+
+  if (customId === SHOP_CHANGE_STYLE_ID && state.item_id) {
+    state.view = "style";
     return { changed: true };
   }
 
@@ -354,8 +363,8 @@ async function handleConfirm({ interaction, session }) {
       itemId: item.id,
       currency: state.currency,
       styleName: state.style_name || null,
-      expectedVersion: item.version,
-      expectedPrice: shopPrice(item, state.currency),
+      expectedVersion: state.item_snapshot?.version ?? item.version,
+      expectedPrice: shopPrice(state.item_snapshot || item, state.currency),
     });
 
     if (!result.success) {
@@ -391,7 +400,7 @@ async function handleConfirm({ interaction, session }) {
 
     await closeInteractionSession(session.message_id, { claimToken: claimed.claim_token });
     await interaction.editReply({
-      components: createShopReceiptComponents({ item, result }),
+      components: createShopReceiptComponents({ item, result, characterName: state.character_name }),
     });
 
     // Уведомление админам — после квитанции и без await в общем потоке ошибок:
@@ -489,11 +498,16 @@ async function handleComponent({ interaction, session }) {
   }).catch(() => {});
 }
 
-async function renderExpired({ interaction }) {
+async function renderExpired({ interaction, session }) {
+  if (interaction.customId === SHOP_INVENTORY_ID && session?.state?.player_id) {
+    const slot = Number(session.state.player_id.match(/_([23])$/)?.[1] || 1);
+    return openInventory({ interaction, targetUser: interaction.user,
+      playerId: session.state.player_id, slot, ephemeral: true });
+  }
   return interaction.reply({
     components: createShopStatusComponents(
       "Витрина закрыта",
-      "Эта панель магазина больше не активна. Откройте `/shop` ещё раз — баланс и корзина не пострадали.",
+      "Откройте `/shop` для новой покупки. Это не повторит прежнюю оплату. Результат предыдущей покупки проверьте в инвентаре или разделе заявок.",
       "warning",
     ),
     flags: EPHEMERAL_V2,

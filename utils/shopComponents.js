@@ -1,3 +1,6 @@
+import { safeAvatarUrl } from "./avatarUrl.js";
+import { RESPONSE_COLORS, cleanText, markdownText, formatNumber } from "./responseStyle.js";
+import { createStatusComponents } from "./modernResponses.js";
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -10,7 +13,7 @@ import {
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from "discord.js";
-import { CURRENCIES } from "./banking.js";
+import { CURRENCIES, EXCHANGE_RATE } from "./banking.js";
 import {
   getShopCategory,
   getShopRarity,
@@ -22,6 +25,8 @@ export const SHOP_CATEGORY_SELECT_ID = "shop_category";
 export const SHOP_ITEM_SELECT_ID = "shop_item";
 export const SHOP_CURRENCY_SELECT_ID = "shop_currency";
 export const SHOP_STYLE_SELECT_ID = "shop_style";
+export const SHOP_INVENTORY_ID = "shop_inventory";
+export const SHOP_CHANGE_STYLE_ID = "shop_change_style";
 export const SHOP_BACK_ID = "shop_back";
 export const SHOP_BUY_ID = "shop_buy";
 export const SHOP_CONFIRM_ID = "shop_confirm";
@@ -32,34 +37,7 @@ export const SHOP_CATEGORY_NEXT_ID = "shop_category_next";
 export const SHOP_ORDER_RESOLVE_CONFIRM_ID = "shop_order_resolve_confirm";
 export const SHOP_ORDER_RESOLVE_CANCEL_ID = "shop_order_resolve_cancel";
 
-const COLORS = {
-  shop: 0xb209d4,
-  success: 0x22c55e,
-  error: 0xef4444,
-  warning: 0xf59e0b,
-  neutral: 0x64748b,
-};
-
-function cleanText(value, maxLength = 100) {
-  const compact = String(value || "")
-    .replace(/[\u0000-\u001f\u007f]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return compact.length <= maxLength
-    ? compact
-    : `${compact.slice(0, Math.max(1, maxLength - 1))}…`;
-}
-
-function markdownText(value, maxLength = 100) {
-  return cleanText(value, maxLength).replace(/([\\`*_{}\[\]()<>#+\-.!|~])/g, "\\$1");
-}
-
-function formatNumber(value) {
-  const number = Number(value || 0);
-  return Number.isSafeInteger(number)
-    ? number.toLocaleString("ru-RU")
-    : "некорректное значение";
-}
+const COLORS = { ...RESPONSE_COLORS, shop: RESPONSE_COLORS.brand };
 
 function money(value, currency) {
   return `${formatNumber(value)} ${CURRENCIES[currency].symbol}`;
@@ -69,12 +47,12 @@ function characterHeader(characterName, avatarUrl, title, subtitle) {
   return new SectionBuilder()
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `## ${title}\n**${markdownText(characterName, 80)}**\n${subtitle}`,
+        `## ${cleanText(title, 160)}\n**${markdownText(characterName, 80)}**\n${subtitle}`,
       ),
     )
     .setThumbnailAccessory(
       new ThumbnailBuilder()
-        .setURL(avatarUrl)
+        .setURL(safeAvatarUrl(avatarUrl))
         .setDescription(`Аватар персонажа ${cleanText(characterName, 80)}`),
     );
 }
@@ -96,7 +74,7 @@ function currencyRow(currency, disabled = false) {
         {
           label: "Корейские воны",
           value: "krw",
-          description: "Цены пересчитываются по курсу 1 ¥ = 9,4 ₩",
+          description: `Цены по курсу 1 ¥ = ${EXCHANGE_RATE.toLocaleString("ru-RU")} ₩`,
           emoji: "💳",
           default: currency === "krw",
         },
@@ -110,7 +88,7 @@ function navigationRow({ showBack = true, showOrders = true, disabled = false } 
     row.addComponents(
       new ButtonBuilder()
         .setCustomId(SHOP_BACK_ID)
-        .setLabel("Вернуться в магазин")
+        .setLabel("Назад")
         .setEmoji("⬅️")
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(disabled),
@@ -282,7 +260,7 @@ export function createShopItemComponents({
     : "";
   return [
     new ContainerBuilder()
-      .setAccentColor(rarity.color)
+      .setAccentColor(COLORS.shop)
       .addSectionComponents(
         characterHeader(
           characterName,
@@ -296,16 +274,18 @@ export function createShopItemComponents({
       )
       .addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-          `${item.description}${styleLine}\n\n` +
+          `${cleanText(item.description, 1600)}${styleLine}\n\nКоличество: **1 шт.**\n` +
           `Цена: **${money(price, currency)}**\n` +
-          `Баланс после покупки: **${canAfford ? money(balance - price, currency) : "недостаточно средств"}**\n` +
+          `Доступно: **${money(balance, currency)}**\n` +
+          (canAfford ? `После оплаты: **${money(balance - price, currency)}**\n` : `Не хватает: **${money(price - balance, currency)}**. Вернитесь назад и выберите другую валюту или товар.\n`) +
+          (!inStock ? "**Покупка недоступна: товар закончился.**\n" : "") +
           `Остаток магазина: **${item.stock === null ? "без ограничений" : `${formatNumber(item.stock)} шт.`}**\n` +
           `Недельный лимит: **${formatNumber(item.weekly_limit)} шт.**\n` +
           (Number(item.cooldown_hours) > 0
             ? `Кулдаун: **${cooldownLabel(item.cooldown_hours)}** между покупками\n`
             : "") +
           `Выдача: **${shopDeliveryLabel(item)}**\n\n` +
-          "-# Особые товары не дают способность автоматически: стафф проверяет их отдельно.",
+          (item.delivery.kind === "order" ? "-# Оплата создаёт заявку. Особый предмет выдаёт ответственный после проверки." : "-# Окончательные лимиты и остаток проверяются при оплате."),
         ),
       )
       .addActionRowComponents(
@@ -316,10 +296,11 @@ export function createShopItemComponents({
               ? "Выбрать стиль"
               : item.delivery.kind === "order"
                 ? "Создать заявку"
-                : "Купить товар")
+                : "Купить предмет")
             .setEmoji(item.delivery.kind === "order" ? "📋" : "🛒")
             .setStyle(ButtonStyle.Primary)
             .setDisabled(disabled || !canAfford || !inStock),
+          ...(selectedStyle ? [new ButtonBuilder().setCustomId(SHOP_CHANGE_STYLE_ID).setLabel("Изменить стиль").setStyle(ButtonStyle.Secondary).setDisabled(disabled)] : []),
         ),
       )
       .addActionRowComponents(navigationRow({ disabled })),
@@ -327,6 +308,14 @@ export function createShopItemComponents({
 }
 
 export function createShopStyleComponents({ item, styles, disabled = false }) {
+  if (styles.length === 0) {
+    return createStatusComponents(
+      "Нет изученных стилей",
+      "Для этого свитка нужен изученный боевой стиль. Вернитесь к предмету или выберите другой товар.",
+      "empty",
+      { rows: [navigationRow({ showOrders: false, disabled })] },
+    );
+  }
   const select = new StringSelectMenuBuilder()
     .setCustomId(SHOP_STYLE_SELECT_ID)
     .setPlaceholder("Выберите изученный стиль")
@@ -387,7 +376,7 @@ export function createShopConfirmationComponents({
         new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setCustomId(SHOP_CONFIRM_ID)
-            .setLabel(isOrder ? "Оплатить и создать заявку" : "Оплатить покупку")
+            .setLabel(isOrder ? "Оплатить и создать заявку" : "Купить предмет")
             .setEmoji("✅")
             .setStyle(ButtonStyle.Success)
             .setDisabled(disabled),
@@ -402,7 +391,7 @@ export function createShopConfirmationComponents({
   ];
 }
 
-export function createShopReceiptComponents({ item, result }) {
+export function createShopReceiptComponents({ item, result, characterName = "" }) {
   let deliveryText = "Покупка сохранена.";
   if (result.delivery === "inventory") {
     deliveryText = "Предмет уже находится в `/inventory`.";
@@ -416,13 +405,15 @@ export function createShopReceiptComponents({ item, result }) {
       .setAccentColor(COLORS.success)
       .addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-          `## Покупка выполнена\n${item.emoji} **${markdownText(item.name, 100)}**\n\n` +
+          `## ✓ ${result.delivery === "order" ? "Заявка оплачена" : "Покупка выполнена"}\n${characterName ? `**${markdownText(characterName, 100)}**\n` : ""}${item.emoji} **${markdownText(item.name, 100)}**\n\n` +
           `Списано: **${money(result.price, result.currency)}**\n` +
           `Остаток: **${money(result.balance, result.currency)}**\n` +
           `${deliveryText}\n\n` +
-          `-# Операция: ${markdownText(result.operationId, 120)}`,
+          "-# Новая покупка — через `/shop`.",
         ),
-      ),
+      )
+      .addActionRowComponents(new ActionRowBuilder().addComponents(new ButtonBuilder()
+        .setCustomId(SHOP_INVENTORY_ID).setLabel("Открыть инвентарь").setStyle(ButtonStyle.Secondary))),
   ];
 }
 
@@ -435,10 +426,10 @@ const ORDER_STATUSES = {
 export function createShopOrdersComponents({ orders, disabled = false }) {
   const body = orders.length > 0
     ? orders.map((order) => (
-        `### ${order.item_name}\n` +
+        `### ${markdownText(order.item_name, 80)}\n` +
         `Заявка: **${order.public_id}** · ${ORDER_STATUSES[order.status] || order.status}\n` +
         `Создана: <t:${Math.floor(new Date(order.created_at).getTime() / 1000)}:R>` +
-        (order.resolution_reason ? `\nКомментарий: ${markdownText(order.resolution_reason, 300)}` : "")
+        (order.resolution_reason ? `\nКомментарий: ${markdownText(order.resolution_reason, 100)}` : "")
       )).join("\n\n")
     : "Заявок пока нет. Особые артефакты, протезы и мутации появятся здесь после оплаты.";
   return [
@@ -501,11 +492,5 @@ export function createShopOrderResolutionReceipt({ result }) {
 }
 
 export function createShopStatusComponents(title, message, type = "error") {
-  return [
-    new ContainerBuilder()
-      .setAccentColor(COLORS[type] || COLORS.error)
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`## ${markdownText(title, 100)}\n${message}`),
-      ),
-  ];
+  return createStatusComponents(title, message, type);
 }

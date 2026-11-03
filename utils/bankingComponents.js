@@ -1,72 +1,65 @@
+import { safeAvatarUrl } from "./avatarUrl.js";
+import { RESPONSE_COLORS, cleanText, markdownText, formatNumber } from "./responseStyle.js";
+import { createStatusComponents } from "./modernResponses.js";
 import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
+  LabelBuilder,
+  ModalBuilder,
   SectionBuilder,
   SeparatorBuilder,
   SeparatorSpacingSize,
   TextDisplayBuilder,
+  TextInputBuilder,
+  TextInputStyle,
   ThumbnailBuilder,
 } from "discord.js";
 import { CURRENCIES, EXCHANGE_RATE, TRANSFER_TAX_RATE } from "./banking.js";
 
 export const PAY_CONFIRM_ID = "bank_pay_confirm";
 export const PAY_CANCEL_ID = "bank_pay_cancel";
+export const PAY_AMOUNT_ID = "bank_pay_amount";
 export const EXCHANGE_CONFIRM_ID = "bank_exchange_confirm";
 export const EXCHANGE_CANCEL_ID = "bank_exchange_cancel";
 
-const COLORS = {
-  bank: 0x2563eb,
-  exchange: 0x8b5cf6,
-  success: 0x22c55e,
-  warning: 0xf59e0b,
-  error: 0xef4444,
-  neutral: 0x64748b,
-};
-
-function cleanText(value, maxLength = 80) {
-  const compact = String(value || "")
-    .replace(/[\u0000-\u001f\u007f]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (compact.length <= maxLength) return compact;
-  return `${compact.slice(0, Math.max(1, maxLength - 1))}…`;
-}
-
-function markdownText(value, maxLength = 80) {
-  return cleanText(value, maxLength).replace(/([\\`*_{}\[\]()<>#+\-.!|~])/g, "\\$1");
-}
-
-function formatNumber(value) {
-  const number = Number(value || 0);
-  if (!Number.isFinite(number)) return "слишком много";
-  if (Number.isSafeInteger(number)) return number.toLocaleString("ru-RU");
-  return number.toLocaleString("ru-RU", {
-    notation: "scientific",
-    maximumFractionDigits: 2,
-  });
-}
+const COLORS = { ...RESPONSE_COLORS, bank: RESPONSE_COLORS.confirm, exchange: RESPONSE_COLORS.confirm };
 
 function money(value, currency) {
   return `${formatNumber(value)} ${CURRENCIES[currency].symbol}`;
 }
 
-function confirmationButtons(confirmId, cancelId, confirmLabel, disabled) {
-  return new ActionRowBuilder().addComponents(
+function confirmationButtons(confirmId, cancelId, confirmLabel, disabled, { editAmount = false, pending = false, canAfford = true } = {}) {
+  const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(confirmId)
       .setLabel(confirmLabel)
       .setEmoji("✅")
       .setStyle(ButtonStyle.Success)
-      .setDisabled(disabled),
+      .setDisabled(disabled || !canAfford),
     new ButtonBuilder()
       .setCustomId(cancelId)
       .setLabel("Отменить")
       .setEmoji("❌")
       .setStyle(ButtonStyle.Secondary)
-      .setDisabled(disabled),
+      .setDisabled(disabled || pending),
   );
+  if (editAmount) row.addComponents(new ButtonBuilder().setCustomId(PAY_AMOUNT_ID)
+    .setLabel("Изменить сумму").setStyle(ButtonStyle.Secondary).setDisabled(disabled || pending));
+  return row;
+}
+
+export function insufficientFundsText(required, available, currency) {
+  return `Нужно **${money(required, currency)}**. Доступно **${money(available, currency)}**. Не хватает **${money(Math.max(0, required - available), currency)}**.`;
+}
+
+export function createPayAmountModal(customId, amount, currency) {
+  return new ModalBuilder().setCustomId(customId).setTitle("Изменить сумму перевода")
+    .addLabelComponents(new LabelBuilder().setLabel(`Сумма в ${CURRENCIES[currency].code}, до налога`)
+      .setDescription("Целое число от 2. После изменения проверьте расчёт и подтвердите перевод.")
+      .setTextInputComponent(new TextInputBuilder().setCustomId("amount").setStyle(TextInputStyle.Short)
+        .setValue(String(amount)).setMaxLength(24).setRequired(true)));
 }
 
 export function createPayPreviewComponents({
@@ -78,6 +71,7 @@ export function createPayPreviewComponents({
   calculation,
   senderBalance,
   disabled = false,
+  pending = false,
 }) {
   const config = CURRENCIES[currency];
   const balanceAfter = Number(senderBalance) - calculation.sent;
@@ -95,7 +89,7 @@ export function createPayPreviewComponents({
           )
           .setThumbnailAccessory(
             new ThumbnailBuilder()
-              .setURL(senderAvatarUrl)
+              .setURL(safeAvatarUrl(senderAvatarUrl))
               .setDescription(`Аватар персонажа ${cleanText(senderName)}`),
           ),
       )
@@ -108,16 +102,19 @@ export function createPayPreviewComponents({
           `Перевод: **${money(calculation.sent, currency)}**\n` +
           `Налог ${Math.round(TRANSFER_TAX_RATE * 100)}%: **−${money(calculation.tax, currency)}**\n` +
           `Получатель получит: **${money(calculation.received, currency)}**\n\n` +
-          `Ваш баланс: **${money(senderBalance, currency)} → ${money(balanceAfter, currency)}**\n` +
-          `-# Перед подтверждением бот ещё раз проверит баланс и получателя.`,
+          (balanceAfter >= 0
+            ? `Ваш баланс: **${money(senderBalance, currency)} → ${money(balanceAfter, currency)}**\n`
+            : `${insufficientFundsText(calculation.sent, senderBalance, currency)}\nИзмените сумму перевода.\n`) +
+          (pending ? "-# Результат проверяется. Повторное подтверждение проверит ту же операцию." : "-# Налог удерживается из суммы перевода. Перед подтверждением баланс и получатель проверяются снова."),
         ),
       )
       .addActionRowComponents(
         confirmationButtons(
           PAY_CONFIRM_ID,
           PAY_CANCEL_ID,
-          `Перевести ${config.code}`,
+          "Подтвердить перевод",
           disabled,
+          { editAmount: true, pending, canAfford: pending || balanceAfter >= 0 },
         ),
       ),
   ];
@@ -139,12 +136,12 @@ export function createPayReceiptComponents({
           .addTextDisplayComponents(
             new TextDisplayBuilder().setContent(
               `## Перевод выполнен\n` +
-              `**${markdownText(senderName)}** отправляет **${markdownText(recipientName)}** ${money(result.sent, currency)}.`,
+              `**${markdownText(senderName)}** перевёл **${markdownText(recipientName)}** ${money(result.sent, currency)}.`,
             ),
           )
           .setThumbnailAccessory(
             new ThumbnailBuilder()
-              .setURL(senderAvatarUrl)
+              .setURL(safeAvatarUrl(senderAvatarUrl))
               .setDescription(`Квитанция ${cleanText(senderName)}`),
           ),
       )
@@ -156,7 +153,7 @@ export function createPayReceiptComponents({
           `${config.emoji} Получено: **${money(result.received, currency)}**\n` +
           `Налог: **${money(result.tax, currency)}**\n` +
           `Остаток отправителя: **${money(result.senderBalance, currency)}**\n` +
-          `-# Списание и зачисление проведены как одна операция.`,
+          "-# Перевод завершён. Баланс можно проверить в `/profile`.",
         ),
       ),
   ];
@@ -184,7 +181,7 @@ export function createExchangePreviewComponents({
           )
           .setThumbnailAccessory(
             new ThumbnailBuilder()
-              .setURL(avatarUrl)
+              .setURL(safeAvatarUrl(avatarUrl))
               .setDescription(`Аватар персонажа ${cleanText(characterName)}`),
           ),
       )
@@ -196,6 +193,7 @@ export function createExchangePreviewComponents({
           `Отдаёте: **${money(calculation.spent, calculation.sourceCurrency)}**\n` +
           `Получаете: **${money(calculation.received, calculation.targetCurrency)}**\n` +
           `Курс: **1 ¥ = ${EXCHANGE_RATE.toLocaleString("ru-RU")} ₩**\n\n` +
+          `Комиссия: **0**\n` +
           `Баланс ${source.code}: **${money(sourceBalance, calculation.sourceCurrency)} → ${money(sourceBalance - calculation.spent, calculation.sourceCurrency)}**\n` +
           `-# Дробная часть результата округляется вниз.`,
         ),
@@ -204,7 +202,7 @@ export function createExchangePreviewComponents({
         confirmationButtons(
           EXCHANGE_CONFIRM_ID,
           EXCHANGE_CANCEL_ID,
-          `Обменять на ${target.code}`,
+          "Подтвердить обмен",
           disabled,
         ),
       ),
@@ -231,7 +229,7 @@ export function createExchangeReceiptComponents({
           )
           .setThumbnailAccessory(
             new ThumbnailBuilder()
-              .setURL(avatarUrl)
+              .setURL(safeAvatarUrl(avatarUrl))
               .setDescription(`Квитанция ${cleanText(characterName)}`),
           ),
       )
@@ -249,13 +247,5 @@ export function createExchangeReceiptComponents({
 }
 
 export function createBankStatusComponents(title, message, type = "error") {
-  return [
-    new ContainerBuilder()
-      .setAccentColor(COLORS[type] || COLORS.error)
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          `## ${markdownText(title, 100)}\n${message}`,
-        ),
-      ),
-  ];
+  return createStatusComponents(title, message, type);
 }

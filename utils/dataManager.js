@@ -1836,7 +1836,7 @@ export async function giveStyle(playerId, styleName, initialSp = 0, adminId) {
   }
 }
 
-export async function exchangeCurrency(playerId, currency, amount) {
+export async function exchangeCurrency(playerId, currency, amount, operationId = null) {
   try {
     const db = getDB();
     const calculation = calculateExchange(currency, amount);
@@ -1844,51 +1844,56 @@ export async function exchangeCurrency(playerId, currency, amount) {
       return { success: false, reason: calculation.reason, ...calculation };
     }
 
-    const player = await db.collection("players").findOne(
-      { id: playerId },
-      { projection: { krw: 1, yen: 1 } },
-    );
-    if (!player) return { success: false, reason: "player_not_found" };
-    const sourceBalance = Number(player[currency] || 0);
-    const targetBalance = Number(player[calculation.targetCurrency] || 0);
-    if (!Number.isSafeInteger(sourceBalance) || !Number.isSafeInteger(targetBalance)) {
-      return { success: false, reason: "unsafe_balance" };
-    }
-    if (sourceBalance < calculation.spent) {
+    const exchange = async (session) => {
+      const player = await db.collection("players").findOne(
+        { id: playerId },
+        { projection: { krw: 1, yen: 1 }, ...(session ? { session } : {}) },
+      );
+      if (!player) return { success: false, reason: "player_not_found" };
+      const sourceBalance = Number(player[currency] || 0);
+      const targetBalance = Number(player[calculation.targetCurrency] || 0);
+      if (!Number.isSafeInteger(sourceBalance) || !Number.isSafeInteger(targetBalance)) {
+        return { success: false, reason: "unsafe_balance" };
+      }
+      if (sourceBalance < calculation.spent) {
+        return {
+          success: false,
+          reason: "insufficient_funds",
+          available: sourceBalance,
+        };
+      }
+      if (!Number.isSafeInteger(targetBalance + calculation.received)) {
+        return { success: false, reason: "unsafe_balance" };
+      }
+
+      const updated = await db.collection("players").findOneAndUpdate(
+        {
+          id: playerId,
+          [currency]: { $gte: calculation.spent },
+          [calculation.targetCurrency]: {
+            $lte: Number.MAX_SAFE_INTEGER - calculation.received,
+          },
+        },
+        {
+          $inc: {
+            [currency]: -calculation.spent,
+            [calculation.targetCurrency]: calculation.received,
+          },
+        },
+        { returnDocument: "after", ...(session ? { session } : {}) },
+      );
+      if (!updated) return { success: false, reason: "balance_changed" };
+
       return {
-        success: false,
-        reason: "insufficient_funds",
-        available: sourceBalance,
+        success: true,
+        ...calculation,
+        sourceBalance: Number(updated[currency] || 0),
+        targetBalance: Number(updated[calculation.targetCurrency] || 0),
       };
-    }
-    if (!Number.isSafeInteger(targetBalance + calculation.received)) {
-      return { success: false, reason: "unsafe_balance" };
-    }
-
-    const updated = await db.collection("players").findOneAndUpdate(
-      {
-        id: playerId,
-        [currency]: { $gte: calculation.spent },
-        [calculation.targetCurrency]: {
-          $lte: Number.MAX_SAFE_INTEGER - calculation.received,
-        },
-      },
-      {
-        $inc: {
-          [currency]: -calculation.spent,
-          [calculation.targetCurrency]: calculation.received,
-        },
-      },
-      { returnDocument: "after" },
-    );
-    if (!updated) return { success: false, reason: "balance_changed" };
-
-    return {
-      success: true,
-      ...calculation,
-      sourceBalance: Number(updated[currency] || 0),
-      targetBalance: Number(updated[calculation.targetCurrency] || 0),
     };
+    return operationId
+      ? await runOnceOperation(operationId, { kind: "exchange", playerId, currency, amount: calculation.spent }, exchange)
+      : await exchange();
   } catch (error) {
     console.error("Error exchanging currency:", error);
     return { success: false, reason: "error" };

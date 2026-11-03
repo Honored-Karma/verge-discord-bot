@@ -1,3 +1,5 @@
+import { RESPONSE_COLORS, cleanText, markdownText, formatNumber } from "./responseStyle.js";
+import { createStatusComponents } from "./modernResponses.js";
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -44,37 +46,10 @@ export const GIVE_ITEM_QUANTITY_INPUT_ID = "give_item_quantity_value";
 
 const ITEMS_PER_PAGE = 20;
 const STYLES_PER_PAGE = 25;
-const COLORS = {
-  center: 0x8b5cf6,
-  sp: 0x22d3ee,
-  success: 0x22c55e,
-  error: 0xef4444,
-  warning: 0xf59e0b,
-  neutral: 0x64748b,
-};
+const COLORS = { ...RESPONSE_COLORS, center: RESPONSE_COLORS.brand, sp: RESPONSE_COLORS.brand };
 
-function cleanText(value, maxLength = 100) {
-  const compact = String(value || "")
-    .replace(/[\u0000-\u001f\u007f]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (compact.length <= maxLength) return compact;
-  return `${compact.slice(0, Math.max(1, maxLength - 1))}…`;
-}
 
-function markdownText(value, maxLength = 100) {
-  return cleanText(value, maxLength).replace(/([\\`*_{}\[\]()<>#+\-.!|~])/g, "\\$1");
-}
 
-function formatNumber(value) {
-  const number = Number(value || 0);
-  if (!Number.isFinite(number)) return "слишком много";
-  if (Number.isSafeInteger(number)) return number.toLocaleString("ru-RU");
-  return number.toLocaleString("ru-RU", {
-    notation: "scientific",
-    maximumFractionDigits: 2,
-  });
-}
 
 function pageCount(values, perPage) {
   return Math.max(1, Math.ceil(values.length / perPage));
@@ -294,7 +269,7 @@ export function createGiveItemPreviewComponents({
   const totalEffect = formatItemEffect(itemName, quantity);
   return [
     new ContainerBuilder()
-      .setAccentColor(definition.rarity.color)
+      .setAccentColor(COLORS.confirm)
       .addSectionComponents(
         targetSection(
           characterName,
@@ -315,7 +290,7 @@ export function createGiveItemPreviewComponents({
           (definition.usable
             ? definition.kind === "sp" && !recipientOwnsStyle
               ? `-# ⚠ Персонаж ещё не изучил стиль «${markdownText(definition.styleName, 80)}». Свиток сохранится, но использовать его можно будет только после изучения стиля.`
-              : "-# Предмет можно будет использовать через `/use`."
+              : "-# Откройте `/inventory`, выберите предмет и нажмите «Использовать 1». Команда `/use` также доступна."
             : "-# Предмет будет коллекционным и не сможет начислять AP или SP."),
         ),
       )
@@ -355,7 +330,7 @@ export function createGiveItemReceiptComponents({
           characterName,
           avatarUrl,
           slot,
-          "Предмет выдан",
+          "✓ Предмет выдан",
           `${definition.emoji} **${markdownText(result.itemName, 100)}** ×${formatNumber(result.quantity)}`,
         ),
       )
@@ -511,11 +486,5 @@ export function createGiveItemQuantityModal(context, quantity) {
 }
 
 export function createGiveItemStatusComponents(title, message, type = "error") {
-  return [
-    new ContainerBuilder()
-      .setAccentColor(COLORS[type] || COLORS.error)
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`## ${markdownText(title, 100)}\n${message}`),
-      ),
-  ];
+  return createStatusComponents(title, message, type);
 }

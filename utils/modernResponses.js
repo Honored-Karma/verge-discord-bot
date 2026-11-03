@@ -1,24 +1,21 @@
 import {
+  AttachmentBuilder,
   ComponentType,
   ContainerBuilder,
+  FileBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   MessageFlags,
+  MessageFlagsBitField,
   SectionBuilder,
   SeparatorBuilder,
   SeparatorSpacingSize,
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from "discord.js";
+import { randomUUID } from "node:crypto";
 import { isLegacyBannerUrl } from "./embeds.js";
-
-const COLORS = {
-  brand: 0xb209d4,
-  success: 0x22c55e,
-  error: 0xef4444,
-  warning: 0xf59e0b,
-  info: 0x38bdf8,
-};
+import { RESPONSE_COLORS as COLORS, getResponseState, statusHeading, truncateText, splitResponseText } from "./responseStyle.js";
 
 const V2_COMPONENT_TYPES = new Set([
   ComponentType.TextDisplay,
@@ -56,14 +53,12 @@ function hasV2Components(components = []) {
 }
 
 function resolveFlags(flags) {
-  if (typeof flags === "number") return flags;
-  if (typeof flags === "bigint") return Number(flags);
-  if (flags?.bitfield !== undefined) return Number(flags.bitfield);
-  return 0;
+  return flags === undefined ? 0 : Number(new MessageFlagsBitField(flags).bitfield);
 }
 
 function embedData(embed) {
-  return typeof embed?.toJSON === "function" ? embed.toJSON() : (embed || {});
+  // We are converting to V2: legacy embed length limits do not apply here.
+  return embed?.data || (typeof embed?.toJSON === "function" ? embed.toJSON() : (embed || {}));
 }
 
 function inferColor(text, fallback = COLORS.brand) {
@@ -83,22 +78,6 @@ function inferColor(text, fallback = COLORS.brand) {
   return Number.isInteger(fallback) ? fallback : COLORS.brand;
 }
 
-function splitText(value, limit = 3900) {
-  const source = String(value || "").trim();
-  if (!source) return [];
-
-  const chunks = [];
-  let remaining = source;
-  while (remaining.length > limit) {
-    let cut = remaining.lastIndexOf("\n", limit);
-    if (cut < Math.floor(limit * 0.55)) cut = remaining.lastIndexOf(" ", limit);
-    if (cut < Math.floor(limit * 0.55)) cut = limit;
-    chunks.push(remaining.slice(0, cut).trim());
-    remaining = remaining.slice(cut).trim();
-  }
-  if (remaining) chunks.push(remaining);
-  return chunks;
-}
 
 function formatTimestamp(timestamp) {
   if (!timestamp) return null;
@@ -162,23 +141,67 @@ function addRows(container, rows) {
   }
 }
 
-function createContainer({ text, embed, rows = [] }) {
+function createContainer({ text, embed, state, rows = [] }) {
   const data = embedData(embed);
   const combinedText = [text, embedText(data)].filter(Boolean).join("\n\n");
   const container = new ContainerBuilder().setAccentColor(
-    inferColor(combinedText, data.color),
+    COLORS[state || getResponseState(embed)]
+      ?? ([COLORS.success, COLORS.error, COLORS.warning, COLORS.neutral].includes(data.color)
+        ? data.color : inferColor(combinedText, data.color)),
   );
-  const chunks = splitText(combinedText || "Готово.");
+  const chunks = splitResponseText(combinedText || "Готово.");
 
-  addText(container, chunks.slice(0, 7), data.thumbnail);
+  addText(container, chunks, data.thumbnail);
   addImage(container, data.image);
   addRows(container, rows);
   return container;
 }
 
+/** 4,000 characters are shared by all Text Displays, not per component. */
+function fitTextBudget(options) {
+  const components = options.components.map((component) => component.toJSON?.() || structuredClone(component));
+  const texts = [];
+  const visit = (component) => {
+    if (component.type === ComponentType.TextDisplay) texts.push(component);
+    (component.components || []).forEach(visit);
+  };
+  components.forEach(visit);
+  const total = texts.reduce((sum, component) => sum + component.content.length, 0);
+  if (total <= 4000) return options;
+  if ((options.files?.length || 0) + (options.attachments?.length || 0) >= 10) {
+    throw new RangeError("Long response requires one free attachment slot");
+  }
+  const fullText = texts.map((component) => component.content).join("\n\n");
+  const filename = `verge-details-${randomUUID()}.txt`;
+  const note = "\n\n-# Текст сокращён. Полный ответ — во вложении ниже.";
+  const budget = 4000 - note.length - texts.length * 4;
+  for (const component of texts) {
+    component.content = truncateText(component.content, Math.max(1, Math.floor(budget * component.content.length / total)));
+  }
+  texts[0].content += note;
+  components.push(new FileBuilder().setURL(`attachment://${filename}`).toJSON());
+  const count = (items) => items.reduce((sum, item) => sum + 1 + count(item.components || []) + (item.accessory ? 1 : 0), 0);
+  // Free one layout slot without removing controls or text.
+  if (count(components) > 40) {
+    const index = components.findIndex((component) => component.type === ComponentType.Container);
+    if (index >= 0) components.splice(index, 1, ...components[index].components);
+    else {
+      const indices = components.flatMap((component, i) => component.type === ComponentType.TextDisplay ? [i] : []);
+      if (indices.length >= 2) {
+        components[indices[0]].content += `\n${components[indices[1]].content}`;
+        components.splice(indices[1], 1);
+      }
+    }
+  }
+  return { ...options, components,
+    files: [...(options.files || []), new AttachmentBuilder(Buffer.from(fullText, "utf8"), { name: filename })] };
+}
+
 export function modernizeResponsePayload(payload, { resetLegacyFields = false } = {}) {
   if (payload === undefined || payload === null) return payload;
   const options = typeof payload === "string" ? { content: payload } : { ...payload };
+  const state = options.responseState;
+  delete options.responseState;
 
   if (options.ephemeral) {
     options.flags = resolveFlags(options.flags) | MessageFlags.Ephemeral;
@@ -188,23 +211,56 @@ export function modernizeResponsePayload(payload, { resetLegacyFields = false } 
   const components = Array.isArray(options.components) ? options.components : [];
   const embeds = Array.isArray(options.embeds) ? options.embeds.filter(Boolean) : [];
   const content = typeof options.content === "string" ? options.content.trim() : "";
+  // Mentions inside legacy embeds did not notify users. Keep that behavior.
+  if (!content && embeds.length && options.allowedMentions === undefined) options.allowedMentions = { parse: [] };
 
-  if (hasV2Components(components)) return options;
+  if (hasV2Components(components)) {
+    options.flags = resolveFlags(options.flags) | MessageFlags.IsComponentsV2;
+    if (resetLegacyFields) {
+      options.content = null;
+      options.embeds = [];
+    }
+    return fitTextBudget(options);
+  }
   if (!content && embeds.length === 0) return options;
 
   const rows = components.filter((component) => componentType(component) === ComponentType.ActionRow);
-  const containers = [];
+  let containers = [];
 
   if (embeds.length > 0) {
     embeds.forEach((embed, index) => {
       containers.push(createContainer({
         text: index === 0 ? content : "",
         embed,
+        state,
         rows: index === embeds.length - 1 ? rows : [],
       }));
     });
   } else {
-    containers.push(createContainer({ text: content, rows }));
+    containers.push(createContainer({ text: content, state, rows }));
+  }
+
+  // Ten embeds with thumbnails, images and five button rows can exceed V2's
+  // 40-component budget. Flatten decorative nesting, retaining all text/media/actions.
+  const count = (component) => {
+    const data = component.toJSON?.() || component;
+    return 1 + (data.components || []).reduce((n, child) => n + count(child), 0)
+      + (data.accessory ? count(data.accessory) : 0);
+  };
+  if (containers.reduce((n, component) => n + count(component), 0) > 40) {
+    const combined = [content, ...embeds.map((embed) => embedText(embedData(embed)))].filter(Boolean).join("\n\n");
+    const compact = createContainer({ text: combined, state: state || getResponseState(embeds[0]) });
+    const media = embeds.flatMap((embed) => {
+      const data = embedData(embed);
+      return [data.thumbnail, data.image].filter((item) => item?.url && !isLegacyBannerUrl(item.url));
+    });
+    for (let i = 0; i < media.length; i += 10) {
+      compact.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(
+        media.slice(i, i + 10).map((item) => new MediaGalleryItemBuilder().setURL(item.url)),
+      ));
+    }
+    addRows(compact, rows);
+    containers = [compact];
   }
 
   if (resetLegacyFields) {
@@ -216,7 +272,16 @@ export function modernizeResponsePayload(payload, { resetLegacyFields = false } 
   }
   options.components = containers;
   options.flags = resolveFlags(options.flags) | MessageFlags.IsComponentsV2;
-  return options;
+  return fitTextBudget(options);
+}
+
+/** Compact shared template; complex panels reuse the same tokens and adapter. */
+export function createStatusComponents(title, message, state = "info", { subject, next, rows = [] } = {}) {
+  return [createContainer({
+    state,
+    text: [`## ${statusHeading(title, state)}`, subject, message, next && `-# ${next}`].filter(Boolean).join("\n\n"),
+    rows,
+  })];
 }
 
 function isClearControlsPayload(payload) {
@@ -249,48 +314,42 @@ export function installModernResponseAdapter(interaction) {
   if (!interaction || interaction[ADAPTER_INSTALLED]) return;
   interaction[ADAPTER_INSTALLED] = true;
 
-  let messageId = interaction.message?.id || null;
-  let lastV2Components = hasV2Components(interaction.message?.components || [])
-    ? interaction.message.components
-    : null;
-  if (messageId && lastV2Components) {
-    rememberComponents(messageId, lastV2Components);
+  const source = { id: interaction.message?.id || null,
+    components: hasV2Components(interaction.message?.components || []) ? interaction.message.components : null };
+  const ownReply = { id: null, components: null };
+  let editTarget = source.id ? source : ownReply;
+  if (source.id && source.components) rememberComponents(source.id, source.components);
+
+  // editReply targets the deferred response. A private reply from a component
+  // interaction is a different message from the public panel it came from.
+  for (const [method, target] of [["deferReply", ownReply], ["deferUpdate", source]]) {
+    if (typeof interaction[method] !== "function") continue;
+    const original = interaction[method].bind(interaction);
+    interaction[method] = async (...args) => {
+      const result = await original(...args);
+      editTarget = target;
+      return result;
+    };
   }
 
-  const methods = ["reply", "followUp", "editReply", "update"];
-  for (const method of methods) {
-    if (typeof interaction?.[method] !== "function") continue;
+  for (const method of ["reply", "followUp", "editReply", "update"]) {
+    if (typeof interaction[method] !== "function") continue;
     const original = interaction[method].bind(interaction);
     interaction[method] = async (payload) => {
-      const sharedComponents = messageId ? MESSAGE_COMPONENT_STATE.get(messageId) : null;
-      if (sharedComponents) lastV2Components = sharedComponents;
-
-      let nextPayload;
-      if (isClearControlsPayload(payload) && lastV2Components) {
-        nextPayload = {
-          ...payload,
-          content: null,
-          embeds: [],
-          components: stripActionRows(lastV2Components),
-          flags: resolveFlags(payload.flags) | MessageFlags.IsComponentsV2,
-        };
-      } else {
-        nextPayload = modernizeResponsePayload(payload, {
-          resetLegacyFields: method === "editReply" || method === "update",
-        });
-      }
-
-      if (hasV2Components(nextPayload?.components || [])) {
-        lastV2Components = nextPayload.components;
-      }
+      const target = method === "update" ? source : method === "reply" ? ownReply
+        : method === "editReply" ? editTarget : { id: null, components: null };
+      const previous = (target.id && MESSAGE_COMPONENT_STATE.get(target.id)) || target.components;
+      const editsMessage = method === "editReply" || method === "update";
+      const nextPayload = editsMessage && isClearControlsPayload(payload) && previous
+        ? { ...payload, content: null, embeds: [], components: stripActionRows(previous),
+          flags: resolveFlags(payload.flags) | MessageFlags.IsComponentsV2 }
+        : modernizeResponsePayload(payload, { resetLegacyFields: editsMessage });
       const result = await original(nextPayload);
-      messageId = result?.id || messageId;
-      if (messageId && lastV2Components) {
-        rememberComponents(messageId, lastV2Components);
-      }
-      if (isClearControlsPayload(payload) && messageId) {
-        MESSAGE_COMPONENT_STATE.delete(messageId);
-      }
+      target.id = result?.id || result?.resource?.message?.id || target.id;
+      if (hasV2Components(nextPayload?.components || [])) target.components = nextPayload.components;
+      if (target.id && target.components) rememberComponents(target.id, target.components);
+      if (editsMessage && isClearControlsPayload(payload) && target.id) MESSAGE_COMPONENT_STATE.delete(target.id);
+      if (method === "reply") editTarget = ownReply;
       return result;
     };
   }

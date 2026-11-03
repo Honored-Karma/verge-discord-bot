@@ -1,3 +1,4 @@
+import { TRAINING_RULES } from "./trainingRules.js";
 import ms from 'ms';
 
 // Global command cooldown tracker (3 seconds between commands per user)
@@ -106,12 +107,12 @@ export function validateTrainingText(text) {
         return { valid: false, reason: 'Введите текст тренировки.' };
     }
 
-    if (text.length < 800) {
-        return { valid: false, reason: `Текст тренировки должен содержать минимум 800 символов. Сейчас: ${text.length}` };
+    if (text.length < TRAINING_RULES.ap.minLength) {
+        return { valid: false, reason: `Текст тренировки должен содержать минимум ${TRAINING_RULES.ap.minLength} символов. Сейчас: ${text.length}` };
     }
 
-    if (text.length > 4000) {
-        return { valid: false, reason: `Сократите текст тренировки до 4 000 символов. Сейчас: ${text.length}` };
+    if (text.length > TRAINING_RULES.ap.maxLength) {
+        return { valid: false, reason: `Сократите текст тренировки до ${TRAINING_RULES.ap.maxLength.toLocaleString("ru-RU")} символов. Сейчас: ${text.length}` };
     }
     
     const letterDigitSpaceCount = (text.match(/[a-zA-Zа-яА-ЯёЁ0-9\s]/g) || []).length;
@@ -129,12 +130,12 @@ export function validateSocialRPText(text) {
         return { valid: false, reason: 'Введите текст социальной сцены.' };
     }
 
-    if (text.length < 50) {
-        return { valid: false, reason: `Текст социальной сцены должен содержать минимум 50 символов. Сейчас: ${text.length}` };
+    if (text.length < TRAINING_RULES.social.minLength) {
+        return { valid: false, reason: `Текст социальной сцены должен содержать минимум ${TRAINING_RULES.social.minLength} символов. Сейчас: ${text.length}` };
     }
 
-    if (text.length > 4000) {
-        return { valid: false, reason: `Сократите текст социальной сцены до 4 000 символов. Сейчас: ${text.length}` };
+    if (text.length > TRAINING_RULES.social.maxLength) {
+        return { valid: false, reason: `Сократите текст социальной сцены до ${TRAINING_RULES.social.maxLength.toLocaleString("ru-RU")} символов. Сейчас: ${text.length}` };
     }
 
     const meaningfulCount = (text.match(/[\p{L}\p{N}\s]/gu) || []).length;
@@ -154,17 +155,17 @@ export function validateSPTrainingText(text) {
         return { valid: false, reason: 'Введите текст тренировки боевого стиля.' };
     }
 
-    if (text.length < 500) {
+    if (text.length < TRAINING_RULES.sp.minLength) {
         return {
             valid: false,
-            reason: `Опишите тренировку подробнее: нужно не менее 500 символов. Сейчас: ${text.length}.`,
+            reason: `Опишите тренировку подробнее: нужно не менее ${TRAINING_RULES.sp.minLength} символов. Сейчас: ${text.length}.`,
         };
     }
 
-    if (text.length > 4000) {
+    if (text.length > TRAINING_RULES.sp.maxLength) {
         return {
             valid: false,
-            reason: `Сократите тренировку до 4 000 символов. Сейчас: ${text.length}.`,
+            reason: `Сократите тренировку до ${TRAINING_RULES.sp.maxLength.toLocaleString("ru-RU")} символов. Сейчас: ${text.length}.`,
         };
     }
 

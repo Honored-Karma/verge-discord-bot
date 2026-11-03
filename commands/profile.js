@@ -9,7 +9,7 @@ import {
     PROFILE_SESSION_TTL_MS,
     renderProfilePage,
 } from '../interactions/profileSession.js';
-import { createInteractionSession } from '../utils/interactionSessions.js';
+import { createInteractionSession, getInteractionSession } from '../utils/interactionSessions.js';
 import { makePlayerKey } from '../utils/playerKey.js';
 
 export const data = new SlashCommandBuilder()
@@ -102,7 +102,8 @@ export async function execute(interaction) {
     });
 
     const view = await renderProfilePage(state, targetUser);
-    if (view?.files.length) {
+    const latest = created.success ? await getInteractionSession(messageId) : null;
+    if (view && (!created.success || latest?.revision === created.session.revision)) {
         await interaction.editReply({
             components: view.components,
             files: view.files,

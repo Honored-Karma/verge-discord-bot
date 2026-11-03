@@ -1,3 +1,4 @@
+import { TRAINING_RULES } from "../utils/trainingRules.js";
 import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import {
   completeSocialRP,
@@ -28,8 +29,8 @@ import {
   SOCIAL_RP_TEXT_INPUT_ID,
 } from "../utils/trainingComponents.js";
 
-const SOCIAL_RP_COOLDOWN = 12 * 60 * 60 * 1000;
-const SOCIAL_RP_AP_REWARD = 10;
+const SOCIAL_RP_COOLDOWN = TRAINING_RULES.social.cooldownMs;
+const SOCIAL_RP_AP_REWARD = TRAINING_RULES.social.reward;
 
 export const modalCustomIdPrefix = SOCIAL_RP_MODAL_PREFIX;
 

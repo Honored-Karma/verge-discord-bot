@@ -24,6 +24,8 @@ import {
   createMemberProfileSelectRow,
   createMissionActionRows,
   createMissionCardEmbed,
+  createMissionDetailsComponents,
+  MISSION_BTN_DETAILS,
   createPartyListEmbed,
   createPublicProfileEmbed,
   createRetryDeliveryActionRow,
@@ -261,6 +263,11 @@ export const missionInteractionHandler = {
 
     const member = await resolveMember(interaction);
     const customId = interaction.customId;
+    if (customId === MISSION_BTN_DETAILS) return interaction.reply({
+      components: createMissionDetailsComponents(mission),
+      flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+      allowedMentions: { parse: [] },
+    });
 
     // ──────────────────────────────────────────────────────────────────────────
     // 1. ВСТУПИТЬ В ПАТИ

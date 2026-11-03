@@ -1,3 +1,5 @@
+import { RESPONSE_COLORS, cleanText, markdownText, formatNumber } from "./responseStyle.js";
+import { createStatusComponents } from "./modernResponses.js";
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -21,32 +23,11 @@ export const INVENTORY_USE_ALL_ID = "inventory_use_all";
 export const INVENTORY_BACK_ID = "inventory_back";
 
 const ITEMS_PER_PAGE = 12;
-const INVENTORY_COLOR = 0x8b5cf6;
-const SUCCESS_COLOR = 0x22c55e;
-const ERROR_COLOR = 0xef4444;
+const INVENTORY_COLOR = RESPONSE_COLORS.brand;
+const SUCCESS_COLOR = RESPONSE_COLORS.success;
 
-function formatNumber(value) {
-  const number = Number(value || 0);
-  if (!Number.isFinite(number)) return "слишком много";
-  if (Number.isSafeInteger(number)) return number.toLocaleString("ru-RU");
-  return number.toLocaleString("ru-RU", {
-    notation: "scientific",
-    maximumFractionDigits: 2,
-  });
-}
 
-function cleanText(value, maxLength = 100) {
-  const compact = String(value || "")
-    .replace(/[\u0000-\u001f\u007f]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (compact.length <= maxLength) return compact;
-  return `${compact.slice(0, Math.max(1, maxLength - 1))}…`;
-}
 
-function markdownText(value, maxLength = 100) {
-  return cleanText(value, maxLength).replace(/([\\`*_{}\[\]()<>#+\-.!|~])/g, "\\$1");
-}
 
 export function getInventoryPageCount(inventory) {
   return Math.max(1, Math.ceil(inventory.length / ITEMS_PER_PAGE));
@@ -60,6 +41,7 @@ export function createInventoryComponents({
   canUse = false,
   disabled = false,
 }) {
+  if (!inventory.length) return createInventoryEmptyComponents(characterName, avatarUrl, disabled);
   const totalPages = getInventoryPageCount(inventory);
   const safePage = Math.max(0, Math.min(totalPages - 1, page));
   const pageItems = inventory.slice(
@@ -140,6 +122,8 @@ export function createInventoryComponents({
       );
   }
 
+  container.addActionRowComponents(new ActionRowBuilder().addComponents(new ButtonBuilder()
+    .setCustomId(INVENTORY_BACK_ID).setLabel("Обновить инвентарь").setStyle(ButtonStyle.Secondary).setDisabled(disabled)));
   return [container];
 }
 
@@ -181,7 +165,7 @@ export function createInventoryItemComponents({
       ? ""
       : "\n\n-# Этот предмет сохранён как коллекционный и не будет потрачен."
   const container = new ContainerBuilder()
-    .setAccentColor(definition.rarity.color)
+    .setAccentColor(INVENTORY_COLOR)
     .addSectionComponents(header)
     .addSeparatorComponents(
       new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
@@ -273,15 +257,15 @@ export function createItemUsedComponents({
   ];
 }
 
-export function createInventoryEmptyComponents(characterName, avatarUrl) {
+export function createInventoryEmptyComponents(characterName, avatarUrl, disabled = false) {
   return [
     new ContainerBuilder()
-      .setAccentColor(INVENTORY_COLOR)
+      .setAccentColor(RESPONSE_COLORS.empty)
       .addSectionComponents(
         new SectionBuilder()
           .addTextDisplayComponents(
             new TextDisplayBuilder().setContent(
-              `## Инвентарь пуст\nУ **${markdownText(characterName, 80)}** пока нет предметов.\n-# Когда предметы появятся, здесь можно будет открыть их описание и эффект.`,
+              `## Инвентарь пуст\nУ **${markdownText(characterName, 80)}** пока нет предметов.\nПредметы из магазина и награды появятся здесь. Откройте \`/shop\`, затем обновите инвентарь.`,
             ),
           )
           .setThumbnailAccessory(
@@ -289,16 +273,12 @@ export function createInventoryEmptyComponents(characterName, avatarUrl) {
               .setURL(safeAvatarUrl(avatarUrl))
               .setDescription(`Аватар персонажа ${cleanText(characterName, 80)}`),
           ),
-      ),
+      )
+      .addActionRowComponents(new ActionRowBuilder().addComponents(new ButtonBuilder()
+        .setCustomId(INVENTORY_BACK_ID).setLabel("Обновить инвентарь").setStyle(ButtonStyle.Secondary).setDisabled(disabled))),
   ];
 }
 
-export function createInventoryErrorComponents(title, message) {
-  return [
-    new ContainerBuilder()
-      .setAccentColor(ERROR_COLOR)
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`## ${markdownText(title, 100)}\n${message}`),
-      ),
-  ];
+export function createInventoryErrorComponents(title, message, type = "error") {
+  return createStatusComponents(title, message, type);
 }

@@ -6,6 +6,8 @@ import {
   createPayReceiptComponents,
   PAY_CANCEL_ID,
   PAY_CONFIRM_ID,
+  PAY_AMOUNT_ID,
+  createPayAmountModal,
 } from "../utils/bankingComponents.js";
 import { getPlayer, transferCurrency } from "../utils/dataManager.js";
 import {
@@ -16,6 +18,7 @@ import {
 } from "../utils/interactionSessions.js";
 import { logCommand } from "../utils/logs.js";
 import { getOperationResult } from "../utils/operations.js";
+import { buildModalCustomId } from "../utils/interactionRouter.js";
 
 export const PAY_NAMESPACE = "pay";
 
@@ -84,6 +87,7 @@ export function previewPayload(state, senderBalance) {
     currency: state.currency,
     calculation: calculateTransfer(state.amount),
     senderBalance,
+    pending: Boolean(state.operation_pending),
   });
 }
 
@@ -94,7 +98,9 @@ export async function renderPayComponents(state) {
 }
 
 async function handleCancel({ interaction, session }) {
-  await closeInteractionSession(session.message_id);
+  const claimed = await claimInteractionSession(session.message_id, session.revision);
+  if (!claimed) return interaction.deferUpdate();
+  await closeInteractionSession(session.message_id, { claimToken: claimed.claim_token });
   return interaction.update({
     components: createBankStatusComponents(
       "Перевод отменён",
@@ -105,7 +111,9 @@ async function handleCancel({ interaction, session }) {
 }
 
 async function handleConfirm({ interaction, session }) {
-  const claimed = await claimInteractionSession(session.message_id, session.revision);
+  const claimed = await claimInteractionSession(session.message_id, session.revision, {
+    state: { ...session.state, operation_pending: true },
+  });
   if (!claimed) {
     return interaction.reply({
       components: createBankStatusComponents(
@@ -142,22 +150,16 @@ async function handleConfirm({ interaction, session }) {
     );
 
     if (!result.success) {
+      state.operation_pending = ["error", "operation_unknown", "rollback_failed"].includes(result.reason);
       await releaseInteractionSession(session.message_id, state, { claimToken: claimed.claim_token });
       const freshSender = await getPlayer(state.sender_id);
       const freshBalance = Number(freshSender?.[state.currency] || 0);
-      const retryable = Number.isSafeInteger(freshBalance)
-        && freshBalance >= calculation.sent;
       await interaction.editReply({
-        components: retryable
-          ? previewPayload(state, freshBalance)
-          : createBankStatusComponents(
-            "Перевод не выполнен",
-            transferError(result, state.currency),
-          ),
+        components: previewPayload(state, freshBalance),
       });
       await interaction.followUp({
         components: createBankStatusComponents(
-          "Перевод не выполнен",
+          state.operation_pending ? "Результат перевода не подтверждён" : "Перевод не выполнен",
           transferError(result, state.currency),
         ),
         flags: EPHEMERAL_V2,
@@ -213,7 +215,7 @@ async function handleConfirm({ interaction, session }) {
     }).catch(() => {});
     await interaction.followUp({
       components: createBankStatusComponents(
-        "Перевод не выполнен",
+        "Результат перевода не подтверждён",
         "Результат пока не подтверждён. Повторите подтверждение в этой квитанции, чтобы проверить ту же операцию.",
       ),
       flags: EPHEMERAL_V2,
@@ -233,13 +235,56 @@ async function handleComponent({ interaction, session }) {
     }).catch(() => {});
   }
 
+  if (session.state.operation_pending && interaction.customId !== PAY_CONFIRM_ID) {
+    return interaction.reply({ components: createBankStatusComponents("Результат проверяется",
+      "Повторите подтверждение в этой квитанции. Изменить или отменить перевод можно только после проверки результата.", "warning"), flags: EPHEMERAL_V2 });
+  }
+
+  if (interaction.customId === PAY_AMOUNT_ID) {
+    return interaction.showModal(createPayAmountModal(
+      buildModalCustomId(PAY_NAMESPACE, `amount:${session.revision}`, session.message_id),
+      session.state.amount, session.state.currency));
+  }
+
   if (interaction.customId === PAY_CANCEL_ID) {
     return handleCancel({ interaction, session });
   }
   if (interaction.customId === PAY_CONFIRM_ID) {
+    // A failed Discord edit may leave the previous amount on screen. Refresh
+    // that quote first; this click must not execute a different amount.
+    if (session.state.quote_pending) return updateDraft({ interaction, session, amount: session.state.amount });
     return handleConfirm({ interaction, session });
   }
   return interaction.deferUpdate().catch(() => {});
+}
+
+async function handleModal({ interaction, session, action }) {
+  if (action !== `amount:${session.revision}` || session.status !== SESSION_STATUS.open || session.state.operation_pending) {
+    return interaction.reply({ components: createBankStatusComponents("Квитанция изменилась",
+      "Закройте форму и проверьте текущую квитанцию. Если перевод обрабатывается, дождитесь результата.", "warning"), flags: EPHEMERAL_V2 });
+  }
+  const input = interaction.fields.getTextInputValue("amount").replace(/\s/g, "");
+  const amount = /^\d+$/.test(input) ? Number(input) : NaN;
+  if (!calculateTransfer(amount).valid) {
+    return interaction.reply({ components: createBankStatusComponents("Проверьте сумму",
+      "Введите целое число от 2 в пределах допустимого баланса. Откройте «Изменить сумму» ещё раз."), flags: EPHEMERAL_V2 });
+  }
+  return updateDraft({ interaction, session, amount });
+}
+
+async function updateDraft({ interaction, session, amount }) {
+  const state = { ...session.state, amount, quote_pending: true };
+  const claimed = await claimInteractionSession(session.message_id, session.revision, { state });
+  if (!claimed) return interaction.deferUpdate();
+  await interaction.deferUpdate();
+  try {
+    const components = await renderPayComponents(state);
+    await interaction.editReply({ components });
+    await releaseInteractionSession(session.message_id, { ...state, quote_pending: false }, { claimToken: claimed.claim_token });
+  } catch (error) {
+    await releaseInteractionSession(session.message_id, state, { claimToken: claimed.claim_token });
+    throw error;
+  }
 }
 
 async function renderExpired({ interaction, session }) {
@@ -275,6 +320,7 @@ async function renderForeign({ interaction }) {
 export const payInteractionHandler = {
   namespace: PAY_NAMESPACE,
   handleComponent,
+  handleModal,
   renderExpired,
   renderForeign,
 };

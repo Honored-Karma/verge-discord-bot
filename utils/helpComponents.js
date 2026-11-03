@@ -1,3 +1,5 @@
+import { RESPONSE_COLORS, splitResponseText } from "./responseStyle.js";
+import { COMMAND_HELP } from "./helpCatalog.js";
 import {
   ActionRowBuilder,
   ContainerBuilder,
@@ -10,7 +12,7 @@ import {
 
 export const HELP_SELECT_ID = "help_page_select";
 
-const HELP_COLOR = 0xb209d4;
+const HELP_COLOR = RESPONSE_COLORS.brand;
 
 function clean(value, maxLength = 100) {
   return String(value ?? "")
@@ -29,7 +31,7 @@ function commandLines(commands) {
       const description = clean(command.description, 90) || "без описания";
       return command.type === 3
         ? `**${command.name}** (меню сообщения → Приложения) — ${description}`
-        : `**/${command.name}** — ${description}`;
+        : `**/${command.name}** — ${description}${COMMAND_HELP[command.name] ? `\n-# ${COMMAND_HELP[command.name]}` : ""}`;
     })
     .join("\n");
 }
@@ -71,9 +73,9 @@ export function createHelpComponents({ pages, activeId, total, disabled = false 
       .addSeparatorComponents(
         new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
       )
-      .addTextDisplayComponents(new TextDisplayBuilder().setContent(commandLines(page.commands)))
+      .addTextDisplayComponents(splitResponseText(commandLines(page.commands)).map(text => new TextDisplayBuilder().setContent(text)))
       .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-        "-# Список собран из реального набора команд бота, поэтому он не устаревает.",
+        "-# Команды доступны в пределах ваших прав. Игровые решения и последствия сцен определяют игроки и ГМ.",
       ))
       .addActionRowComponents(createPageSelect(pages, page.id, disabled)),
   ];

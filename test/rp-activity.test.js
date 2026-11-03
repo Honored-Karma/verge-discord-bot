@@ -252,7 +252,7 @@ test("награды, штрафы и смена канала работают �
         interaction.user.displayAvatarURL = () => "https://cdn.discordapp.com/embed/avatars/0.png";
         interaction.fields = { getTextInputValue: () => "Персонаж выполняет упражнения и отрабатывает движения. ".repeat(20) };
         await command.handleModalSubmit(interaction);
-        assert.match(JSON.stringify(interaction.response), /завершена/);
+        assert.match(JSON.stringify(interaction.response), /завершена|учтена/);
         if (commandName === "train-sp") {
           assert.ok(await dm.getSP(interaction.user.id, style.id) > 20);
         } else {
@@ -298,7 +298,7 @@ test("награды, штрафы и смена канала работают �
         interaction.user.displayAvatarURL = () => "https://cdn.discordapp.com/embed/avatars/0.png";
         interaction.fields = { getTextInputValue: () => "Персонаж выполняет упражнения и отрабатывает движения. ".repeat(20) };
         await command.handleModalSubmit(interaction);
-        assert.match(JSON.stringify(interaction.response), /завершена/);
+        assert.match(JSON.stringify(interaction.response), /завершена|учтена/);
         if (commandName === "train-sp") {
           assert.match(JSON.stringify(interaction.response), /Повтор в том же канале/);
         }

@@ -1,42 +1,25 @@
+import { createInteractionSession } from "../utils/interactionSessions.js";
+import { createExchangeSessionState, EXCHANGE_NAMESPACE, EXCHANGE_SESSION_TTL_MS } from "../interactions/exchangeSession.js";
+import { insufficientFundsText } from "../utils/bankingComponents.js";
 import { MessageFlags, SlashCommandBuilder } from "discord.js";
-import { calculateExchange, CURRENCIES, EXCHANGE_RATE } from "../utils/banking.js";
+import { calculateExchange, EXCHANGE_RATE } from "../utils/banking.js";
 import {
   createBankStatusComponents,
   createExchangePreviewComponents,
-  createExchangeReceiptComponents,
-  EXCHANGE_CANCEL_ID,
-  EXCHANGE_CONFIRM_ID,
 } from "../utils/bankingComponents.js";
 import {
-  exchangeCurrency,
   getActiveSlot,
   getPlayer,
 } from "../utils/dataManager.js";
 import { checkGlobalCooldown } from "../utils/cooldowns.js";
-import { logCommand } from "../utils/logs.js";
 import { makePlayerKey } from "../utils/playerKey.js";
 
-const CONFIRMATION_DURATION = 90 * 1000;
 
 function avatarUrl(player, user) {
   const custom = String(player.character_avatar || "").trim();
   return /^https?:\/\//i.test(custom)
     ? custom
     : user.displayAvatarURL({ extension: "png", size: 256 });
-}
-
-function exchangeError(result, currency) {
-  const symbol = CURRENCIES[currency].symbol;
-  switch (result.reason) {
-    case "insufficient_funds":
-      return `На балансе доступно только **${Number(result.available || 0).toLocaleString("ru-RU")} ${symbol}**. Укажите меньшую сумму.`;
-    case "balance_changed":
-      return "Баланс изменился во время подтверждения. Запустите `/exchange` ещё раз, чтобы получить новый расчёт.";
-    case "unsafe_balance":
-      return "Баланс слишком велик для безопасного обмена. Обратитесь к администратору.";
-    default:
-      return "Не удалось провести обмен. Балансы не изменены — попробуйте ещё раз.";
-  }
 }
 
 export const data = new SlashCommandBuilder()
@@ -104,7 +87,7 @@ export async function execute(interaction) {
     return interaction.reply({
       components: createBankStatusComponents(
         "Недостаточно средств",
-        `На балансе доступно **${sourceBalance.toLocaleString("ru-RU")} ${CURRENCIES[currency].symbol}**. Укажите меньшую сумму.`,
+        `${insufficientFundsText(calculation.spent, sourceBalance, currency)} Укажите меньшую сумму в /exchange.`,
       ),
       flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
     });
@@ -112,8 +95,7 @@ export async function execute(interaction) {
 
   const characterName = player.character_name || player.username;
   const characterAvatarUrl = avatarUrl(player, interaction.user);
-  let completed = false;
-  let busy = false;
+  const state = createExchangeSessionState({ playerId, currency, amount: calculation.spent, characterName, avatarUrl: characterAvatarUrl });
   const response = await interaction.reply({
     components: createExchangePreviewComponents({
       characterName,
@@ -124,86 +106,12 @@ export async function execute(interaction) {
     flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
     fetchReply: true,
   });
-  const collector = response.createMessageComponentCollector({
-    time: CONFIRMATION_DURATION,
-  });
-
-  collector.on("collect", async (componentInteraction) => {
-    if (componentInteraction.user.id !== interaction.user.id) return;
-    if (busy) {
-      await componentInteraction.reply({
-        content: "Обмен уже обрабатывается.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    if (componentInteraction.customId === EXCHANGE_CANCEL_ID) {
-      completed = true;
-      collector.stop("cancelled");
-      await componentInteraction.update({
-        components: createBankStatusComponents(
-          "Обмен отменён",
-          "Обе валюты остались на вашем балансе.",
-          "neutral",
-        ),
-      });
-      return;
-    }
-    if (componentInteraction.customId !== EXCHANGE_CONFIRM_ID) return;
-
-    busy = true;
-    await componentInteraction.deferUpdate();
-    const result = await exchangeCurrency(playerId, currency, calculation.spent);
-    completed = true;
-    collector.stop(result.success ? "confirmed" : "failed");
-
-    if (!result.success) {
-      await interaction.editReply({
-        components: createBankStatusComponents(
-          "Обмен не выполнен",
-          exchangeError(result, currency),
-        ),
-      });
-      return;
-    }
-
-    await interaction.editReply({
-      components: createExchangeReceiptComponents({
-        characterName,
-        avatarUrl: characterAvatarUrl,
-        result,
-      }),
-    });
-    await logCommand({
-      client: interaction.client,
-      guildId: interaction.guildId,
-      channelId: interaction.channelId,
-      userId: playerId,
-      userTag: interaction.user.tag,
-      command: "exchange",
-      extra: {
-        from: result.sourceCurrency,
-        to: result.targetCurrency,
-        spent: result.spent,
-        received: result.received,
-        rate: EXCHANGE_RATE,
-      },
-    });
-  });
-
-  collector.on("end", async () => {
-    if (completed) return;
-    try {
-      await interaction.editReply({
-        components: createBankStatusComponents(
-          "Время подтверждения истекло",
-          "Валюты не списаны. Запустите `/exchange` ещё раз, если обмен всё ещё нужен.",
-          "warning",
-        ),
-      });
-    } catch {}
-  });
+  const messageId = response?.id || (await interaction.fetchReply()).id;
+  const created = await createInteractionSession({ messageId, namespace: EXCHANGE_NAMESPACE,
+    ownerId: interaction.user.id, guildId: interaction.guildId, channelId: interaction.channelId,
+    state, ttlMs: EXCHANGE_SESSION_TTL_MS });
+  if (!created.success) await interaction.editReply({ components: createBankStatusComponents(
+    "Обмен не подготовлен", "Не удалось сохранить квитанцию. Деньги не списаны. Откройте `/exchange` ещё раз.") });
 
   return response;
 }

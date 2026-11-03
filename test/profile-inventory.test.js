@@ -74,7 +74,8 @@ test("кнопка инвентаря есть на каждой страниц�
     .filter((component) => component.type === 1);
 
   assert.equal(rows.length, 2, "ожидаются два ряда: вкладки и действия");
-  assert.equal(rows[1].components.length, 1);
+  assert.equal(rows[1].components.length, 3);
+  assert.deepEqual(rows[1].components.map(button => button.custom_id), [PROFILE_INVENTORY_ID, "profile_text", "profile_refresh"]);
   assert.equal(rows[1].components[0].custom_id, PROFILE_INVENTORY_ID);
   // Идентификатор не должен пересечься с кнопками самого инвентаря.
   assert.ok(!PROFILE_INVENTORY_ID.startsWith("inventory_"));

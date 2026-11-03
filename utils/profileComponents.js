@@ -13,31 +13,40 @@ import {
 } from "discord.js";
 import { isValidCharacterUrl, physicalStatsSummary } from "./physicalStats.js";
 import { safeAvatarUrl } from "./avatarUrl.js";
+import { getProfileMultipliers } from "./embeds.js";
+import { RESPONSE_COLORS, markdownText, formatNumber, truncateText, splitResponseText } from "./responseStyle.js";
 
-const PROFILE_COLOR = 0xb209d4;
+const PROFILE_COLOR = RESPONSE_COLORS.brand;
 
 export const PROFILE_INVENTORY_ID = "profile_inventory";
+export const PROFILE_TEXT_ID = "profile_text";
+export const PROFILE_REFRESH_ID = "profile_refresh";
 
 /**
  * Действия вынесены в отдельный ряд, ниже вкладок. Вкладки переключают вид этой
  * же панели, а инвентарь открывает новое окно — в одном ряду эти кнопки было бы
  * не отличить друг от друга.
  */
-function createActions(disabled = false) {
+function createActions(disabled = false, textMode = false) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(PROFILE_INVENTORY_ID)
-      .setLabel("Инвентарь")
+      .setLabel("Открыть инвентарь")
       .setEmoji("🎒")
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(disabled),
+    new ButtonBuilder().setCustomId(PROFILE_TEXT_ID)
+      .setLabel(textMode ? "Показать изображение" : "Показать текст")
+      .setStyle(ButtonStyle.Secondary).setDisabled(disabled),
+    new ButtonBuilder().setCustomId(PROFILE_REFRESH_ID).setLabel("Обновить")
+      .setStyle(ButtonStyle.Secondary).setDisabled(disabled),
   );
 }
 
 function createTabs(activePage, disabled = false) {
   const tabs = [
-    { id: "profile_main", page: "main", label: "Основная", emoji: "👤" },
-    { id: "profile_physical", page: "physical", label: "Физа", emoji: "💪" },
+    { id: "profile_main", page: "main", label: "Досье", emoji: "👤" },
+    { id: "profile_physical", page: "physical", label: "Физические показатели", emoji: "💪" },
     { id: "profile_history", page: "history", label: "История", emoji: "🕓" },
   ];
 
@@ -57,22 +66,22 @@ function createGallery(imageName, description) {
   return new MediaGalleryBuilder().addItems(
     new MediaGalleryItemBuilder()
       .setURL(`attachment://${imageName}`)
-      .setDescription(description),
+      .setDescription(truncateText(description, 1024)),
   );
 }
 
 function formatHistory(history) {
-  if (!history?.length) return "Изменений пока нет.";
+  if (!history?.length) return "Изменений пока нет. Здесь появятся начисления AP и SP после тренировок и других действий.";
 
   return history
-    .map((entry) => {
+    .slice(0, 8).map((entry) => {
       const amount = Number(entry.delta || 0);
       const sign = amount >= 0 ? "+" : "−";
       const formatted = Math.abs(amount).toLocaleString("ru-RU");
       const date = new Date(entry.changed_at).getTime();
       const timestamp = Number.isFinite(date) ? Math.floor(date / 1000) : null;
       const relativeTime = timestamp ? ` • <t:${timestamp}:R>` : "";
-      const styleName = entry.style_name ? ` • ${entry.style_name}` : "";
+      const styleName = entry.style_name ? ` • ${markdownText(entry.style_name, 100)}` : "";
       return `**${String(entry.type || "Изменение").toUpperCase()}**  ${sign}${formatted}${styleName}${relativeTime}`;
     })
     .join("\n");
@@ -83,10 +92,10 @@ function formatHistory(history) {
  * пока рисуется карточка, и как постоянный вид, если канвас не справился.
  * Поэтому он должен читаться законченным, а не заготовкой под картинку.
  */
-function mainFallback(player, totalSP, leaderboardRank = null) {
-  const number = (value) => Number(value || 0).toLocaleString("ru-RU");
-  const name = player.character_name || player.username || "Неизвестно";
-  const org = player.organization || player.custom_org;
+function mainFallback(player, totalSP, leaderboardRank = null, styles = [], slot = 1) {
+  const number = formatNumber;
+  const name = markdownText(player.character_name || player.username || "Без имени", 160);
+  const org = markdownText(player.organization || player.custom_org, 120);
   const affiliation = org
     ? `${org}${player.rank ? ` · ${player.rank}` : ""}`
     : "Без организации";
@@ -98,15 +107,24 @@ function mainFallback(player, totalSP, leaderboardRank = null) {
     : null;
 
   const lines = [
-    `## ${name}`,
-    `-# ${affiliation}${player.attribute_name ? ` · ${player.attribute_name}` : ""}`,
+    `## Досье • ${name}`,
+    `-# ${affiliation}${player.attribute_name ? ` · ${markdownText(player.attribute_name, 100)}` : ""} · слот ${slot}`,
     "",
-    `**${number(player.ap)}** AP · **${number(totalSP)}** SP`,
-    `**${number(player.krw)}** ₩ · **${number(player.yen)}** ¥ · репутация **${number(player.reputation)}**`,
+    `**AP: ${number(player.ap)}** · **SP всего: ${number(totalSP)}**`,
+    `Баланс: **${number(player.krw)} ₩** · **${number(player.yen)} ¥**`,
+    `Репутация: **${number(player.reputation)}**`,
   ];
   if (rankLine) {
     lines.push(rankLine);
   }
+  const multipliers = getProfileMultipliers(player);
+  lines.push("", "### Множители", `AP: **${number(multipliers.ap)}%** · SP: **${number(multipliers.sp)}%** · зарплата: **${number(player.salary_multiplier ?? 100)}%**`,
+    `-# Бонус ранга и активности уже включён: +${number(multipliers.dynamicBonus)}%.`);
+  if (multipliers.apExpiresAt) lines.push(`Временный множитель AP: до <t:${multipliers.apExpiresAt}:R>.`);
+  if (multipliers.spExpiresAt) lines.push(`Временный множитель SP: до <t:${multipliers.spExpiresAt}:R>.`);
+  lines.push("", "### Боевые стили", styles.length
+    ? styles.map((style) => `• ${markdownText(style.name, 100)} — **${number(style.sp)} SP**`).join("\n")
+    : "Стили ещё не изучены. Получить стиль можно у ответственного за развитие персонажей.");
   return lines.join("\n");
 }
 
@@ -119,9 +137,11 @@ export function createProfileV2Components({
   leaderboardRank = null,
   history = [],
   imageName = null,
+  styles = [],
+  textMode = false,
   disabled = false,
 }) {
-  const name = player.character_name || player.username || "Неизвестно";
+  const name = markdownText(player.character_name || player.username || "Без имени", 160);
   const container = new ContainerBuilder().setAccentColor(PROFILE_COLOR);
 
   if (page === "main") {
@@ -131,7 +151,7 @@ export function createProfileV2Components({
       );
     } else {
       container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(mainFallback(player, totalSP, leaderboardRank)),
+        splitResponseText(mainFallback(player, totalSP, leaderboardRank, styles, slot)).map(text => new TextDisplayBuilder().setContent(text)),
       );
     }
   } else if (page === "physical") {
@@ -144,7 +164,7 @@ export function createProfileV2Components({
         ? physicalStatsSummary(player.physical_stats)
         : "**Показатели ещё не зарегистрированы.**\nОбратитесь к ответственному за анкеты персонажей.";
       container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`## Физа • ${name}\n${fallback}`),
+        new TextDisplayBuilder().setContent(`## Физические показатели • ${name}\n${fallback}`),
       );
     }
 
@@ -181,7 +201,7 @@ export function createProfileV2Components({
         .setSpacing(SeparatorSpacingSize.Small),
     )
     .addActionRowComponents(createTabs(page, disabled))
-    .addActionRowComponents(createActions(disabled));
+    .addActionRowComponents(createActions(disabled, textMode));
 
   return [container];
 }

@@ -1,3 +1,4 @@
+import { TRAINING_RULES } from "../utils/trainingRules.js";
 import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import {
   completeAPTraining,
@@ -28,8 +29,8 @@ import {
   TRAINING_TEXT_INPUT_ID,
 } from "../utils/trainingComponents.js";
 
-const TRAIN_COOLDOWN = 5 * 60 * 60 * 1000;
-const TRAIN_AP_REWARD = 10;
+const TRAIN_COOLDOWN = TRAINING_RULES.ap.cooldownMs;
+const TRAIN_AP_REWARD = TRAINING_RULES.ap.reward;
 
 export const modalCustomIdPrefix = TRAINING_MODAL_PREFIX;
 

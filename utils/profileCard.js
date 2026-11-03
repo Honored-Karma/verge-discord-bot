@@ -1,7 +1,6 @@
+import { RESPONSE_COLORS } from "./responseStyle.js";
 import { createCanvas, loadImage } from "@napi-rs/canvas";
 import { ensureCardFont, FONT_BOLD, FONT_REGULAR } from "./cardFont.js";
-import { getAdaptiveProgressScale } from "./progressScale.js";
-import { getSPMastery } from "./spMastery.js";
 
 /**
  * Карточка персонажа: плоская поверхность, один акцент, выровненная сетка.
@@ -23,7 +22,7 @@ const T = {
   hairlineStrong: "rgba(255,255,255,0.14)",
 
   // Единственный акцент — фирменный, тот же, что в embed-ах.
-  accent: "#b209d4",
+  accent: `#${RESPONSE_COLORS.brand.toString(16).padStart(6, "0")}`,
   accentSoft: "rgba(178,9,212,0.16)",
   // Вторичные акценты только для смысловых различий (SP, деньги).
   sp: "#22d3ee",
@@ -42,7 +41,7 @@ const T = {
   radius: { sm: 6, md: 10, lg: 16 },
 };
 
-const CARD = { width: 900, height: 300, pad: T.space(7) };
+const CARD = { width: 720, height: 360, pad: T.space(7) };
 const PHYSICAL = { width: 900, height: 180, pad: T.space(7) };
 const SCALE = 2; // рендерим в двойном разрешении — на retina текст не мылится
 
@@ -95,17 +94,26 @@ function text(ctx, value, x, y, {
   ctx.textBaseline = "alphabetic";
 
   let output = String(value ?? "");
+  const measure = (value) => letterSpacing
+    ? [...value].reduce((sum, char) => sum + ctx.measureText(char).width + letterSpacing, 0) - letterSpacing
+    : ctx.measureText(value).width;
   if (maxWidth) {
-    while (output.length > 1 && ctx.measureText(output).width > maxWidth) {
-      output = output.slice(0, -1);
+    if (measure(output) > maxWidth) {
+      while (output.length > 1 && measure(`${output}…`) > maxWidth) output = output.slice(0, -1);
+      output = `${output}…`;
     }
-    if (output !== String(value ?? "")) output = `${output.slice(0, -1)}…`;
+    const clipX = align === "right" ? x - maxWidth : align === "center" ? x - maxWidth / 2 : x;
+    ctx.beginPath();
+    ctx.rect(clipX, 0, maxWidth, Math.max(CARD.height, PHYSICAL.height));
+    ctx.clip();
   }
 
   if (!letterSpacing) {
-    ctx.fillText(output, x, y);
+    if (maxWidth) ctx.fillText(output, x, y, maxWidth);
+    else ctx.fillText(output, x, y);
+    const width = measure(output);
     ctx.restore();
-    return ctx.measureText(output).width;
+    return width;
   }
 
   // Трекинг для микрозаголовков: canvas не умеет letter-spacing сам.
@@ -120,12 +128,13 @@ function text(ctx, value, x, y, {
   return totalWidth;
 }
 
-function label(ctx, value, x, y, { align = "left", color = T.textFaint } = {}) {
+function label(ctx, value, x, y, { align = "left", color = T.textFaint, maxWidth } = {}) {
   return text(ctx, String(value).toUpperCase(), x, y, {
     font: bold(T.size.micro),
     color,
     align,
     letterSpacing: 0.8,
+    maxWidth,
   });
 }
 
@@ -153,60 +162,6 @@ function compact(value) {
 }
 
 /** Плоская полоса прогресса: трек и заливка, без свечения и градиента. */
-function bar(ctx, x, y, width, ratio, color) {
-  const height = 6;
-  ctx.fillStyle = T.hairline;
-  roundRect(ctx, x, y, width, height, height / 2);
-  ctx.fill();
-
-  const filled = Math.max(0, Math.min(1, ratio)) * width;
-  if (filled < 1) return;
-  ctx.fillStyle = color;
-  roundRect(ctx, x, y, filled, height, height / 2);
-  ctx.fill();
-}
-
-/**
- * Ячейка показателя: микрозаголовок сверху, крупное значение снизу.
- * Цветом помечается подпись, а не число: четыре разноцветных крупных числа
- * перетягивали внимание и мешали сравнивать значения между собой.
- */
-function statCell(ctx, x, y, width, { caption, value, captionColor = T.textFaint }) {
-  label(ctx, caption, x, y, { color: captionColor });
-  text(ctx, value, x, y + T.space(7), {
-    font: bold(T.size.stat),
-    color: T.text,
-    maxWidth: width,
-  });
-}
-
-function chip(ctx, x, y, { title, value }) {
-  ctx.font = bold(T.size.caption);
-  const titleWidth = ctx.measureText(title).width;
-  ctx.font = regular(T.size.caption);
-  const valueWidth = ctx.measureText(value).width;
-  const width = titleWidth + valueWidth + T.space(6);
-  const height = T.space(7);
-
-  ctx.fillStyle = T.surfaceRaised;
-  roundRect(ctx, x, y, width, height, T.radius.sm);
-  ctx.fill();
-  ctx.strokeStyle = T.hairline;
-  ctx.lineWidth = 1;
-  roundRect(ctx, x + 0.5, y + 0.5, width - 1, height - 1, T.radius.sm);
-  ctx.stroke();
-
-  text(ctx, title, x + T.space(2), y + height - T.space(2.4), {
-    font: bold(T.size.caption),
-    color: T.text,
-  });
-  text(ctx, value, x + T.space(2) + titleWidth + T.space(2), y + height - T.space(2.4), {
-    font: regular(T.size.caption),
-    color: T.textMuted,
-  });
-  return width;
-}
-
 /**
  * URL аватара задаёт сам игрок через `/set-avatar`, а у loadImage нет
  * собственного таймаута: медленный или подвисший хост задержал бы рендер
@@ -289,200 +244,53 @@ async function drawAvatar(ctx, x, y, size, { avatarBuffer, avatarUrl, fallbackAv
  */
 export async function renderProfileCard(data) {
   await ensureCardFont();
-  const {
-    characterName,
-    avatarBuffer,
-    avatarUrl,
-    fallbackAvatarUrl,
-    attributeName,
-    styles = [],
-    ap = 0,
-    totalSP = 0,
-    apMultiplier = 100,
-    spMultiplier = 100,
-    salaryMultiplier = 100,
-    krw = 0,
-    yen = 0,
-    reputation = 0,
-    reputationTier = "",
-    orgName,
-    orgRank,
-    slot = 1,
-    playerId = "",
-    leaderboardRank = null,
-  } = data;
-
+  const { characterName = "Без имени", avatarBuffer, avatarUrl, fallbackAvatarUrl,
+    attributeName, styles = [], ap = 0, totalSP = 0, krw = 0, yen = 0, reputation = 0,
+    reputationTier = "", orgName, orgRank, slot = 1, leaderboardRank = null } = data;
   const { canvas, ctx } = createSurface(CARD.width, CARD.height);
   const pad = CARD.pad;
-
-  // ── Верхняя строка: принадлежность персонажа ────────────────────────────
-  const org = orgName ? `${orgName}${orgRank ? ` · ${orgRank}` : ""}` : "БЕЗ ОРГАНИЗАЦИИ";
-  const profileLabelWidth = label(ctx, "профиль", pad, pad + T.space(2), { color: T.accent });
-
-  const rankPos = typeof leaderboardRank === "object" ? leaderboardRank?.position : leaderboardRank;
-  const rankTotal = typeof leaderboardRank === "object" ? leaderboardRank?.total : null;
-  if (rankPos) {
-    label(ctx, `• #${rankPos} В ТОПЕ`, pad + profileLabelWidth + T.space(3), pad + T.space(2), {
-      color: T.textMuted,
-    });
-  }
-
-  label(ctx, org, CARD.width - pad, pad + T.space(2), { align: "right", color: T.textMuted });
-
-  const headerY = pad + T.space(5);
+  label(ctx, "досье / verge", pad, 36, { color: T.accent });
+  const org = orgName ? `${orgName}${orgRank ? ` · ${orgRank}` : ""}` : "Без организации";
+  label(ctx, org, CARD.width - pad, 36, { align: "right", color: T.textMuted, maxWidth: 390 });
   ctx.fillStyle = T.hairline;
-  ctx.fillRect(pad, headerY, CARD.width - pad * 2, 1);
+  ctx.fillRect(pad, 52, CARD.width - pad * 2, 1);
 
-  // ── Левая колонка: аватар, имя, атрибут ─────────────────────────────────
-  const colX = pad;
-  const colWidth = T.space(46);
-  const avatarSize = T.space(22);
-  const avatarY = headerY + T.space(5);
-  await drawAvatar(ctx, colX, avatarY, avatarSize, {
-    avatarBuffer,
-    avatarUrl,
-    fallbackAvatarUrl,
-    name: characterName,
+  const leftWidth = 190;
+  await drawAvatar(ctx, pad, 72, 104, { avatarBuffer, avatarUrl, fallbackAvatarUrl, name: characterName });
+  const nameLines = wrap(ctx, characterName || "Без имени", leftWidth, bold(22));
+  nameLines.slice(0, 2).forEach((line, index) => text(ctx, line, pad, 210 + index * 28, {
+    font: bold(22), maxWidth: leftWidth,
+  }));
+  if (attributeName) text(ctx, attributeName, pad, 270, {
+    font: regular(16), color: T.textMuted, maxWidth: leftWidth,
   });
+  label(ctx, `слот ${slot}`, pad, CARD.height - pad, { color: T.textMuted });
 
-  let cursorY = avatarY + avatarSize + T.space(6);
-  const nameLines = wrap(ctx, characterName || "Без имени", colWidth, bold(T.size.lead));
-  for (const line of nameLines.slice(0, 2)) {
-    text(ctx, line, colX, cursorY, { font: bold(T.size.lead), color: T.text });
-    cursorY += T.space(5.5);
-  }
-
-  if (attributeName) {
-    cursorY += T.space(0.5);
-    const badgeHeight = T.space(6);
-    ctx.font = bold(T.size.caption);
-    const badgeWidth = Math.min(colWidth, ctx.measureText(attributeName).width + T.space(5));
-    ctx.fillStyle = T.accentSoft;
-    roundRect(ctx, colX, cursorY, badgeWidth, badgeHeight, T.radius.sm);
-    ctx.fill();
-    text(ctx, attributeName, colX + T.space(2.5), cursorY + badgeHeight - T.space(2), {
-      font: bold(T.size.caption),
-      color: T.accent,
-      maxWidth: badgeWidth - T.space(5),
-    });
-    cursorY += badgeHeight + T.space(3);
-  }
-
-  label(ctx, `слот ${slot}`, colX, CARD.height - pad + T.space(1), { color: T.textFaint });
-
-  // ── Правая колонка ──────────────────────────────────────────────────────
-  const rightX = colX + colWidth + T.space(8);
+  const rightX = pad + leftWidth + 24;
   const rightWidth = CARD.width - pad - rightX;
-
-  // Четыре показателя в один ряд: сравнивать удобнее, чем вразнобой.
-  const cellWidth = rightWidth / 4;
-  const statsY = headerY + T.space(6);
-  statCell(ctx, rightX, statsY, cellWidth - T.space(3), {
-    caption: "AP", value: formatNumber(ap),
+  const cells = [
+    { caption: "AP", value: compact(ap) },
+    { caption: "SP всего", value: compact(totalSP) },
+    { caption: "Воны · ₩", value: compact(krw) },
+    { caption: "Йены · ¥", value: compact(yen) },
+  ];
+  cells.forEach((cell, index) => {
+    const x = rightX + index % 2 * rightWidth / 2;
+    const y = 87 + Math.floor(index / 2) * 79;
+    text(ctx, cell.caption, x, y, { font: regular(16), color: T.textMuted });
+    text(ctx, cell.value, x, y + 36, { font: bold(30), maxWidth: rightWidth / 2 - 16 });
   });
-  statCell(ctx, rightX + cellWidth, statsY, cellWidth - T.space(3), {
-    caption: "SP", value: formatNumber(totalSP),
+  ctx.fillStyle = T.hairline;
+  ctx.fillRect(rightX, 224, rightWidth, 1);
+  text(ctx, `Репутация: ${compact(reputation)}${reputationTier ? ` · ${reputationTier}` : ""}`, rightX, 252, {
+    font: regular(16), color: T.textMuted, maxWidth: rightWidth,
   });
-  statCell(ctx, rightX + cellWidth * 2, statsY, cellWidth - T.space(3), {
-    caption: "воны", value: compact(krw), captionColor: T.money,
+  const rank = typeof leaderboardRank === "object" ? leaderboardRank?.position : leaderboardRank;
+  const styleText = styles.length ? `Боевые стили: ${styles.length} · ${[...styles].sort((a, b) => Number(b.sp) - Number(a.sp))[0].name}` : "Боевые стили ещё не изучены";
+  text(ctx, styleText, rightX, 281, { font: regular(16), color: T.textMuted, maxWidth: rightWidth });
+  text(ctx, rank ? `Место в рейтинге: #${formatNumber(rank)}` : "Полные данные — «Показать текст»", rightX, 332, {
+    font: regular(14), color: T.textMuted, maxWidth: rightWidth,
   });
-  statCell(ctx, rightX + cellWidth * 3, statsY, cellWidth - T.space(3), {
-    caption: "йены", value: compact(yen), captionColor: T.moneyAlt,
-  });
-
-  // Прогресс: AP до следующей круглой отметки, SP до следующего ранга мастерства.
-  const apScale = getAdaptiveProgressScale(ap);
-  const mastery = getSPMastery(totalSP);
-  let progressY = statsY + T.space(12);
-
-  /**
-   * Подпись состоит из двух частей: код метрики капсом и пояснение обычным
-   * регистром. Иначе название ранга попадало под общий капс и получалось
-   * «ДО МАСТЕР» вместо «до Мастера».
-   */
-  const progressRow = (code, note, right, ratio, color) => {
-    const codeWidth = label(ctx, code, rightX, progressY, { color: T.textMuted });
-    text(ctx, note, rightX + codeWidth + T.space(2), progressY, {
-      font: regular(T.size.caption),
-      color: T.textFaint,
-    });
-    text(ctx, right, CARD.width - pad, progressY, {
-      font: regular(T.size.caption),
-      color: T.textFaint,
-      align: "right",
-    });
-    bar(ctx, rightX, progressY + T.space(2), rightWidth, ratio, color);
-    progressY += T.space(9);
-  };
-
-  progressRow(
-    "AP",
-    `до ${formatNumber(apScale.next)}`,
-    `${formatNumber(ap)} / ${formatNumber(apScale.next)}`,
-    apScale.ratio,
-    T.accent,
-  );
-  progressRow(
-    "SP",
-    mastery.isMax ? `ранг «${mastery.rank}» — максимум` : `до ранга «${mastery.nextRank}»`,
-    mastery.isMax
-      ? formatNumber(totalSP)
-      : `${formatNumber(totalSP)} / ${formatNumber(mastery.nextThreshold)}`,
-    mastery.ratio,
-    T.sp,
-  );
-
-  // Лидерборд, репутация и множители — одной строкой чипов, без пустых значений.
-  let chipX = rightX;
-  const chipY = progressY - T.space(3);
-  const chips = [];
-  if (rankPos) {
-    chips.push({
-      title: "Лидерборд",
-      value: rankTotal ? `#${rankPos} из ${formatNumber(rankTotal)}` : `#${rankPos}`,
-    });
-  }
-  chips.push({
-    title: "Репутация",
-    value: `${formatNumber(reputation)}${reputationTier ? ` · ${reputationTier}` : ""}`,
-  });
-  if (Number(apMultiplier) !== 100) chips.push({ title: "AP", value: `×${apMultiplier}%` });
-  if (Number(spMultiplier) !== 100) chips.push({ title: "SP", value: `×${spMultiplier}%` });
-  if (Number(salaryMultiplier) !== 100) chips.push({ title: "Зарплата", value: `×${salaryMultiplier}%` });
-
-  for (const item of chips) {
-    if (chipX > CARD.width - pad - T.space(20)) break;
-    chipX += chip(ctx, chipX, chipY, item) + T.space(2);
-  }
-
-  // Стили — самое нижнее, потому что их может не быть вовсе.
-  const stylesY = chipY + T.space(11.5);
-  const topStyles = [...styles]
-    .sort((a, b) => Number(b.sp || 0) - Number(a.sp || 0))
-    .slice(0, 3);
-
-  if (topStyles.length > 0) {
-    label(ctx, "стили", rightX, stylesY, { color: T.textFaint });
-    let styleX = rightX;
-    const styleY = stylesY + T.space(2);
-    for (const style of topStyles) {
-      if (styleX > CARD.width - pad - T.space(20)) break;
-      styleX += chip(ctx, styleX, styleY, {
-        title: style.name,
-        value: formatNumber(style.sp),
-      }) + T.space(2);
-    }
-  } else {
-    label(ctx, "стили ещё не изучены", rightX, stylesY, { color: T.textFaint });
-  }
-
-  if (playerId) {
-    label(ctx, `id ${playerId}`, CARD.width - pad, CARD.height - pad + T.space(1), {
-      align: "right",
-      color: T.textFaint,
-    });
-  }
-
   return canvas.encode("png");
 }
 

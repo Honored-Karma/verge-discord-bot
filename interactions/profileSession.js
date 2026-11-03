@@ -14,8 +14,11 @@ import { renderPhysicalCard, renderProfileCard } from "../utils/profileCard.js";
 import {
   createProfileV2Components,
   PROFILE_INVENTORY_ID,
+  PROFILE_TEXT_ID,
+  PROFILE_REFRESH_ID,
 } from "../utils/profileComponents.js";
-import { saveInteractionSession } from "../utils/interactionSessions.js";
+import { createStatusComponents } from "../utils/modernResponses.js";
+import { getInteractionSession, saveInteractionSession } from "../utils/interactionSessions.js";
 import { openInventory } from "../utils/inventoryFlow.js";
 
 export const PROFILE_NAMESPACE = "profile";
@@ -57,7 +60,7 @@ function avatarUrls(player, targetUser) {
  * Картинка рисуется только для тех страниц, где она видна: у истории карточки
  * нет, и гонять канвас ради неё незачем.
  */
-export async function renderProfilePage(state, targetUser, { disabled = false } = {}) {
+export async function renderProfilePage(state, targetUser, { disabled = false, renderMain = renderProfileCard, renderPhysical = renderPhysicalCard } = {}) {
   const player = await getPlayer(state.player_id);
   if (!player) return null;
 
@@ -87,8 +90,8 @@ export async function renderProfilePage(state, targetUser, { disabled = false } 
   const multipliers = getProfileMultipliers(player);
 
   let buffer = null;
-  if (state.page === "main") {
-    buffer = await renderProfileCard({
+  if (state.page === "main" && !state.text_mode) {
+    buffer = await renderMain({
       characterName,
       avatarBuffer,
       avatarUrl,
@@ -113,8 +116,8 @@ export async function renderProfilePage(state, targetUser, { disabled = false } 
       console.error("Profile card render error:", error);
       return null;
     });
-  } else if (state.page === "physical" && player.physical_stats) {
-    buffer = await renderPhysicalCard({
+  } else if (state.page === "physical" && player.physical_stats && !state.text_mode) {
+    buffer = await renderPhysical({
       characterName,
       stats: player.physical_stats,
       playerId: player.id,
@@ -137,6 +140,8 @@ export async function renderProfilePage(state, targetUser, { disabled = false } 
       leaderboardRank,
       history,
       imageName,
+      styles,
+      textMode: Boolean(state.text_mode),
       disabled,
     }),
     files: buffer ? [new AttachmentBuilder(buffer, { name: imageName })] : [],
@@ -186,15 +191,22 @@ async function handleComponent({ interaction, session }) {
     return openInventoryPanel({ interaction, session });
   }
 
-  const nextPage = PAGE_BY_BUTTON[interaction.customId];
+  const toggleText = interaction.customId === PROFILE_TEXT_ID;
+  const refresh = interaction.customId === PROFILE_REFRESH_ID;
+  const nextPage = toggleText || refresh ? session.state.page : PAGE_BY_BUTTON[interaction.customId];
   if (!nextPage) return interaction.deferUpdate().catch(() => {});
-  if (nextPage === session.state.page) return interaction.deferUpdate().catch(() => {});
+  if (nextPage === session.state.page && !toggleText && !refresh) return interaction.deferUpdate().catch(() => {});
 
   const state = { ...session.state, page: nextPage };
+  if (toggleText) state.text_mode = !state.text_mode;
 
   // Рендер карточки занимает заметное время, поэтому подтверждаем нажатие
   // сразу, а содержимое досылаем правкой.
   await interaction.deferUpdate();
+
+  const saved = await saveInteractionSession(session.message_id, session.revision, state,
+    { ttlMs: PROFILE_SESSION_TTL_MS });
+  if (!saved.success) return;
 
   const targetUser = await resolveTargetUser(interaction, state);
   const view = await renderProfilePage(state, targetUser);
@@ -216,12 +228,8 @@ async function handleComponent({ interaction, session }) {
     }).catch(() => {});
   }
 
-  await saveInteractionSession(
-    session.message_id,
-    session.revision,
-    state,
-    { ttlMs: PROFILE_SESSION_TTL_MS },
-  );
+  const latest = await getInteractionSession(session.message_id);
+  if (latest?.revision !== saved.session.revision) return;
 
   await interaction.editReply({
     components: view.components,
@@ -239,8 +247,8 @@ async function renderForeign({ interaction }) {
 
 async function renderExpired({ interaction }) {
   return interaction.reply({
-    content: "Эта панель профиля больше не активна. Откройте `/profile` ещё раз.",
-    flags: MessageFlags.Ephemeral,
+    components: createStatusComponents("Панель профиля закрыта", "Откройте `/profile` ещё раз, чтобы получить актуальные данные.", "expired"),
+    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
   }).catch(() => {});
 }
 

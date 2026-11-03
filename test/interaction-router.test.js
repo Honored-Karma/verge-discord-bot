@@ -186,9 +186,16 @@ test("router dispatches only interactions that own a session", async () => {
   assert.deepEqual(handled, ["message-3"]);
 
   // A collector-driven message from another command must be left alone.
-  const foreignMessage = fakeInteraction({ messageId: "message-legacy" });
+  const foreignMessage = fakeInteraction({ messageId: "message-legacy", customId: "shop_order_resolve_confirm" });
   assert.equal(await routeComponentInteraction(foreignMessage, { loadSession }), false);
   assert.equal(foreignMessage.calls.length, 0);
+
+  // Known persistent panels still explain expiry after the TTL document is gone.
+  const deletedPanel = fakeInteraction({ messageId: "message-deleted", customId: "shop_back" });
+  assert.equal(await routeComponentInteraction(deletedPanel, { loadSession }), true);
+  assert.equal(deletedPanel.calls[0][0], "reply");
+  assert.match(JSON.stringify(deletedPanel.calls), /Сессия завершена/);
+  assert.equal(handled.length, 1);
 
   const otherUser = fakeInteraction({ messageId: "message-3", userId: "intruder" });
   assert.equal(await routeComponentInteraction(otherUser, { loadSession }), true);

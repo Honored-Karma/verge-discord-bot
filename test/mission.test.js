@@ -1014,7 +1014,7 @@ test("компоненты карточки миссии и сессия вос�
   assert.ok(embed.data.title.includes("Ночной рейд"));
 
   const [row1, row2] = createMissionActionRows(loadedMission);
-  assert.equal(row1.components.length, 4, "первый ряд содержит 4 кнопки игрока");
+  assert.equal(row1.components.length, 5, "первый ряд содержит 5 кнопок игрока");
   assert.equal(row2.components.length, 4, "второй ряд содержит 4 кнопки управления");
 });
 
@@ -1293,11 +1293,11 @@ test("кастомные эмодзи миссий: правильные тег�
 
   // Проверяем секцию состава пати
   assert.ok(desc.includes(":25user:"), "Секция пати должна содержать :25user:");
-  assert.ok(desc.includes("Состав пати:"), "Секция должна содержать 'Состав пати:'");
+  assert.ok(desc.includes("Участники:"), "Секция должна содержать 'Участники:'");
 
   // Проверяем награды
   assert.ok(desc.includes("<:45lootbox:1499585857995411576>"), "Секция наград должна содержать лутбокс");
-  assert.ok(desc.includes("Награды каждому завершившему миссию:"), "Секция должна содержать 'Награды каждому завершившему миссию:'");
+  assert.ok(desc.includes("Награды:"), "Секция должна содержать 'Награды:'");
 
   // Проверяем набег с фиолетовой молнией
   const raidMission = {
