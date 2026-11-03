@@ -1,5 +1,5 @@
 import { markdownText } from "../utils/responseStyle.js";
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 import { getPlayer, getStyleByName, addSP, listStyles, getAllPlayerSP, getActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
@@ -10,6 +10,8 @@ import { getSPMastery } from '../utils/spMastery.js';
 
 export const data = new SlashCommandBuilder()
     .setName('add-sp')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(false)
     .setDescription('[АДМИН] Добавить SP игроку для стиля')
     .addUserOption(option =>
         option.setName('user')

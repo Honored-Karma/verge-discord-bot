@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 import { deleteStyle, getStyleByName } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin } from '../utils/adminCheck.js';
@@ -6,6 +6,8 @@ import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.
 
 export const data = new SlashCommandBuilder()
     .setName('delete-style')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(false)
     .setDescription('[АДМИН] Удалить боевой стиль')
     .addStringOption(option =>
         option.setName('style_name')

@@ -1,4 +1,4 @@
-import { MessageFlags, SlashCommandBuilder } from "discord.js";
+import { MessageFlags, SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
 import {
   getActiveSlot,
   getPlayer,
@@ -22,6 +22,8 @@ import { createInteractionSession } from "../utils/interactionSessions.js";
 
 export const data = new SlashCommandBuilder()
   .setName("physical-register")
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  .setDMPermission(false)
   .setDescription("[ПЕРСОНАЛ] Зарегистрировать физические показатели персонажа")
   .addUserOption((option) =>
     option.setName("user").setDescription("Игрок").setRequired(true),

@@ -1,11 +1,13 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 import { parseDiscohookPayload } from '../utils/discohookParser.js';
 import { createErrorEmbed } from '../utils/embeds.js';
-import { hasCommandPermission } from '../utils/adminCheck.js';
+import { isAdmin } from '../utils/adminCheck.js';
 import { resolveMember } from '../utils/memberHelper.js';
 
 export const data = new SlashCommandBuilder()
     .setName('render-ui')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(false)
     .setDescription('[АДМИН] Рендер UI из Discohook JSON')
     .addStringOption((option) =>
         option
@@ -20,7 +22,7 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
     const member = await resolveMember(interaction);
-    if (!hasCommandPermission(member, 'render-ui')) {
+    if (!isAdmin(member)) {
         return interaction.reply({
             embeds: [createErrorEmbed('Доступ запрещен', 'Команда доступна только администраторам.')],
             flags: 64

@@ -36,10 +36,11 @@ function memberHasAnyRole(member, roleIds) {
 }
 
 export function isAdmin(member) {
-  if (!member) return false;
+  const memberId = member?.id || member?.user?.id;
+  if (!memberId) return false;
 
   // Check if owner
-  if (member.guild?.ownerId === member.id) return true;
+  if (member.guild?.ownerId === memberId) return true;
 
   // Check if has Administrator permission
   if (
@@ -49,12 +50,10 @@ export function isAdmin(member) {
     return true;
 
   // Check specific admin user IDs (ENV + config/admins.json)
-  const envAdminIds = process.env.ADMIN_IDS
-    ? process.env.ADMIN_IDS.split(",").map((id) => id.trim()).filter(Boolean)
-    : [];
+  const envAdminIds = getEnvRoleIds("ADMIN_IDS", "ADMIN_USER_IDS");
   const fileConfig = loadAdminConfigFile();
   const allAdminIds = Array.from(new Set([...envAdminIds, ...fileConfig.adminUserIds]));
-  if (allAdminIds.includes(member.id)) return true;
+  if (allAdminIds.includes(memberId)) return true;
 
   // Check ADMIN_ROLE_IDS (admin role without owner permissions)
   const envAdminRoleIds = getEnvRoleIds("ADMIN_ROLE_IDS", "ADMIN_ROLE_ID");
@@ -99,7 +98,6 @@ export function hasCommandPermission(member, commandName) {
     "set-reputation",
     "train-block",
     "logs",
-    "render-ui",
     "set-rank",
   ];
 

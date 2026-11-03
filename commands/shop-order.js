@@ -1,4 +1,4 @@
-import { MessageFlags, SlashCommandBuilder } from "discord.js";
+import { MessageFlags, SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
 import { isAdmin } from "../utils/adminCheck.js";
 import { resolveMember } from "../utils/memberHelper.js";
 import { logCommand } from "../utils/logs.js";
@@ -18,6 +18,7 @@ const REVIEW_DURATION = 90 * 1000;
 
 export const data = new SlashCommandBuilder()
   .setName("shop-order")
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .setDescription("[СОТРУДНИК] Обработать оплаченную заявку магазина")
   .setDMPermission(false)
   .addStringOption((option) => option

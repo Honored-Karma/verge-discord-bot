@@ -10,6 +10,7 @@ export const data = new SlashCommandBuilder()
     .setName('grant-slot')
     .setDescription('[АДМИН] Управление доступом к 3-му слоту персонажа')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(false)
     .addSubcommand(sub =>
         sub.setName('give')
             .setDescription('Выдать игроку доступ к 3-му слоту персонажа')

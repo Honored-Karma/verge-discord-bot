@@ -16,7 +16,8 @@ export const data = new SlashCommandBuilder()
         opt.setName('channel')
             .setDescription('Канал для отправки (по умолчанию — текущий)')
             .setRequired(false))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(false);
 
 export async function execute(interaction) {
     if (!isAdmin(interaction.member)) {

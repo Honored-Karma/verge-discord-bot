@@ -12,7 +12,7 @@ import {
   displayTupperName, parseTupperImport, purgeTuppers, pruneTuppers,
 } from '../utils/tupperModel.js';
 import {
-  proxyMessage, expandProxyBlocks, splitProxyContent, proxyPermissionError, getProxyWebhook,
+  proxyMessage, splitProxyContent, proxyPermissionError, getProxyWebhook,
   loadProxyForUser, editProxy, deleteProxy, downloadDiscordAttachment, assertPrivateThreadAccess,
   handleTupperMessage,
 } from '../services/tupperService.js';
@@ -197,7 +197,7 @@ test('сбой вебхука сохраняет исходный текст и 
   assert.equal(await proxyMessage(f.message), true);
 });
 
-test('мультипрокси, вложения, ответы, ветки и липкий режим', async () => {
+test('мультипрокси, вложения, ответы и ветки; старый липкий режим не включается', async () => {
   const a = await saveTupper('100', profile());
   const b = await saveTupper('100', profile('Боб', 'б:'));
   await setUserSettings('100', 'channel_300', { auto: 'sticky', proxy: true, private: true });
@@ -211,10 +211,10 @@ test('мультипрокси, вложения, ответы, ветки и л
   assert.equal(f.sent[0].files.length, 1);
   assert.equal(f.sent[1].files, undefined);
   assert.match(f.sent[0].content, /\/reply\nПривет/);
-  assert.equal((await db.collection('tupper_sticky').findOne({ _id: '100_300' })).profile_id, b._id);
+  assert.equal(await db.collection('tupper_sticky').findOne({ _id: '100_300' }), null);
   f.message.id = 'source2'; f.message.content = 'Продолжение'; f.message.attachments.clear();
   await proxyMessage(f.message);
-  assert.equal(f.sent[2].username, 'Боб');
+  assert.equal(f.sent.length, 2);
   f.message.id = 'source3'; f.message.content = '\\\\сам';
   await proxyMessage(f.message);
   assert.equal(await db.collection('tupper_sticky').findOne({ _id: '100_300' }), null);
@@ -226,26 +226,32 @@ test('мультипрокси, вложения, ответы, ветки и л
   assert.equal((await getTupper('100', a._id)).posts, 2);
 });
 
-test('права Discord, тайм-аут, запрет в приватном канале и редирект', async () => {
+test('права Discord и тайм-аут проверяются до отправки отыгрыша', async () => {
   await saveTupper('100', profile());
   const f = fixture();
-  assert.match(proxyPermissionError(f.channel, { ...f.member, communicationDisabledUntilTimestamp: Date.now() + 10000 }, f.bot), /тайм-аут/);
-  const blocked = { ...f.channel, id: '301', name: 'secret', permissionsFor: who => who.id === '100' ? new PermissionsBitField() : allPermissions };
-  f.channels.set(blocked.id, blocked);
-  f.message.content = 'ая: {{#301}} Секрет';
+  f.member.communicationDisabledUntilTimestamp = Date.now() + 60000;
+  f.guild.members.fetch = async () => f.member;
+  await assert.rejects(proxyMessage(f.message), /тайм-аут/);
+  assert.equal(f.sent.length, 0);
+  delete f.member.communicationDisabledUntilTimestamp;
+  f.channel.permissionsFor = target => target.id === '100' ? new PermissionsBitField(P.ViewChannel) : allPermissions;
   await assert.rejects(proxyMessage(f.message), /нет права/);
-  assert.equal(f.sourceDeleted(), 0); assert.equal(f.sent.length, 0);
-  blocked.permissionsFor = () => allPermissions;
-  await proxyMessage(f.message);
-  assert.equal(f.sent[0].content, 'Секрет');
+  assert.equal(f.sent.length, 0);
+  assert.equal(f.sourceDeleted(), 0);
 });
 
-test('блоки кубиков, вложенный JSON вставок, редирект, ограничения длины', async () => {
-  const expanded = await expandProxyBlocks('Урон {{2d6+3}} {{"embed":{"title":"Заголовок","fields":[{"name":"A","value":"B"}]}}} {{#123}}');
-  assert.match(expanded.content, /Урон.*2d6\+3/);
-  assert.equal(expanded.embeds[0].title, 'Заголовок');
-  assert.equal(expanded.embeds[0].fields[0].value, 'B');
-  assert.equal(expanded.redirect, '123');
+test('специальные блоки, JSON и перенаправление остаются обычным текстом', async () => {
+  await saveTupper('100', profile());
+  const f = fixture();
+  const text = 'Урон {{2d6+3}} {{"embed":{"title":"Заголовок"}}} {{#123}}';
+  f.message.content = `ая: ${text}`;
+  await proxyMessage(f.message);
+  assert.equal(f.sent.length, 1);
+  assert.equal(f.sent[0].content, text);
+  assert.equal(f.sent[0].embeds, undefined);
+  assert.equal(f.sent[0].threadId, undefined);
+  const record = await db.collection('tupper_messages').findOne({ _id: 'sent1' });
+  assert.equal(record.channel_id, f.channel.id);
   const long = 'a'.repeat(1999) + '😀' + 'b'.repeat(2000);
   assert.equal(splitProxyContent(long).join(''), long);
   assert.ok(splitProxyContent(long).every(c => c.length <= 2000));
@@ -281,7 +287,7 @@ test('все формы соответствуют API Discord; создание
   assert.equal(schema.components.length, 5);
   assert.ok(schema.components.some(c => c.component.type === 19));
   const p = await saveTupper('100', profile());
-  const actions = ['edit', 'details', 'brackets', 'appearance', 'copy', 'group', 'groups', 'deletegroup', 'settings', 'import', 'server', 'rules', 'delete', 'search', 'share', 'find', 'prune', 'purge', 'crop'];
+  const actions = ['create', 'edit', 'delete'];
   for (const action of actions) {
     const result = await showTupperAction(i, action, { selected: p._id });
     assert.ok(result.components.length <= 5, action);
@@ -325,14 +331,81 @@ test('настоящая структура ModalSubmitFields сохраняет
   assert.ok(replies[0].components[0].toJSON().content.includes('сохранены'));
 });
 
-test('файл экспорта явно отображается в V2; список другого пользователя остаётся без управления', async () => {
-  await saveTupper('100', profile());
+test('панель предлагает только создание, изменение и удаление профиля', async () => {
+  const p = await saveTupper('100', profile());
+  const payload = await renderTupperPanel('100', { selected: p._id });
+  const menus = payload.components[0].toJSON().components.flatMap(c => c.components || []);
+  const actions = menus.find(c => c.custom_id === 'tp_action').options.map(o => o.value);
+  assert.deepEqual(actions, ['create', 'edit', 'delete']);
+});
+
+test('удалённые действия нельзя вызвать через старые формы и меню', async () => {
+  const p = await saveTupper('100', profile());
   const i = interaction();
-  const result = await showTupperAction(i, 'export');
-  assert.ok(result.components.some(c => c.toJSON().type === ComponentType.File));
-  assert.equal(result.files[0].name, 'verge-tuppers.json');
-  const publicPanel = await renderTupperPanel('100', {}, true);
-  assert.ok(!JSON.stringify(publicPanel).includes('tp_action'));
+  const replies = [];
+  i.editReply = async payload => { replies.push(payload); };
+  i.fields = { getTextInputValue: () => assert.fail('Удалённая форма не должна читать поля') };
+  const removed = ['manage', 'details', 'brackets', 'appearance', 'copy', 'character', 'group', 'groups',
+    'deletegroup', 'settings', 'import', 'export', 'server', 'rules', 'diagnose', 'search', 'share',
+    'find', 'birthdays', 'prune', 'purge', 'crop'];
+  for (const action of removed) {
+    await assert.rejects(showTupperAction(i, action, { selected: p._id }), /больше не поддерживается/);
+    i.customId = `tp|${action}|100|${p._id}|${p.revision}`;
+    await handleTupperModal(i);
+    assert.match(replies.at(-1).content, /больше не поддерживается/);
+  }
+  assert.equal((await getTuppers('100')).length, 1);
+  assert.equal(await db.collection('tupper_servers').countDocuments(), 0);
+});
+
+test('старые панели чужих профилей и групп больше не работают', async () => {
+  for (const state of [{ view_owner: 'other' }, { group_id: 'group' }]) {
+    const i = interaction();
+    let reply;
+    i.customId = 'tp_refresh';
+    i.reply = async payload => { reply = payload; };
+    await tupperInteractionHandler.handleComponent({ interaction: i, session: { owner_id: '100', state } });
+    assert.match(reply.content, /больше не поддерживается/);
+  }
+});
+
+test('изменение и удаление чужого профиля отклоняются даже при известном ID', async () => {
+  const p = await saveTupper('other', profile());
+  for (const action of ['edit', 'delete']) {
+    const i = interaction();
+    await assert.rejects(showTupperAction(i, action, { selected: p._id }), /свой профиль/);
+    let reply;
+    i.customId = `tp|${action}|100|${p._id}|${p.revision}`;
+    i.editReply = async payload => { reply = payload; };
+    await handleTupperModal(i);
+    assert.match(reply.content, /изменён или удалён/);
+    assert.ok(await getTupper('other', p._id));
+  }
+});
+
+test('свой профиль можно изменить и удалить; устаревшая форма не перезаписывает изменения', async () => {
+  const p = await saveTupper('100', profile());
+  const i = interaction();
+  const values = { name: 'Новое имя', avatar_url: '', prefix: 'новое:', suffix: '' };
+  i.fields = { getTextInputValue: id => values[id], getUploadedFiles: () => new Collection() };
+  i.customId = `tp|edit|100|${p._id}|${p.revision}`;
+  i.editReply = async () => ({ id: 'panel' });
+  await handleTupperModal(i);
+  const updated = await getTupper('100', p._id);
+  assert.equal(updated.name, 'Новое имя');
+  assert.deepEqual(updated.brackets, ['новое:', '']);
+  let reply;
+  i.editReply = async payload => { reply = payload; return { id: 'panel' }; };
+  await handleTupperModal(i);
+  assert.match(reply.content, /уже изменён/);
+  i.customId = `tp|delete|100|${p._id}|${updated.revision}`;
+  values.confirm = 'не то имя';
+  await handleTupperModal(i);
+  assert.match(reply.content, /Имя не совпало/);
+  assert.ok(await getTupper('100', p._id));
+  values.confirm = updated.name;
+  await handleTupperModal(i);
+  assert.equal(await getTupper('100', p._id), null);
 });
 
 test('импорт без ID группы и без маркеров не присваивает случайную группу', async () => {
@@ -369,13 +442,26 @@ test('очистка старых профилей сначала считает
   assert.equal((await getTuppers('other')).length, 1);
 });
 
-test('sticky сохраняет порядок двух сообщений, пришедших одновременно', async () => {
+test('сообщение без маркеров не отправляется профилем после одновременной реплики', async () => {
   await saveTupper('100', profile());
   await setUserSettings('100', 'channel_300', { auto: 'sticky', proxy: true, private: true });
   const f = fixture();
   const second = { ...f.message, id: 'second', content: 'Следующая реплика' };
   await Promise.all([proxyMessage(f.message), proxyMessage(second)]);
-  assert.equal(f.sent.length, 2); assert.equal(f.sent[1].content, 'Следующая реплика');
+  assert.equal(f.sent.length, 1); assert.equal(f.sent[0].content, 'Привет!');
+});
+
+test('старые настройки fixed, ник и группа не подменяют обычный текст и имя профиля', async () => {
+  const group = await saveGroup('100', { name: 'Старая группа', tag: '[G]' });
+  const p = await saveTupper('100', { ...profile(), nick: 'Старый ник', tag: '[T]', group_id: group._id });
+  await setUserSettings('100', 'global', { auto: 'fixed', profile_id: p._id, proxy: true, private: true });
+  const f = fixture();
+  f.message.content = 'Обычный текст';
+  assert.equal(await proxyMessage(f.message), false);
+  assert.equal(f.sent.length, 0);
+  f.message.content = 'ая: Привет';
+  await proxyMessage(f.message);
+  assert.equal(f.sent[0].username, 'Ая');
 });
 
 test('приватная ветка требует участия, даже когда permissionsFor наследует доступ от родителя', async () => {
@@ -443,45 +529,15 @@ test('пробелы и табуляция в конечных маркерах 
   assert.equal(parseProxyMessage('Ответ) \n', [suffixOnly]).parts[0]?.content, 'Ответ');
 });
 
-const embedBlock = embed => `{{${JSON.stringify({ embed }).slice(1, -1)}}}`;
-
-test('JSON-вставки проверяют ограничения всех полей до отправки', async () => {
-  const invalid = [
-    null, [], 'text', {}, { title: 'x'.repeat(257) }, { description: 'x'.repeat(4097) },
-    { fields: Array.from({ length: 26 }, () => ({ name: 'A', value: 'B' })) },
-    { fields: [{ name: 'x'.repeat(257), value: 'B' }] },
-    { fields: [{ name: 'A', value: 'x'.repeat(1025) }] },
-    { fields: [{ name: 'A', value: 'B', inline: 'yes' }] },
-    { author: { name: 'x'.repeat(257) } }, { footer: { text: 'x'.repeat(2049) } },
-    { title: 'A', image: { url: 'file:///private/image.png' } },
-    { title: 'A', thumbnail: 'https://example.com/image.png' },
-    { title: 'A', author: { name: 'B', url: 'javascript:alert(1)' } },
-    { title: 'A', footer: { text: 'B', icon_url: 'invalid' } },
-    { title: 'A', url: 'invalid' }, { title: 'A', timestamp: 'invalid' },
-    { title: 'A', color: 0x1000000 }, { type: 'video', title: 'A' },
-  ];
-  for (const embed of invalid) await assert.rejects(expandProxyBlocks(embedBlock(embed)), /встав/i);
-  const valid = { title: 'Заголовок', description: 'Описание', url: 'https://example.com', color: 0x123456,
-    timestamp: '2026-01-01T00:00:00.000Z', author: { name: 'Автор', url: 'https://example.com/author', icon_url: 'https://example.com/icon.png' },
-    footer: { text: 'Подпись', icon_url: 'https://example.com/footer.png' },
-    image: { url: 'https://example.com/image.png' }, thumbnail: { url: 'https://example.com/thumb.png' },
-    fields: [{ name: 'Поле', value: 'Значение', inline: true }] };
-  assert.deepEqual((await expandProxyBlocks(embedBlock(valid))).embeds[0], valid);
-});
-
-test('ошибка во второй вставке отменяет всё мультипрокси, исходник можно исправить и отправить', async () => {
+test('невалидный JSON в реплике не исполняется и не мешает обычному отыгрышу', async () => {
   await saveTupper('100', profile());
-  await saveTupper('100', profile('Боб', 'б:'));
   const f = fixture();
-  f.message.content = `ая: Первая реплика\nб: ${embedBlock({ title: 'x'.repeat(257) })}`;
-  await assert.rejects(proxyMessage(f.message), /встав/i);
-  assert.equal(f.sent.length, 0);
-  assert.equal(f.sourceDeleted(), 0);
-  assert.equal(await db.collection('tupper_sources').findOne({ _id: f.message.id }), null);
-  f.message.content = `ая: Первая реплика\nб: ${embedBlock({ title: 'Верная вставка' })}`;
+  const text = '{{"embed": невалидный JSON}}';
+  f.message.content = `ая: ${text}`;
   await proxyMessage(f.message);
-  assert.equal(f.sent.length, 2);
-  assert.equal(f.sent[1].embeds[0].title, 'Верная вставка');
+  assert.equal(f.sent[0].content, text);
+  assert.equal(f.sent[0].embeds, undefined);
+  assert.equal(f.sourceDeleted(), 1);
 });
 
 for (const [label, change] of [
@@ -523,7 +579,7 @@ test('удаление исходника во время отправки не 
   assert.equal((await db.collection('tupper_sources').findOne({ _id: f.message.id })).status, 'complete');
 });
 
-test('поиск не теряет публичный профиль за сотней скрытых профилей и профилями другого сервера', async () => {
+test('старая форма поиска больше не раскрывает чужие профили', async () => {
   await db.collection('tuppers').insertMany(Array.from({ length: 120 }, (_, n) => ({
     ...normalizeProfile(profile(`Ая а скрытая ${n}`, `hidden${n}:`)), _id: `hidden${n}`, owner_id: 'hidden', revision: 1,
   })));
@@ -542,7 +598,7 @@ test('поиск не теряет публичный профиль за сот
   let result;
   i.editReply = async payload => { result = payload; };
   await handleTupperModal(i);
-  assert.match(result.content, /Ая я видимая/);
+  assert.match(result.content, /больше не поддерживается/);
   assert.doesNotMatch(result.content, /скрытая|другого сервера/);
 });
 

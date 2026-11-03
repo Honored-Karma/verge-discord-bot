@@ -1,5 +1,5 @@
 import { markdownText } from "../utils/responseStyle.js";
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 import { getPlayer, addAP, getActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { hasCommandPermission } from '../utils/adminCheck.js';
@@ -9,6 +9,8 @@ import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.
 
 export const data = new SlashCommandBuilder()
     .setName('add-ap')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(false)
     .setDescription('[АДМИН] Добавить AP игроку')
     .addUserOption(option =>
         option.setName('user')

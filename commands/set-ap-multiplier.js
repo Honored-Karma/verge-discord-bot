@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 import { getPlayer, setAPMultiplier, getActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
@@ -9,6 +9,8 @@ import { makePlayerKey } from '../utils/playerKey.js';
 
 export const data = new SlashCommandBuilder()
     .setName('set-ap-multiplier')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(false)
     .setDescription('[АДМИН] Установить множитель получения AP для игрока')
     .addUserOption(option =>
         option.setName('user')

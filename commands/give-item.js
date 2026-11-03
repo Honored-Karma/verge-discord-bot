@@ -1,4 +1,4 @@
-import { MessageFlags, SlashCommandBuilder } from "discord.js";
+import { MessageFlags, SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
 import { hasCommandPermission } from "../utils/adminCheck.js";
 import {
   createAPItemName,
@@ -63,6 +63,8 @@ export const modalCustomIdPrefix = GIVE_ITEM_AP_MODAL_PREFIX;
 
 export const data = new SlashCommandBuilder()
   .setName("give-item")
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  .setDMPermission(false)
   .setDescription("[АДМИН] Открыть центр выдачи предметов")
   .addUserOption((option) => option
     .setName("user")

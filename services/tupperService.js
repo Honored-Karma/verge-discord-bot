@@ -1,8 +1,6 @@
-import { PermissionFlagsBits as P, EmbedBuilder, ChannelType } from 'discord.js';
+import { PermissionFlagsBits as P, ChannelType } from 'discord.js';
 import { getDB } from '../utils/db.js';
-import { getTuppers, getGroups, channelScopes, resolveSettings, serverAllows, parseProxyMessage, displayTupperName } from '../utils/tupperModel.js';
-import { parseRollInput, rollExpression, formatRollResult } from '../utils/diceRoller.js';
-import { rollAdvancedTupperDice } from '../utils/tupperDice.js';
+import { getTuppers, channelScopes, resolveSettings, serverAllows, parseProxyMessage } from '../utils/tupperModel.js';
 import { TupperError, tupperErrorText } from '../utils/tupperErrors.js';
 
 const webhookLocks = new Map();
@@ -83,95 +81,6 @@ export function splitProxyContent(value, limit = 2000) {
   return chunks;
 }
 
-function validateProxyEmbed(data) {
-  const object = value => value && typeof value === 'object' && !Array.isArray(value);
-  if (!object(data)) error('Каждая вставка должна быть объектом JSON.');
-  if (data.type !== undefined && data.type !== 'rich') error('Поддерживаются только rich-вставки.');
-  try {
-    // Constructors/toJSON do not validate raw API data. Setters validate each field.
-    const embed = new EmbedBuilder(data.type === 'rich' ? { type: 'rich' } : {});
-    for (const [key, setter] of [['title', 'setTitle'], ['description', 'setDescription'], ['url', 'setURL'], ['color', 'setColor']]) {
-      if (data[key] !== undefined) embed[setter](data[key]);
-    }
-    if (data.timestamp != null) {
-      if (!['string', 'number'].includes(typeof data.timestamp)) throw new TypeError('timestamp');
-      embed.setTimestamp(new Date(data.timestamp));
-    }
-    for (const [key, setter] of [['image', 'setImage'], ['thumbnail', 'setThumbnail']]) {
-      if (data[key] == null) continue;
-      if (!object(data[key]) || typeof data[key].url !== 'string' || !data[key].url) throw new TypeError(key);
-      embed[setter](data[key].url);
-    }
-    if (data.author != null) {
-      if (!object(data.author) || typeof data.author.name !== 'string' || !data.author.name) throw new TypeError('author');
-      embed.setAuthor({ name: data.author.name, url: data.author.url, iconURL: data.author.icon_url });
-    }
-    if (data.footer != null) {
-      if (!object(data.footer) || typeof data.footer.text !== 'string' || !data.footer.text) throw new TypeError('footer');
-      embed.setFooter({ text: data.footer.text, iconURL: data.footer.icon_url });
-    }
-    if (data.fields !== undefined) {
-      if (!Array.isArray(data.fields)) throw new TypeError('fields');
-      embed.setFields(data.fields);
-      if (data.fields.some(field => !field.name.length || !field.value.length)) throw new TypeError('fields');
-    }
-    const built = embed.toJSON();
-    if (!built.title && !built.description && !built.author && !built.footer && !built.fields?.length && !built.image && !built.thumbnail) {
-      error('Вставка должна содержать текст или изображение.');
-    }
-    return built;
-  } catch (e) {
-    if (e instanceof TupperError) throw e;
-    error('Вставка содержит неверные данные. Проверьте длину полей, ссылки, цвет и дату.');
-  }
-}
-
-export async function expandProxyBlocks(content) {
-  const embeds = [];
-  let redirect = null;
-  let blocks = 0;
-  // JSON embeds can contain nested braces. Scan balanced objects instead of truncating at the first }}.
-  let output = '';
-  for (let i = 0; i < content.length;) {
-    if (!content.startsWith('{{', i)) { output += content[i++]; continue; }
-    if (++blocks > 10) error('В сообщении можно использовать до 10 блоков {{…}}.');
-    let end;
-    const json = content.slice(i + 2).trimStart().startsWith('"');
-    if (json) {
-      let depth = 1, quoted = false, escaped = false;
-      for (let j = i + 2; j < content.length; j++) {
-        const c = content[j];
-        if (quoted) { if (escaped) escaped = false; else if (c === '\\') escaped = true; else if (c === '"') quoted = false; }
-        else if (c === '"') quoted = true;
-        else if (c === '{') depth++;
-        else if (c === '}' && --depth === 0 && content[j + 1] === '}') { end = j; break; }
-      }
-    } else end = content.indexOf('}}', i + 2);
-    if (end === -1 || end === undefined) { output += content[i++]; continue; }
-    const raw = content.slice(i + 2, end).trim();
-    if (json) {
-      let obj;
-      try { obj = JSON.parse(`{${raw}}`); } catch { error('Блок вставки содержит неверный JSON.'); }
-      const list = obj.embeds || (obj.embed ? [obj.embed] : null);
-      if (!Array.isArray(list) || embeds.length + list.length > 10) error('В блоке нужны embed или embeds, не больше 10 вставок.');
-      // External media are fetched by Discord, never by this process.
-      for (const e of list) embeds.push(validateProxyEmbed(e));
-    } else if (/^#/.test(raw)) {
-      if (redirect) error('Укажите один канал перенаправления.');
-      redirect = raw.slice(1).replace(/^<|>$/g, '').replace(/^#/, '');
-    } else {
-      const parsed = parseRollInput(raw);
-      if (parsed.ok) output += formatRollResult(parsed.specs.map(spec => rollExpression(spec)));
-      else if (/\d|d[f%]|d\d/i.test(raw)) output += await rollAdvancedTupperDice(raw);
-      else output += content.slice(i, end + 2);
-    }
-    i = end + 2;
-  }
-  if (embeds.reduce((sum, e) => sum + (e.title?.length || 0) + (e.description?.length || 0) + (e.footer?.text?.length || 0) + (e.author?.name?.length || 0)
-    + (e.fields || []).reduce((s, f) => s + f.name.length + f.value.length, 0), 0) > 6000) error('Текст вставок должен занимать до 6000 символов.');
-  return { content: output.trim(), embeds, redirect };
-}
-
 async function replyPrefix(message, destination) {
   if (!message.reference?.messageId) return '';
   // Keep a jump link, never copy text from a possibly more private channel.
@@ -210,15 +119,9 @@ async function processProxyMessage(message, { download = downloadDiscordAttachme
   const [profiles, settingsDoc, config] = await Promise.all([getTuppers(owner), db.collection('tupper_settings').findOne({ _id: owner }), getServerConfig(message.guildId)]);
   if (!profiles.length) return false;
   const scopes = channelScopes(message.channel);
-  const settings = resolveSettings(settingsDoc, scopes);
+  const settings = { ...resolveSettings(settingsDoc, scopes), auto: 'off' };
   if (!settings.proxy) return false;
-  const stickyKey = `${owner}_${message.channelId}`;
-  const sticky = settings.auto === 'sticky' ? await db.collection('tupper_sticky').findOne({ _id: stickyKey }) : null;
-  const parsed = parseProxyMessage(originalContent, profiles, { ...settings, sticky_id: sticky?.profile_id });
-  if (parsed.reset) {
-    await db.collection('tupper_sticky').deleteOne({ _id: stickyKey });
-    if (settings.auto === 'fixed') await db.collection('tupper_settings').updateOne({ _id: owner }, { $set: { [`scopes.${scopes.at(-1)}.auto`]: 'off' } }, { upsert: true });
-  }
+  const parsed = parseProxyMessage(originalContent, profiles, settings);
   if (!parsed.parts.length) return false;
   recognizedMessages.add(message);
   const member = await message.guild.members.fetch({ user: owner, force: true });
@@ -229,42 +132,32 @@ async function processProxyMessage(message, { download = downloadDiscordAttachme
   if (sourceError) error(sourceError);
   if (originalAttachments.size > 10 || message.stickers?.size) error('Поддерживаются до 10 вложений. Сообщение со стикерами отправьте от своего имени.');
   if ([...originalAttachments.values()].reduce((sum, a) => sum + (a.size || 0), 0) > 25 * 1024 * 1024) error('Общий размер вложений превышает 25 МиБ. Разделите их на несколько сообщений.');
-  const [groups, files] = await Promise.all([getGroups(owner), Promise.all([...originalAttachments.values()].map(a => download(a)))]);
+  const files = await Promise.all([...originalAttachments.values()].map(a => download(a)));
   const jobs = [];
   for (let i = 0; i < parsed.parts.length; i++) {
     const part = parsed.parts[i];
-    const expanded = await expandProxyBlocks(part.content);
-    let destination = message.channel;
-    if (expanded.redirect) {
-      if (/^\d{1,20}$/.test(expanded.redirect)) destination = await message.guild.channels.fetch(expanded.redirect);
-      else {
-        const matches = message.guild.channels.cache.filter(c => c.name === expanded.redirect && c.isTextBased?.());
-        if (matches.size !== 1) error('Канал перенаправления не найден или имя неоднозначно. Укажите {{#ID_канала}}.');
-        destination = matches.first();
-      }
-      if (!destination?.isTextBased?.() || destination.guildId !== message.guildId) error('Перенаправление доступно только в текстовые каналы этого сервера.');
-    }
+    const destination = message.channel;
     if (!serverAllows(config, 'proxies', member, destination)) error('Отыгрыш в канале назначения запрещён администрацией.');
     await assertPrivateThreadAccess(destination, member);
-    const problem = proxyPermissionError(destination, member, bot, { source: false, files: i === 0 && files.length > 0, embeds: expanded.embeds.length > 0 });
+    const problem = proxyPermissionError(destination, member, bot, { source: false, files: i === 0 && files.length > 0 });
     if (problem) error(problem);
-    const chunks = splitProxyContent(await replyPrefix(message, destination) + expanded.content);
+    const chunks = splitProxyContent(await replyPrefix(message, destination) + part.content);
     if (!chunks.length) chunks.push('');
-    if (!chunks[0] && !expanded.embeds.length && !(i === 0 && files.length)) error('После удаления маркеров сообщение пустое. Добавьте текст или вложение.');
+    if (!chunks[0] && !(i === 0 && files.length)) error('После удаления маркеров сообщение пустое. Добавьте текст или вложение.');
     const hook = await webhookFor(destination, message.client);
-    const username = displayTupperName(part.profile, groups.find(g => g._id === part.profile.group_id));
-    if (/clyde|discord/i.test(username)) error('Имя с тегами содержит «clyde» или «discord». Измените имя или тег профиля.');
+    const username = part.profile.name;
+    if (/clyde|discord/i.test(username)) error('Имя содержит «clyde» или «discord». Измените имя профиля.');
     for (let j = 0; j < chunks.length; j++) jobs.push({ part, destination, hook, payload: {
       content: chunks[j] || undefined,
       username,
       avatarURL: part.profile.avatar_url || message.client.user.displayAvatarURL(),
       allowedMentions: noMentions,
       ...(destination.isThread?.() ? { threadId: destination.id } : {}),
-      ...(j === 0 ? { embeds: expanded.embeds, ...(i === 0 ? { files } : {}) } : {}),
+      ...(i === 0 && j === 0 ? { files } : {}),
     } });
   }
   if (jobs.length > 30) error('Сообщение после разбиения превышает 30 частей. Сократите текст.');
-  // A user can cancel a slow download/dice evaluation by changing the source.
+  // A user can cancel a slow download by changing the source.
   if (await proxySourceState(message, snapshot) !== 'unchanged') return true;
   // Reserve once, never retry an ambiguous external send after a crash/network timeout.
   try {
@@ -291,7 +184,6 @@ async function processProxyMessage(message, { download = downloadDiscordAttachme
     }
     await db.collection('tupper_sources').updateOne({ _id: message.id }, { $set: { status: 'complete', source_preserved: sourceState === 'changed' } });
     for (const part of parsed.parts) await db.collection('tuppers').updateOne({ _id: part.profile._id, owner_id: owner }, { $inc: { posts: 1 }, $set: { last_used: new Date() } });
-    if (settings.auto === 'sticky' && parsed.last_id) await db.collection('tupper_sticky').updateOne({ _id: stickyKey }, { $set: { owner_id: owner, profile_id: parsed.last_id } }, { upsert: true });
     return true;
   } catch (e) {
     await db.collection('tupper_sources').updateOne({ _id: message.id }, { $set: { status: 'uncertain', completed } }).catch(() => {});
@@ -304,7 +196,7 @@ export async function proxyMessage(message, options) {
   const key = `${message.author.id}_${message.channelId}`;
   const previous = messageQueues.get(key) || Promise.resolve();
   // Gateway handlers run concurrently. Preserve user order so a following plain
-  // message sees the sticky profile selected by the preceding bracketed message.
+  // message is processed after the preceding one has finished.
   const current = previous.catch(() => {}).then(() => processProxyMessage(message, options));
   messageQueues.set(key, current);
   try { return await current; }

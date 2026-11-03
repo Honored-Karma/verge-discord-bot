@@ -1,10 +1,12 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin } from '../utils/adminCheck.js';
 import { getDB } from '../utils/db.js';
 
 export const data = new SlashCommandBuilder()
     .setName('log-enable')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(false)
     .setDescription('[АДМИН] Включить логирование команд в этом канале')
     .addStringOption(option =>
         option.setName('type')

@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from "discord.js";
+import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
 import {
   getActiveSlot,
   getPlayer,
@@ -15,6 +15,8 @@ import { listCatalogItems } from "../utils/itemSystem.js";
 
 export const data = new SlashCommandBuilder()
   .setName("remove-item")
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  .setDMPermission(false)
   .setDescription("[АДМИН] Удалить предмет из инвентаря персонажа")
   .addUserOption((option) => option
     .setName("user")

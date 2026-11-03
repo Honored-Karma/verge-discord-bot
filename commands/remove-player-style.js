@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 import { getPlayer, getAllPlayerSP, getActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
@@ -9,6 +9,8 @@ import { getDB } from '../utils/db.js';
 
 export const data = new SlashCommandBuilder()
     .setName('remove-player-style')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(false)
     .setDescription('[АДМИН] Удалить стиль у конкретного игрока (не глобально)')
     .addUserOption(option =>
         option.setName('user')

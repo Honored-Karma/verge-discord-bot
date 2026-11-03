@@ -17,6 +17,7 @@ export const data = new SlashCommandBuilder()
   .setName("announce")
   .setDescription("Открыть мастер создания и рассылки объявлений")
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(false)
   .addUserOption((option) =>
     option
       .setName("user")

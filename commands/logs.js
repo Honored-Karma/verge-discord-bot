@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 import { createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
 import { resolveMember } from '../utils/memberHelper.js';
@@ -6,6 +6,8 @@ import { getDB } from '../utils/db.js';
 
 export const data = new SlashCommandBuilder()
     .setName('logs')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(false)
     .setDescription('Показать последние записи использования команд (только в канале логов)')
     .addIntegerOption(option => option.setName('limit').setDescription('Количество записей (по умолчанию: 10)').setRequired(false))
     .addStringOption(option => option.setName('command').setDescription('Фильтр по команде (начните вводить)').setAutocomplete(true).setRequired(false))
