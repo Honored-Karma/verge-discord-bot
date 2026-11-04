@@ -73,89 +73,122 @@ export function hasCommandPermission(member, commandName) {
   // Full admins pass immediately
   if (isAdmin(member)) return true;
 
+  const fileConfig = loadAdminConfigFile();
+
+  // Head GM role IDs (Главный ГМ)
+  const headGmRoleIds = Array.from(new Set([
+    ...getEnvRoleIds("HEAD_GM_ROLE_IDS", "HEAD_GM_ROLE_ID"),
+    ...(fileConfig.headGmRoleIds || []),
+  ]));
+
+  // GM role IDs (Мастер игры) — Head GM inherits all regular GM commands
+  const gmRoleIds = Array.from(new Set([
+    ...getEnvRoleIds("GM_ROLE_IDS", "GM_ROLE_ID", "LIMITED_ADMIN_ROLE_IDS"),
+    ...(fileConfig.gmRoleIds || []),
+    ...headGmRoleIds,
+  ]));
+
+  // Head Anketolog role IDs (Главный Анкетолог)
+  const headAnketologRoleIds = Array.from(new Set([
+    ...getEnvRoleIds("HEAD_ANKETOLOG_ROLE_IDS", "HEAD_ANKETOLOG_ROLE_ID"),
+    ...(fileConfig.headAnketologRoleIds || []),
+  ]));
+
+  // Anketolog role IDs (Анкетолог) — Head Anketolog inherits all regular Anketolog commands
+  const anketologRoleIds = Array.from(new Set([
+    ...getEnvRoleIds("ANKETOLOG_ROLE_IDS", "ANKETOLOG_ROLE_ID"),
+    ...(fileConfig.anketologRoleIds || []),
+    ...headAnketologRoleIds,
+  ]));
+
   // Moderator roles grant only SP awards among character-management commands.
   if (commandName === "add-sp" && memberHasAnyRole(member,
     getEnvRoleIds("MODERATOR_ROLE_IDS", "MODERATOR_ROLE_ID"))) {
     return true;
   }
 
-  // Commands that Game Masters can use (AP, SP, currency, items, reputation, logs, multipliers)
+  // 1. Regular GM commands (Мастер Игры)
+  // add-ap; add-sp; give-style; add-currency; add-reputation; purge offtop; mission create
   const gmCommands = [
     "add-ap",
     "add-sp",
+    "give-style",
     "add-currency",
-    "deduct-currency",
+    "add-reputation",
+    "purge-offtop",
+    "mission",
+    "mission-create",
+    "physical-register",
+    "physical-edit",
+    "train-block",
+  ];
+  if (gmCommands.includes(commandName) && memberHasAnyRole(member, gmRoleIds)) {
+    return true;
+  }
+
+  // 2. Head GM commands (Главный ГМ)
+  // GM commands + /set'ы, multipliers, deductions, item distribution, logs, training blocks
+  const headGmOnlyCommands = [
     "set-ap",
     "set-sp",
     "set-currency",
+    "set-reputation",
+    "set-rank",
     "set-ap-multiplier",
     "set-sp-multiplier",
     "set-salary-multiplier",
+    "deduct-currency",
+    "deduct-reputation",
     "give-item",
     "remove-item",
-    "add-reputation",
-    "deduct-reputation",
-    "set-reputation",
+    "remove-player-style",
     "train-block",
     "logs",
-    "set-rank",
-  ];
-
-  // Commands that style-giver roles can use
-  const styleGiverCommands = ["give-style", "remove-player-style"];
-
-  // Physical stats are managed by profile reviewers, GMs and admins.
-  // LIMITED_ADMIN_ROLE_IDS is kept as a compatibility fallback for existing setups.
-  const physicalStatsCommands = ["physical-register", "physical-edit"];
-
-  // Commands that Anketolog (profile reviewers who approve character applications) can use:
-  // Allows granting combat styles, currency, SP/AP, items, rank, reputation, and physical stats.
-  const anketologCommands = [
-    "give-style",
-    "remove-player-style",
-    "add-currency",
-    "set-currency",
-    "deduct-currency",
-    "add-sp",
-    "set-sp",
-    "add-ap",
-    "set-ap",
-    "give-item",
-    "remove-item",
-    "set-rank",
-    "add-reputation",
-    "set-reputation",
-    "deduct-reputation",
     "physical-register",
     "physical-edit",
+  ];
+  if (headGmOnlyCommands.includes(commandName) && memberHasAnyRole(member, headGmRoleIds)) {
+    return true;
+  }
+
+  // 3. Regular Anketolog commands (Анкетолог)
+  // Выдача стиля; /accept; /add-currency; physical register; physical edit
+  const anketologCommands = [
+    "give-style",
     "accept",
     "accept-application",
+    "add-currency",
+    "physical-register",
+    "physical-edit",
   ];
-
-  // 1. Check Anketolog commands (application acceptance and player onboarding)
-  if (anketologCommands.includes(commandName)) {
-    const anketologRoleIds = [...getEnvRoleIds(
-      "ANKETOLOG_ROLE_IDS",
-      "ANKETOLOG_ROLE_ID"
-    ), ...loadAdminConfigFile().anketologRoleIds];
-    if (memberHasAnyRole(member, anketologRoleIds)) {
-      return true;
-    }
+  if (anketologCommands.includes(commandName) && memberHasAnyRole(member, anketologRoleIds)) {
+    return true;
   }
 
-  // 2. Check GM commands
-  if (gmCommands.includes(commandName)) {
-    const gmRoleIds = getEnvRoleIds(
-      "GM_ROLE_IDS",
-      "GM_ROLE_ID",
-      "LIMITED_ADMIN_ROLE_IDS"
-    );
-    if (memberHasAnyRole(member, gmRoleIds)) {
-      return true;
-    }
+  // 4. Head Anketolog commands (Главный Анкетолог)
+  // Anketolog commands + /set'ы, deductions, slot granting, avatar, style removal, starter item management
+  const headAnketologOnlyCommands = [
+    "set-rank",
+    "set-currency",
+    "set-reputation",
+    "deduct-currency",
+    "deduct-reputation",
+    "remove-player-style",
+    "grant-slot",
+    "set-avatar",
+    "give-item",
+    "remove-item",
+    "add-ap",
+    "add-sp",
+    "set-ap",
+    "set-sp",
+  ];
+  if (headAnketologOnlyCommands.includes(commandName) && memberHasAnyRole(member, headAnketologRoleIds)) {
+    return true;
   }
 
-  // 3. Check style-giver commands
+  // 5. Commands that style-giver roles can use
+  const styleGiverCommands = ["give-style", "remove-player-style"];
   if (styleGiverCommands.includes(commandName)) {
     const styleGiverRoleIds = getEnvRoleIds(
       "GIVE_STYLE_ROLE_IDS",
@@ -168,13 +201,10 @@ export function hasCommandPermission(member, commandName) {
     }
   }
 
-  // 4. Check physical stats commands
+  // 6. Physical stats commands (legacy compatibility fallback for LIMITED_ADMIN_ROLE_IDS)
+  const physicalStatsCommands = ["physical-register", "physical-edit"];
   if (physicalStatsCommands.includes(commandName)) {
     const physicalRoleIds = getEnvRoleIds(
-      "ANKETOLOG_ROLE_IDS",
-      "ANKETOLOG_ROLE_ID",
-      "GM_ROLE_IDS",
-      "GM_ROLE_ID",
       "LIMITED_ADMIN_ROLE_IDS"
     );
     if (memberHasAnyRole(member, physicalRoleIds)) {

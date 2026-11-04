@@ -2,7 +2,20 @@
   "adminUserIds": [
     "1377390312472711219"
   ],
-  "adminRoleIds": [],
-  "anketologRoleIds": [],
+  "adminRoleIds": [
+    "1438987035862892544"
+  ],
+  "headGmRoleIds": [
+    "1438987072026185808"
+  ],
+  "headAnketologRoleIds": [
+    "1438987088975626251"
+  ],
+  "anketologRoleIds": [
+    "1431759459528610013"
+  ],
+  "gmRoleIds": [
+    "1431759694179074162"
+  ],
   "loreMasterRoleIds": []
 }

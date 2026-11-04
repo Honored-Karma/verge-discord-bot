@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
 import { createSuccessEmbed, createErrorEmbed } from "../utils/embeds.js";
-import { isAdmin } from "../utils/adminCheck.js";
+import { isAdmin, hasCommandPermission } from "../utils/adminCheck.js";
+import { resolveMember } from "../utils/memberHelper.js";
 import { logCommand } from "../utils/logs.js";
 
 // Discord API ограничение: до 100 сообщений за один fetch
@@ -34,17 +35,19 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(interaction) {
-  // Проверка прав: либо полный админ, либо есть право "Управление сообщениями"
+  const member = await resolveMember(interaction);
+  // Проверка прав: полный админ, роль Мастера игры (GM) или право "Управление сообщениями"
   const hasPerms =
-    isAdmin(interaction.member) ||
-    interaction.member.permissions.has(PermissionFlagsBits.ManageMessages);
+    isAdmin(member) ||
+    hasCommandPermission(member, "purge-offtop") ||
+    Boolean(member?.permissions?.has && member.permissions.has(PermissionFlagsBits.ManageMessages));
 
   if (!hasPerms) {
     return interaction.reply({
       embeds: [
         createErrorEmbed(
           "Доступ запрещён",
-          "Эта команда доступна администраторам и модераторам с правом **Управление сообщениями**.",
+          "Эта команда доступна администраторам, мастерам игры и модераторам с правом **Управление сообщениями**.",
         ),
       ],
       flags: 64,

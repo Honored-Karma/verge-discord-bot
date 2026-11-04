@@ -5,10 +5,13 @@ import { hasCommandPermission } from "../utils/adminCheck.js";
 
 test("ANKETOLOG_ROLE_IDS grants permissions for onboarding/character approval commands", () => {
   const anketologRoleId = "1431759459528610013";
-  process.env.ANKETOLOG_ROLE_IDS = `1431759459528610013, 1438987088975626251`;
+  const headAnketologRoleId = "1438987088975626251";
+  process.env.ANKETOLOG_ROLE_IDS = anketologRoleId;
+  process.env.HEAD_ANKETOLOG_ROLE_IDS = headAnketologRoleId;
   delete process.env.ADMIN_IDS;
   delete process.env.ADMIN_ROLE_IDS;
   delete process.env.GM_ROLE_IDS;
+  delete process.env.HEAD_GM_ROLE_IDS;
   delete process.env.GIVE_STYLE_ROLE_IDS;
 
   const anketologMember = {
@@ -22,29 +25,27 @@ test("ANKETOLOG_ROLE_IDS grants permissions for onboarding/character approval co
     }
   };
 
-  const allowedCommands = [
+  const headAnketologMember = {
+    id: "555111333",
+    guild: { ownerId: "999999999" },
+    permissions: { has: () => false },
+    roles: {
+      cache: [
+        { id: headAnketologRoleId, name: "Главный Анкетолог" }
+      ]
+    }
+  };
+
+  const allowedForAnketolog = [
     "give-style",
-    "remove-player-style",
     "add-currency",
-    "set-currency",
-    "deduct-currency",
-    "add-sp",
-    "set-sp",
-    "add-ap",
-    "set-ap",
-    "give-item",
-    "remove-item",
-    "set-rank",
-    "add-reputation",
-    "set-reputation",
-    "deduct-reputation",
     "physical-register",
     "physical-edit",
     "accept",
     "accept-application"
   ];
 
-  for (const cmd of allowedCommands) {
+  for (const cmd of allowedForAnketolog) {
     assert.equal(
       hasCommandPermission(anketologMember, cmd),
       true,
@@ -52,7 +53,14 @@ test("ANKETOLOG_ROLE_IDS grants permissions for onboarding/character approval co
     );
   }
 
-  const forbiddenCommands = [
+  // Regular anketolog should not have /set-* or management commands
+  const forbiddenForAnketolog = [
+    "set-currency",
+    "set-rank",
+    "set-reputation",
+    "deduct-currency",
+    "deduct-reputation",
+    "grant-slot",
     "set-ap-multiplier",
     "set-sp-multiplier",
     "set-salary-multiplier",
@@ -66,7 +74,7 @@ test("ANKETOLOG_ROLE_IDS grants permissions for onboarding/character approval co
     "add-style"
   ];
 
-  for (const cmd of forbiddenCommands) {
+  for (const cmd of forbiddenForAnketolog) {
     assert.equal(
       hasCommandPermission(anketologMember, cmd),
       false,
@@ -74,7 +82,30 @@ test("ANKETOLOG_ROLE_IDS grants permissions for onboarding/character approval co
     );
   }
 
-  // Regular member without anketolog role
+  // Head anketolog has /set's and overrides
+  const allowedForHeadAnketolog = [
+    ...allowedForAnketolog,
+    "set-rank",
+    "set-currency",
+    "set-reputation",
+    "deduct-currency",
+    "deduct-reputation",
+    "grant-slot",
+    "remove-player-style",
+    "set-avatar",
+    "give-item",
+    "remove-item"
+  ];
+
+  for (const cmd of allowedForHeadAnketolog) {
+    assert.equal(
+      hasCommandPermission(headAnketologMember, cmd),
+      true,
+      `Head Anketolog should have permission for '${cmd}'`
+    );
+  }
+
+  // Regular member without any staff role
   const regularMember = {
     id: "777888999",
     guild: { ownerId: "999999999" },
@@ -86,7 +117,7 @@ test("ANKETOLOG_ROLE_IDS grants permissions for onboarding/character approval co
     }
   };
 
-  for (const cmd of allowedCommands) {
+  for (const cmd of allowedForHeadAnketolog) {
     assert.equal(
       hasCommandPermission(regularMember, cmd),
       false,
@@ -95,9 +126,98 @@ test("ANKETOLOG_ROLE_IDS grants permissions for onboarding/character approval co
   }
 });
 
+test("GM_ROLE_IDS and HEAD_GM_ROLE_IDS grant correct permissions for Game Masters", () => {
+  const gmRoleId = "1431759694179074162";
+  const headGmRoleId = "1438987072026185808";
+  process.env.GM_ROLE_IDS = gmRoleId;
+  process.env.HEAD_GM_ROLE_IDS = headGmRoleId;
+  delete process.env.ADMIN_IDS;
+  delete process.env.ADMIN_ROLE_IDS;
+  delete process.env.ANKETOLOG_ROLE_IDS;
+  delete process.env.HEAD_ANKETOLOG_ROLE_IDS;
+
+  const gmMember = {
+    id: "gm-test-1",
+    guild: { ownerId: "owner" },
+    permissions: { has: () => false },
+    roles: { cache: [{ id: gmRoleId, name: "Мастер игры" }] }
+  };
+
+  const headGmMember = {
+    id: "head-gm-test-1",
+    guild: { ownerId: "owner" },
+    permissions: { has: () => false },
+    roles: { cache: [{ id: headGmRoleId, name: "Главный ГМ" }] }
+  };
+
+  const allowedForGM = [
+    "add-ap",
+    "add-sp",
+    "give-style",
+    "add-currency",
+    "add-reputation",
+    "purge-offtop",
+    "mission",
+    "mission-create",
+    "physical-register",
+    "physical-edit",
+    "train-block"
+  ];
+
+  for (const cmd of allowedForGM) {
+    assert.equal(hasCommandPermission(gmMember, cmd), true, `GM should have permission for '${cmd}'`);
+    assert.equal(hasCommandPermission(headGmMember, cmd), true, `Head GM should have permission for '${cmd}'`);
+  }
+
+  // Regular GM should not have /set-* or multipliers
+  const forbiddenForGM = [
+    "set-ap",
+    "set-sp",
+    "set-currency",
+    "set-reputation",
+    "set-rank",
+    "set-ap-multiplier",
+    "set-sp-multiplier",
+    "set-salary-multiplier",
+    "logs",
+    "send-json",
+    "render-ui",
+    "delete-user"
+  ];
+
+  for (const cmd of forbiddenForGM) {
+    assert.equal(hasCommandPermission(gmMember, cmd), false, `GM should NOT have permission for '${cmd}'`);
+  }
+
+  // Head GM has /set's and multipliers
+  const allowedForHeadGM = [
+    "set-ap",
+    "set-sp",
+    "set-currency",
+    "set-reputation",
+    "set-rank",
+    "set-ap-multiplier",
+    "set-sp-multiplier",
+    "set-salary-multiplier",
+    "deduct-currency",
+    "deduct-reputation",
+    "give-item",
+    "remove-item",
+    "remove-player-style",
+    "train-block",
+    "logs"
+  ];
+
+  for (const cmd of allowedForHeadGM) {
+    assert.equal(hasCommandPermission(headGmMember, cmd), true, `Head GM should have permission for '${cmd}'`);
+  }
+});
+
 function configureStaffRoles(t) {
   const envNames = [
     "ADMIN_IDS", "ADMIN_ROLE_IDS", "ADMIN_ROLE_ID",
+    "HEAD_GM_ROLE_IDS", "HEAD_GM_ROLE_ID",
+    "HEAD_ANKETOLOG_ROLE_IDS", "HEAD_ANKETOLOG_ROLE_ID",
     "ANKETOLOG_ROLE_IDS", "ANKETOLOG_ROLE_ID",
     "MODERATOR_ROLE_IDS", "MODERATOR_ROLE_ID",
     "GM_ROLE_IDS", "GM_ROLE_ID", "LIMITED_ADMIN_ROLE_IDS",

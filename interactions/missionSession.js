@@ -61,7 +61,11 @@ export const MISSION_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 export function isGMOrAdmin(member) {
   if (!member) return false;
   if (isAdmin(member)) return true;
-  return hasCommandPermission(member, "add-ap");
+  return (
+    hasCommandPermission(member, "mission") ||
+    hasCommandPermission(member, "mission-create") ||
+    hasCommandPermission(member, "add-ap")
+  );
 }
 
 /**

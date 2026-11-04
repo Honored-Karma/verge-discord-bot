@@ -9,7 +9,7 @@ import {
   TextInputStyle,
 } from "discord.js";
 import { getDB } from "../utils/db.js";
-import { getPlayer, setActiveSlot } from "../utils/dataManager.js";
+import { getPlayer, setActiveSlot, getStyleByName, setSP } from "../utils/dataManager.js";
 import { hasCommandPermission } from "../utils/adminCheck.js";
 import {
   isValidCharacterUrl,
@@ -74,6 +74,9 @@ export function createAcceptApplicationState({
   rank = "",
   character_avatar = null,
   character_url = "",
+  combat_style = "",
+  initial_krw = 0,
+  initial_yen = 0,
   stats = {},
 } = {}) {
   const pId = player_id || makeTargetPlayerId(target_user_id, slot);
@@ -88,6 +91,9 @@ export function createAcceptApplicationState({
     rank: rank || "",
     character_avatar: character_avatar || null,
     character_url: character_url || "",
+    combat_style: combat_style ? combat_style.trim() : "",
+    initial_krw: Number.isFinite(initial_krw) && initial_krw >= 0 ? Math.floor(initial_krw) : 0,
+    initial_yen: Number.isFinite(initial_yen) && initial_yen >= 0 ? Math.floor(initial_yen) : 0,
     stats: {
       punch_strength_kg: stats?.punch_strength_kg ?? null,
       lifting_strength_kg: stats?.lifting_strength_kg ?? null,
@@ -122,6 +128,8 @@ export function createAcceptApplicationPreviewEmbed(state) {
     `✨ **Атрибут:** ${state.attribute_name ? `**${state.attribute_name}**` : "*(не указан)*"}`,
     `🏛️ **Организация:** **${state.organization || "Не состоит"}**`,
     `🎖️ **Ранг:** **${state.rank || "—"}**`,
+    `🥋 **Боевой стиль (БИ):** ${state.combat_style ? `**${state.combat_style}**` : "*(не выбран)*"}`,
+    `💰 **Стартовый баланс:** ${(state.initial_krw > 0 || state.initial_yen > 0) ? `${formatNumber(state.initial_krw)} ₩ / ${formatNumber(state.initial_yen)} ¥` : "0 ₩ / 0 ¥"}`,
     `🖼️ **Аватар:** ${state.character_avatar ? "[Установлен]" : "*(не прикреплен)*"}`,
     "",
     "**Физические показатели:**",
@@ -439,8 +447,8 @@ async function confirmAcceptApplication({ interaction, session }) {
         attribute_name: state.attribute_name ? state.attribute_name.trim() : null,
         organization: state.organization ? state.organization.trim() : null,
         rank: state.rank ? state.rank.trim() : null,
-        krw: 0,
-        yen: 0,
+        krw: state.initial_krw || 0,
+        yen: state.initial_yen || 0,
         ap: 0,
         reputation: 20,
         last_train_timestamp: 0,
@@ -459,6 +467,16 @@ async function confirmAcceptApplication({ interaction, session }) {
         updated_at: now,
       });
       await setActiveSlot(targetUserId, slot);
+
+      if (state.combat_style) {
+        try {
+          const style = await getStyleByName(state.combat_style);
+          const sName = style ? style.name : state.combat_style.trim();
+          await setSP(playerId, sName, 1);
+        } catch (styleErr) {
+          console.warn("Failed to set combat style on accept:", styleErr);
+        }
+      }
     } catch (insertErr) {
       if (insertErr?.code === 11000) {
         await closeInteractionSession(session.message_id).catch(() => {});
@@ -575,6 +593,8 @@ async function confirmAcceptApplication({ interaction, session }) {
     `• **Персонаж:** **${state.character_name}** (Слот ${state.slot})\n` +
     `• **Роль игрока:** <@&${playerRoleId}> ${roleStatus.added ? "✅ выдана" : "⚠️ ошибка выдачи"}\n` +
     (orgNote ? `• **Организация:** ${orgNote}\n` : "") +
+    (state.combat_style ? `• **Боевой стиль (БИ):** **${state.combat_style}** (1 SP)\n` : "") +
+    (state.initial_krw > 0 || state.initial_yen > 0 ? `• **Стартовый баланс:** ${formatNumber(state.initial_krw)} ₩ / ${formatNumber(state.initial_yen)} ¥\n` : "") +
     `\nСообщение о принятии опубликовано в <#${interaction.channelId}>.`;
 
   if (roleStatus.error) {

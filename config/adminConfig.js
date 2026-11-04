@@ -13,19 +13,39 @@ const ADMINS_JSON_PATH = path.join(__dirname, 'admins.json');
 export function loadAdminConfigFile() {
     try {
         if (!fs.existsSync(ADMINS_JSON_PATH)) {
-            return { adminUserIds: [], adminRoleIds: [], anketologRoleIds: [], loreMasterRoleIds: [] };
+            return {
+                adminUserIds: [],
+                adminRoleIds: [],
+                headGmRoleIds: [],
+                headAnketologRoleIds: [],
+                anketologRoleIds: [],
+                gmRoleIds: [],
+                loreMasterRoleIds: []
+            };
         }
         const raw = fs.readFileSync(ADMINS_JSON_PATH, 'utf-8');
         const parsed = JSON.parse(raw);
+        const sanitize = (arr) => Array.isArray(arr) ? arr.map(String).map(s => s.trim()).filter(Boolean) : [];
         return {
-            adminUserIds: Array.isArray(parsed.adminUserIds) ? parsed.adminUserIds.map(String).map(s => s.trim()).filter(Boolean) : [],
-            adminRoleIds: Array.isArray(parsed.adminRoleIds) ? parsed.adminRoleIds.map(String).map(s => s.trim()).filter(Boolean) : [],
-            anketologRoleIds: Array.isArray(parsed.anketologRoleIds) ? parsed.anketologRoleIds.map(String).map(s => s.trim()).filter(Boolean) : [],
-            loreMasterRoleIds: Array.isArray(parsed.loreMasterRoleIds) ? parsed.loreMasterRoleIds.map(String).map(s => s.trim()).filter(Boolean) : []
+            adminUserIds: sanitize(parsed.adminUserIds),
+            adminRoleIds: sanitize(parsed.adminRoleIds),
+            headGmRoleIds: sanitize(parsed.headGmRoleIds),
+            headAnketologRoleIds: sanitize(parsed.headAnketologRoleIds),
+            anketologRoleIds: sanitize(parsed.anketologRoleIds),
+            gmRoleIds: sanitize(parsed.gmRoleIds),
+            loreMasterRoleIds: sanitize(parsed.loreMasterRoleIds)
         };
     } catch (err) {
         console.error('[AdminConfig] Failed to read admins.json:', err.message);
-        return { adminUserIds: [], adminRoleIds: [], anketologRoleIds: [], loreMasterRoleIds: [] };
+        return {
+            adminUserIds: [],
+            adminRoleIds: [],
+            headGmRoleIds: [],
+            headAnketologRoleIds: [],
+            anketologRoleIds: [],
+            gmRoleIds: [],
+            loreMasterRoleIds: []
+        };
     }
 }
 

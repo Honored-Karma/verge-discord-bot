@@ -1,5 +1,5 @@
 import { MessageFlags, SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
-import { getPlayer, isSlot3Unlocked } from "../utils/dataManager.js";
+import { getPlayer, isSlot3Unlocked, listStyles } from "../utils/dataManager.js";
 import { hasCommandPermission } from "../utils/adminCheck.js";
 import { resolveMember } from "../utils/memberHelper.js";
 import { createErrorEmbed } from "../utils/embeds.js";
@@ -153,7 +153,45 @@ export const data = new SlashCommandBuilder()
       .setName("character_url")
       .setDescription("Ссылка на анкету персонажа")
       .setRequired(false)
+  )
+  .addStringOption((option) =>
+    option
+      .setName("combat_style")
+      .setDescription("Стартовый боевой стиль (БИ)")
+      .setRequired(false)
+      .setAutocomplete(true)
+  )
+  .addIntegerOption((option) =>
+    option
+      .setName("initial_krw")
+      .setDescription("Стартовый баланс вон (KRW)")
+      .setRequired(false)
+      .setMinValue(0)
+  )
+  .addIntegerOption((option) =>
+    option
+      .setName("initial_yen")
+      .setDescription("Стартовый баланс иен (YEN)")
+      .setRequired(false)
+      .setMinValue(0)
   );
+
+export async function autocomplete(interaction) {
+  const focused = interaction.options.getFocused(true);
+  if (focused.name === "combat_style") {
+    try {
+      const styles = await listStyles();
+      const query = String(focused.value || "").trim().toLowerCase();
+      const filtered = styles.filter((s) => s.name.toLowerCase().includes(query));
+      return interaction.respond(
+        filtered.slice(0, 25).map((s) => ({ name: s.name, value: s.name }))
+      );
+    } catch {
+      return interaction.respond([]);
+    }
+  }
+  return interaction.respond([]);
+}
 
 export async function execute(interaction) {
   const member = await resolveMember(interaction);
@@ -209,6 +247,9 @@ export async function execute(interaction) {
   const characterNameOpt = interaction.options.getString("character_name");
   const attributeNameOpt = interaction.options.getString("attribute_name");
   const characterUrlOpt = interaction.options.getString("character_url");
+  const combatStyleOpt = interaction.options.getString("combat_style");
+  const initialKrwOpt = interaction.options.getInteger("initial_krw") ?? 0;
+  const initialYenOpt = interaction.options.getInteger("initial_yen") ?? 0;
   const avatarAttachment = interaction.options.getAttachment("avatar");
 
   let avatarUrl = null;

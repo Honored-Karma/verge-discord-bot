@@ -58,14 +58,29 @@ export function calculateUserCapabilities(user) {
     const adminIds = getConfiguredAdminIds();
     const adminRoleIds = getConfiguredAdminRoleIds();
     const staffRoleIds = parseEnvIds(process.env.STAFF_ROLE_IDS || process.env.ADMIN_ROLE_ID);
+    const adminConfig = loadAdminConfigFile();
+    const headGmRoleIds = Array.from(new Set([
+        ...parseEnvIds(process.env.HEAD_GM_ROLE_IDS || process.env.HEAD_GM_ROLE_ID),
+        ...(adminConfig.headGmRoleIds || [])
+    ]));
+    const headAnketologRoleIds = Array.from(new Set([
+        ...parseEnvIds(process.env.HEAD_ANKETOLOG_ROLE_IDS || process.env.HEAD_ANKETOLOG_ROLE_ID),
+        ...(adminConfig.headAnketologRoleIds || [])
+    ]));
+    const gmRoleIds = Array.from(new Set([
+        ...parseEnvIds(process.env.GM_ROLE_IDS || process.env.GM_ROLE_ID || process.env.LIMITED_ADMIN_ROLE_IDS),
+        ...(adminConfig.gmRoleIds || []),
+        ...headGmRoleIds
+    ]));
     const anketologRoleIds = Array.from(new Set([
         ...parseEnvIds(process.env.ANKETOLOG_ROLE_IDS || process.env.ANKETOLOG_ROLE_ID),
-        ...loadAdminConfigFile().anketologRoleIds
+        ...(adminConfig.anketologRoleIds || []),
+        ...headAnketologRoleIds
     ]));
     const moderatorRoleIds = parseEnvIds(process.env.MODERATOR_ROLE_IDS || process.env.MODERATOR_ROLE_ID);
     const loreMasterRoleIds = Array.from(new Set([
         ...parseEnvIds(process.env.LORE_MASTER_ROLE_IDS || process.env.WIKI_EDITOR_ROLE_IDS),
-        ...loadAdminConfigFile().loreMasterRoleIds
+        ...(adminConfig.loreMasterRoleIds || [])
     ]));
 
     // Check role memberships & explicit admin status
@@ -73,11 +88,13 @@ export function calculateUserCapabilities(user) {
     const hasAdminRole = userRoles.some(r => adminRoleIds.includes(r));
     const isFullAdmin = isDirectAdmin || hasAdminRole || Boolean(user.is_admin) || Boolean(user.permissions?.isAdmin);
 
-    const isAnketolog = isFullAdmin || userRoles.some(r => anketologRoleIds.includes(r)) || Boolean(user.permissions?.isAnketolog);
+    const isHeadGM = isFullAdmin || userRoles.some(r => headGmRoleIds.includes(r));
+    const isHeadAnketolog = isFullAdmin || userRoles.some(r => headAnketologRoleIds.includes(r));
+    const isAnketolog = isFullAdmin || isHeadAnketolog || userRoles.some(r => anketologRoleIds.includes(r)) || Boolean(user.permissions?.isAnketolog);
     const isLoreMaster = isFullAdmin || userRoles.some(r => loreMasterRoleIds.includes(r));
     const isModerator = isFullAdmin || userRoles.some(r => moderatorRoleIds.includes(r)) || Boolean(user.permissions?.isModerator);
-    const isGM = userRoles.some(r => parseEnvIds(process.env.GM_ROLE_IDS).includes(r));
-    const isStaff = isFullAdmin || isGM || isModerator || isAnketolog || userRoles.some(r => staffRoleIds.includes(r)) || Boolean(user.is_staff) || Boolean(user.permissions?.isStaff);
+    const isGM = isFullAdmin || isHeadGM || userRoles.some(r => gmRoleIds.includes(r));
+    const isStaff = isFullAdmin || isGM || isHeadGM || isHeadAnketolog || isModerator || isAnketolog || userRoles.some(r => staffRoleIds.includes(r)) || Boolean(user.is_staff) || Boolean(user.permissions?.isStaff);
 
     const capabilities = {
         canAccessAdmin: isStaff || isLoreMaster,
@@ -85,10 +102,10 @@ export function calculateUserCapabilities(user) {
         canManageApplications: isFullAdmin || isAnketolog,
         canViewPrivateCharacters: isStaff || isFullAdmin,
         canViewInventories: isStaff || isFullAdmin,
-        canManageCharacters: isFullAdmin,
-        canManageEconomy: isFullAdmin,
+        canManageCharacters: isFullAdmin || isHeadGM || isHeadAnketolog,
+        canManageEconomy: isFullAdmin || isHeadGM,
         canManageRoles: isFullAdmin,
-        canViewAuditLog: isFullAdmin
+        canViewAuditLog: isFullAdmin || isHeadGM
     };
 
     return capabilities;
