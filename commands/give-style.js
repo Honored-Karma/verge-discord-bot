@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, getStyleByName, setSP, getActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
@@ -9,7 +9,7 @@ import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.
 
 export const data = new SlashCommandBuilder()
     .setName('give-style')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDefaultMemberPermissions(null)
     .setDMPermission(false)
     .setDescription('[АДМИН] Выдать боевой стиль игроку')
     .addUserOption(option =>

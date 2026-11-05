@@ -1,7 +1,8 @@
-import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
 import { isSlot3Unlocked, setSlot3Unlocked, getPlayer, logAdminAction } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed, createInfoEmbed } from '../utils/embeds.js';
-import { isAdmin } from '../utils/adminCheck.js';
+import { hasCommandPermission } from '../utils/adminCheck.js';
+import { resolveMember } from '../utils/memberHelper.js';
 import { logCommand } from '../utils/logs.js';
 import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.js';
 import { makePlayerKey } from '../utils/playerKey.js';
@@ -9,7 +10,7 @@ import { makePlayerKey } from '../utils/playerKey.js';
 export const data = new SlashCommandBuilder()
     .setName('grant-slot')
     .setDescription('[АДМИН] Управление доступом к 3-му слоту персонажа')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDefaultMemberPermissions(null)
     .setDMPermission(false)
     .addSubcommand(sub =>
         sub.setName('give')
@@ -40,9 +41,10 @@ export const data = new SlashCommandBuilder()
     );
 
 export async function execute(interaction) {
-    if (!isAdmin(interaction.member)) {
+    const member = await resolveMember(interaction);
+    if (!hasCommandPermission(member, 'grant-slot')) {
         const msg = await interaction.reply({
-            embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна только администраторам сервера.')],
+            embeds: [createErrorEmbed('Доступ запрещен', 'Эта команда доступна администраторам и главным анкетологам.')],
             flags: 64,
             fetchReply: true
         });

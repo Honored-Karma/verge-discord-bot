@@ -1,13 +1,5 @@
 import { PermissionFlagsBits } from "discord.js";
-import { loadAdminConfigFile } from "../config/adminConfig.js";
-
-function getEnvRoleIds(...envNames) {
-  return envNames.flatMap((envName) =>
-    process.env[envName]
-      ? process.env[envName].split(",").map((id) => id.trim()).filter(Boolean)
-      : []
-  );
-}
+import { getStaffConfig } from "../config/adminConfig.js";
 
 function memberHasAnyRole(member, roleIds) {
   if (!member || !roleIds || roleIds.length === 0) return false;
@@ -50,15 +42,11 @@ export function isAdmin(member) {
     return true;
 
   // Check specific admin user IDs (ENV + config/admins.json)
-  const envAdminIds = getEnvRoleIds("ADMIN_IDS", "ADMIN_USER_IDS");
-  const fileConfig = loadAdminConfigFile();
-  const allAdminIds = Array.from(new Set([...envAdminIds, ...fileConfig.adminUserIds]));
-  if (allAdminIds.includes(memberId)) return true;
+  const config = getStaffConfig();
+  if (config.adminUserIds.includes(memberId)) return true;
 
   // Check ADMIN_ROLE_IDS (admin role without owner permissions)
-  const envAdminRoleIds = getEnvRoleIds("ADMIN_ROLE_IDS", "ADMIN_ROLE_ID");
-  const allAdminRoleIds = Array.from(new Set([...envAdminRoleIds, ...fileConfig.adminRoleIds]));
-  if (memberHasAnyRole(member, allAdminRoleIds)) {
+  if (memberHasAnyRole(member, config.adminRoleIds)) {
     return true;
   }
 
@@ -73,37 +61,29 @@ export function hasCommandPermission(member, commandName) {
   // Full admins pass immediately
   if (isAdmin(member)) return true;
 
-  const fileConfig = loadAdminConfigFile();
+  const config = getStaffConfig();
 
   // Head GM role IDs (Главный ГМ)
-  const headGmRoleIds = Array.from(new Set([
-    ...getEnvRoleIds("HEAD_GM_ROLE_IDS", "HEAD_GM_ROLE_ID"),
-    ...(fileConfig.headGmRoleIds || []),
-  ]));
+  const headGmRoleIds = config.headGmRoleIds;
 
   // GM role IDs (Мастер игры) — Head GM inherits all regular GM commands
   const gmRoleIds = Array.from(new Set([
-    ...getEnvRoleIds("GM_ROLE_IDS", "GM_ROLE_ID", "LIMITED_ADMIN_ROLE_IDS"),
-    ...(fileConfig.gmRoleIds || []),
+    ...config.gmRoleIds,
     ...headGmRoleIds,
   ]));
 
   // Head Anketolog role IDs (Главный Анкетолог)
-  const headAnketologRoleIds = Array.from(new Set([
-    ...getEnvRoleIds("HEAD_ANKETOLOG_ROLE_IDS", "HEAD_ANKETOLOG_ROLE_ID"),
-    ...(fileConfig.headAnketologRoleIds || []),
-  ]));
+  const headAnketologRoleIds = config.headAnketologRoleIds;
 
   // Anketolog role IDs (Анкетолог) — Head Anketolog inherits all regular Anketolog commands
   const anketologRoleIds = Array.from(new Set([
-    ...getEnvRoleIds("ANKETOLOG_ROLE_IDS", "ANKETOLOG_ROLE_ID"),
-    ...(fileConfig.anketologRoleIds || []),
+    ...config.anketologRoleIds,
     ...headAnketologRoleIds,
   ]));
 
   // Moderator roles grant only SP awards among character-management commands.
   if (commandName === "add-sp" && memberHasAnyRole(member,
-    getEnvRoleIds("MODERATOR_ROLE_IDS", "MODERATOR_ROLE_ID"))) {
+    config.moderatorRoleIds)) {
     return true;
   }
 
@@ -190,24 +170,7 @@ export function hasCommandPermission(member, commandName) {
   // 5. Commands that style-giver roles can use
   const styleGiverCommands = ["give-style", "remove-player-style"];
   if (styleGiverCommands.includes(commandName)) {
-    const styleGiverRoleIds = getEnvRoleIds(
-      "GIVE_STYLE_ROLE_IDS",
-      "GIVE_STYLE_ROLE_ID",
-      "ANKETOLOG_ROLE_IDS",
-      "ANKETOLOG_ROLE_ID"
-    );
-    if (memberHasAnyRole(member, styleGiverRoleIds)) {
-      return true;
-    }
-  }
-
-  // 6. Physical stats commands (legacy compatibility fallback for LIMITED_ADMIN_ROLE_IDS)
-  const physicalStatsCommands = ["physical-register", "physical-edit"];
-  if (physicalStatsCommands.includes(commandName)) {
-    const physicalRoleIds = getEnvRoleIds(
-      "LIMITED_ADMIN_ROLE_IDS"
-    );
-    if (memberHasAnyRole(member, physicalRoleIds)) {
+    if (memberHasAnyRole(member, config.styleGiverRoleIds)) {
       return true;
     }
   }

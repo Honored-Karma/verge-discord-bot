@@ -2,7 +2,6 @@ import {
   EmbedBuilder,
   MessageFlags,
   SlashCommandBuilder,
-  PermissionFlagsBits,
 } from "discord.js";
 import {
   blockTraining,
@@ -39,7 +38,7 @@ const SLOT_CHOICES = [
 
 export const data = new SlashCommandBuilder()
   .setName("train-block")
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  .setDefaultMemberPermissions(null)
   .setDMPermission(false)
   .setDescription("[АДМИН] Управление блокировками тренировок игроков")
   .addSubcommand((subcommand) =>

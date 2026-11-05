@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { isAdmin, hasCommandPermission } from "../utils/adminCheck.js";
 import { loadAdminConfigFile } from "../config/adminConfig.js";
+import { resolveUserPermissions } from "../services/authService.js";
+import { calculateUserCapabilities } from "../services/permissionService.js";
+import { isGMOrAdmin } from "../interactions/missionSession.js";
 import {
   createAcceptApplicationState,
   createAcceptApplicationPreviewEmbed,
@@ -36,6 +39,93 @@ test("config/admins.json contains all configured role IDs correctly", () => {
   assert.ok(config.headAnketologRoleIds.includes(ROLE_HEAD_ANKETOLOG), "headAnketologRoleIds must include Head Anketolog role");
   assert.ok(config.anketologRoleIds.includes(ROLE_ANKETOLOG), "anketologRoleIds must include Anketolog role");
   assert.ok(config.gmRoleIds.includes(ROLE_GM), "gmRoleIds must include GM role");
+});
+
+test("веб-сессии распознают все пять ролей из admins.json без Discord Administrator", () => {
+  const cases = [
+    [ROLE_ADMIN, true, true, true, true, true],
+    [ROLE_HEAD_GM, false, true, false, true, true],
+    [ROLE_HEAD_ANKETOLOG, false, false, true, true, false],
+    [ROLE_ANKETOLOG, false, false, true, false, false],
+    [ROLE_GM, false, true, false, false, false],
+  ];
+  for (const [roleId, admin, gm, anketolog, manageCharacters, manageEconomy] of cases) {
+    const id = `web-role-${roleId}`;
+    const permissions = resolveUserPermissions(id, { roles: [roleId], permissions: "0" });
+    assert.equal(permissions.isAdmin, admin, roleId);
+    assert.equal(permissions.isGM, gm, roleId);
+    assert.equal(permissions.isAnketolog, anketolog, roleId);
+    assert.equal(permissions.isStaff, true, roleId);
+    const capabilities = calculateUserCapabilities({ id, permissions });
+    assert.equal(capabilities.canAccessAdmin, true, roleId);
+    assert.equal(capabilities.canManageApplications, anketolog, roleId);
+    assert.equal(capabilities.canManageCharacters, manageCharacters, roleId);
+    assert.equal(capabilities.canManageEconomy, manageEconomy, roleId);
+  }
+});
+
+test("главный анкетолог с правом add-ap не получает управление миссиями ГМ", () => {
+  assert.equal(isGMOrAdmin(createMemberWithRole(ROLE_HEAD_ANKETOLOG)), false);
+  assert.equal(isGMOrAdmin(createMemberWithRole(ROLE_GM)), true);
+  assert.equal(isGMOrAdmin(createMemberWithRole(ROLE_HEAD_GM)), true);
+});
+
+test("роль анкетолога из ENV не даёт удалять стили игроков", t => {
+  const old = process.env.ANKETOLOG_ROLE_IDS;
+  process.env.ANKETOLOG_ROLE_IDS = "reviewer-env-regression";
+  t.after(() => {
+    if (old === undefined) delete process.env.ANKETOLOG_ROLE_IDS;
+    else process.env.ANKETOLOG_ROLE_IDS = old;
+  });
+  const member = createMemberWithRole("reviewer-env-regression");
+  assert.equal(hasCommandPermission(member, "give-style"), true);
+  assert.equal(hasCommandPermission(member, "remove-player-style"), false);
+});
+
+test("алиасы ENV объединяются с основными настройками одинаково в боте и веб-панели", t => {
+  const env = {
+    ADMIN_ROLE_IDS: "admin-env-primary",
+    ADMIN_ROLE_ID: " admin-env-alias ",
+    ADMIN_IDS: "admin-user-primary",
+    ADMIN_USER_IDS: "admin-user-alias",
+    GM_ROLE_IDS: "gm-env-primary",
+    GM_ROLE_ID: "gm-env-alias",
+    LIMITED_ADMIN_ROLE_IDS: "gm-env-legacy",
+    HEAD_GM_ROLE_ID: "head-gm-env-alias",
+    HEAD_ANKETOLOG_ROLE_ID: "head-reviewer-env-alias",
+    ANKETOLOG_ROLE_ID: "reviewer-env-alias",
+  };
+  const previous = Object.fromEntries(Object.keys(env).map(name => [name, process.env[name]]));
+  Object.assign(process.env, env);
+  t.after(() => {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
+  for (const id of ["admin-env-primary", "admin-env-alias"]) {
+    const member = { id: `member-${id}`, roles: [id], permissions: "0" };
+    assert.equal(isAdmin(member), true);
+    assert.equal(resolveUserPermissions(member.id, member).isAdmin, true);
+    assert.equal(calculateUserCapabilities(member).canManageRoles, true);
+  }
+  for (const id of ["admin-user-primary", "admin-user-alias"]) {
+    assert.equal(isAdmin({ id, roles: [] }), true);
+    assert.equal(resolveUserPermissions(id, { roles: [] }).isAdmin, true);
+    assert.equal(calculateUserCapabilities({ id, roles: [] }).canManageRoles, true);
+  }
+  for (const id of ["gm-env-primary", "gm-env-alias", "gm-env-legacy", "head-gm-env-alias"]) {
+    const member = { id: `member-${id}`, roles: [id], permissions: "0" };
+    assert.equal(hasCommandPermission(member, "add-ap"), true);
+    assert.equal(resolveUserPermissions(member.id, member).isGM, true);
+    assert.equal(calculateUserCapabilities(member).canAccessAdmin, true);
+  }
+  for (const id of ["head-reviewer-env-alias", "reviewer-env-alias"]) {
+    const member = { id: `member-${id}`, roles: [id], permissions: "0" };
+    assert.equal(hasCommandPermission(member, "accept"), true);
+    assert.equal(resolveUserPermissions(member.id, member).isAnketolog, true);
+    assert.equal(calculateUserCapabilities(member).canManageApplications, true);
+  }
 });
 
 test("Администратор (1438987035862892544) has full access to all bot commands", () => {

@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, addReputation, getReputationTier, getActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { hasCommandPermission } from '../utils/adminCheck.js';
@@ -8,7 +8,7 @@ import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.
 
 export const data = new SlashCommandBuilder()
     .setName('add-reputation')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDefaultMemberPermissions(null)
     .setDMPermission(false)
     .setDescription('[АДМИН/ГМ] Добавить репутацию (Rtg) игроку')
     .addUserOption(option =>

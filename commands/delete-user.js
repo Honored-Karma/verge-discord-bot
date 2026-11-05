@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, deletePlayer, getActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin } from '../utils/adminCheck.js';
@@ -8,7 +8,7 @@ import { describeOrgSync, syncOrgRoles } from '../utils/orgRoles.js';
 
 export const data = new SlashCommandBuilder()
     .setName('delete-user')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDefaultMemberPermissions(null)
     .setDMPermission(false)
     .setDescription('[АДМИН] Удалить профиль игрока (для переучета)')
     .addUserOption(option =>

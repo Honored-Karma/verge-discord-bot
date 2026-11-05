@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, updatePlayer, getActiveSlot } from '../utils/dataManager.js';
 import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
 import { resolveMember } from '../utils/memberHelper.js';
@@ -8,7 +8,7 @@ import { describeOrgSync, syncOrgRoles } from '../utils/orgRoles.js';
 
 export const data = new SlashCommandBuilder()
     .setName('set-rank')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDefaultMemberPermissions(null)
     .setDMPermission(false)
     .setDescription('[АДМИН/АНКЕТОЛОГ] Установить ранг игроку')
     .addUserOption(option => 

@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, addCurrency, getActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
@@ -8,7 +8,7 @@ import { checkGlobalCooldown, autoDeleteMessageShort } from '../utils/cooldowns.
 
 export const data = new SlashCommandBuilder()
     .setName('deduct-currency')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDefaultMemberPermissions(null)
     .setDMPermission(false)
     .setDescription('[АДМИН] Списать валюту с игрока')
     .addUserOption(option =>

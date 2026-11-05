@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits, Routes } from 'discord.js';
+import { SlashCommandBuilder, Routes } from 'discord.js';
 import { isAdmin } from '../utils/adminCheck.js';
 
 export const data = new SlashCommandBuilder()
@@ -16,7 +16,7 @@ export const data = new SlashCommandBuilder()
         opt.setName('channel')
             .setDescription('Канал для отправки (по умолчанию — текущий)')
             .setRequired(false))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDefaultMemberPermissions(null)
     .setDMPermission(false);
 
 export async function execute(interaction) {

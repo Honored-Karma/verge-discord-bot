@@ -128,39 +128,32 @@ export async function fetchGuildMember(userId, { strict = false } = {}) {
     }
 }
 
-import { loadAdminConfigFile } from '../config/adminConfig.js';
+import { getStaffConfig } from '../config/adminConfig.js';
 
 /**
  * Resolve staff permissions based on user ID and guild roles
  */
 export function resolveUserPermissions(userId, guildMember) {
-    const adminConfigFile = loadAdminConfigFile();
-    const envAdminIds = (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
-    const adminIds = Array.from(new Set([...envAdminIds, ...adminConfigFile.adminUserIds]));
-
-    const envAdminRoleIds = (process.env.ADMIN_ROLE_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
-    const adminRoleIds = Array.from(new Set([...envAdminRoleIds, ...adminConfigFile.adminRoleIds]));
-
-    const gmRoleIds = (process.env.GM_ROLE_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
-    const envAnketologRoleIds = (process.env.ANKETOLOG_ROLE_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
-    const anketologRoleIds = Array.from(new Set([...envAnketologRoleIds, ...adminConfigFile.anketologRoleIds]));
-    const moderatorRoleIds = (process.env.MODERATOR_ROLE_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
-    const limitedAdminRoleIds = (process.env.LIMITED_ADMIN_ROLE_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+    const {
+        adminUserIds: adminIds, adminRoleIds, gmRoleIds, headGmRoleIds,
+        anketologRoleIds, headAnketologRoleIds, moderatorRoleIds, staffRoleIds,
+        loreMasterRoleIds
+    } = getStaffConfig();
 
     const isExplicitAdminId = adminIds.includes(String(userId));
     const memberRoles = Array.isArray(guildMember?.roles) ? guildMember.roles : [];
 
     const hasAdminRole = adminRoleIds.some(roleId => memberRoles.includes(roleId));
-    const hasGmRole = gmRoleIds.some(roleId => memberRoles.includes(roleId));
-    const hasAnketologRole = anketologRoleIds.some(roleId => memberRoles.includes(roleId));
+    const hasGmRole = [...gmRoleIds, ...headGmRoleIds].some(roleId => memberRoles.includes(roleId));
+    const hasAnketologRole = [...anketologRoleIds, ...headAnketologRoleIds].some(roleId => memberRoles.includes(roleId));
     const hasModeratorRole = moderatorRoleIds.some(roleId => memberRoles.includes(roleId));
-    const hasLimitedAdminRole = limitedAdminRoleIds.some(roleId => memberRoles.includes(roleId));
+    const hasStaffRole = [...staffRoleIds, ...loreMasterRoleIds].some(roleId => memberRoles.includes(roleId));
 
     const isAdmin = isExplicitAdminId || hasAdminRole;
     const isGM = isAdmin || hasGmRole;
     const isAnketolog = isAdmin || hasAnketologRole;
     const isModerator = isAdmin || hasModeratorRole;
-    const isStaff = isAdmin || isGM || isAnketolog || isModerator || hasLimitedAdminRole;
+    const isStaff = isAdmin || isGM || isAnketolog || isModerator || hasStaffRole;
 
     return {
         isMemberOfGuild: Boolean(guildMember),

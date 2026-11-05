@@ -16,7 +16,7 @@ import { createInteractionSession } from "../utils/interactionSessions.js";
 export const data = new SlashCommandBuilder()
   .setName("announce")
   .setDescription("Открыть мастер создания и рассылки объявлений")
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  .setDefaultMemberPermissions(null)
     .setDMPermission(false)
   .addUserOption((option) =>
     option

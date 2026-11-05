@@ -1,21 +1,22 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { PermissionFlagsBits, PermissionsBitField } from 'discord.js';
+import { Collection, PermissionFlagsBits, PermissionsBitField } from 'discord.js';
 import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
 
 const restricted = `accept add-ap add-currency add-reputation add-sp add-style announce
   deduct-currency deduct-reputation delete-style delete-user give-item give-style grant-slot
   log-disable log-enable logs physical-edit physical-register remove-item remove-player-style
-  render-ui send-json set-ap-multiplier set-ap set-currency set-rank set-reputation
+  purge-offtop render-ui send-json set-ap-multiplier set-ap set-currency set-rank set-reputation
   set-salary-multiplier set-sp-multiplier set-sp shop-admin shop-order train-block`.split(/\s+/);
 
-test('служебные команды закрыты в Discord и отказывают обычным игрокам до выполнения действий', async () => {
+test('служебные команды не требуют прав Discord и отказывают обычным игрокам до выполнения действий', async () => {
   const member = { id: 'regular-permissions-test', guild: { ownerId: 'owner' },
     permissions: new PermissionsBitField(), roles: [] };
   for (const name of restricted) {
     const command = await import(`../commands/${name}.js`);
     const schema = command.data.toJSON();
-    assert.equal(schema.default_member_permissions, String(PermissionFlagsBits.Administrator), name);
+    // Explicit null clears the old Administrator/ManageMessages restriction on redeploy.
+    assert.equal(schema.default_member_permissions, null, name);
     assert.equal(schema.dm_permission, false, name);
     let reply;
     await command.execute({
@@ -26,6 +27,43 @@ test('служебные команды закрыты в Discord и отказ�
     });
     assert.ok(reply, `${name} должен отказать в доступе`);
   }
+});
+
+test('назначенные роли без прав Discord проходят проверки в обработчиках команд', async () => {
+  const cases = [
+    ['1438987035862892544', ['send-json', 'render-ui', 'delete-user', 'shop-admin']],
+    ['1438987072026185808', ['add-ap', 'set-ap', 'set-sp-multiplier']],
+    ['1438987088975626251', ['accept', 'set-rank', 'grant-slot']],
+    ['1431759459528610013', ['accept', 'give-style', 'add-currency', 'physical-register', 'physical-edit']],
+    ['1431759694179074162', ['add-ap', 'add-sp', 'add-reputation', 'train-block']],
+  ];
+  for (const [roleId, names] of cases) {
+    for (const name of names) {
+      const command = await import(`../commands/${name}.js`);
+      const id = `role-handler-${roleId}-${name}`;
+      const member = { id, roles: { cache: new Collection([[roleId, { id: roleId }]]) },
+        permissions: new PermissionsBitField() };
+      const stop = new Error('Reached command options after authorization');
+      let authorized = false;
+      try {
+        await command.execute({
+          user: { id }, member,
+          guild: { members: { fetch: async () => member } },
+          options: new Proxy({}, { get() { authorized = true; throw stop; } }),
+          reply: async () => ({}),
+        });
+      } catch (error) {
+        assert.equal(error, stop, `${name}: unexpected error`);
+      }
+      assert.equal(authorized, true, `${roleId} must pass the ${name} handler's role check`);
+    }
+  }
+});
+
+test('роль администратора распознаётся в сыром участнике Discord без member.id и прав Administrator', () => {
+  const member = { user: { id: 'raw-admin-member' }, roles: ['1438987035862892544'], permissions: '0' };
+  assert.equal(isAdmin(member), true);
+  assert.equal(hasCommandPermission(member, 'delete-user'), true);
 });
 
 test('пустой или неполный объект участника не считается владельцем сервера', () => {

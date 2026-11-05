@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, setSPMultiplier, getActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin, hasCommandPermission } from '../utils/adminCheck.js';
@@ -9,7 +9,7 @@ import { makePlayerKey } from '../utils/playerKey.js';
 
 export const data = new SlashCommandBuilder()
     .setName('set-sp-multiplier')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDefaultMemberPermissions(null)
     .setDMPermission(false)
     .setDescription('[АДМИН] Установить множитель получения SP для игрока')
     .addUserOption(option =>

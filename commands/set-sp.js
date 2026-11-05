@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
+import { SlashCommandBuilder } from "discord.js";
 import {
   getPlayer,
   getStyleByName,
@@ -17,7 +17,7 @@ import {
 
 export const data = new SlashCommandBuilder()
   .setName("set-sp")
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  .setDefaultMemberPermissions(null)
   .setDMPermission(false)
   .setDescription("[АДМИН] Установить SP игрока для стиля")
   .addUserOption((option) =>

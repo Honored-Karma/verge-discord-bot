@@ -2,32 +2,20 @@ import { config } from 'dotenv';
 
 config();
 
-import { loadAdminConfigFile } from '../config/adminConfig.js';
-
-/**
- * Parses comma-separated ID lists from environment variables
- */
-function parseEnvIds(envVar) {
-    if (!envVar) return [];
-    return envVar.split(',').map(id => id.trim()).filter(Boolean);
-}
+import { getStaffConfig } from '../config/adminConfig.js';
 
 /**
  * Resolves current configured Admin User IDs from both ENV and config/admins.json
  */
 export function getConfiguredAdminIds() {
-    const envIds = parseEnvIds(process.env.ADMIN_IDS || process.env.ADMIN_USER_IDS);
-    const fileIds = loadAdminConfigFile().adminUserIds;
-    return Array.from(new Set([...envIds, ...fileIds]));
+    return getStaffConfig().adminUserIds;
 }
 
 /**
  * Resolves current configured Admin Role IDs from both ENV and config/admins.json
  */
 export function getConfiguredAdminRoleIds() {
-    const envIds = parseEnvIds(process.env.ADMIN_ROLE_IDS);
-    const fileIds = loadAdminConfigFile().adminRoleIds;
-    return Array.from(new Set([...envIds, ...fileIds]));
+    return getStaffConfig().adminRoleIds;
 }
 
 /**
@@ -55,33 +43,11 @@ export function calculateUserCapabilities(user) {
         ? user.roles.map(String) 
         : (Array.isArray(user.permissions?.roles) ? user.permissions.roles.map(String) : []);
 
-    const adminIds = getConfiguredAdminIds();
-    const adminRoleIds = getConfiguredAdminRoleIds();
-    const staffRoleIds = parseEnvIds(process.env.STAFF_ROLE_IDS || process.env.ADMIN_ROLE_ID);
-    const adminConfig = loadAdminConfigFile();
-    const headGmRoleIds = Array.from(new Set([
-        ...parseEnvIds(process.env.HEAD_GM_ROLE_IDS || process.env.HEAD_GM_ROLE_ID),
-        ...(adminConfig.headGmRoleIds || [])
-    ]));
-    const headAnketologRoleIds = Array.from(new Set([
-        ...parseEnvIds(process.env.HEAD_ANKETOLOG_ROLE_IDS || process.env.HEAD_ANKETOLOG_ROLE_ID),
-        ...(adminConfig.headAnketologRoleIds || [])
-    ]));
-    const gmRoleIds = Array.from(new Set([
-        ...parseEnvIds(process.env.GM_ROLE_IDS || process.env.GM_ROLE_ID || process.env.LIMITED_ADMIN_ROLE_IDS),
-        ...(adminConfig.gmRoleIds || []),
-        ...headGmRoleIds
-    ]));
-    const anketologRoleIds = Array.from(new Set([
-        ...parseEnvIds(process.env.ANKETOLOG_ROLE_IDS || process.env.ANKETOLOG_ROLE_ID),
-        ...(adminConfig.anketologRoleIds || []),
-        ...headAnketologRoleIds
-    ]));
-    const moderatorRoleIds = parseEnvIds(process.env.MODERATOR_ROLE_IDS || process.env.MODERATOR_ROLE_ID);
-    const loreMasterRoleIds = Array.from(new Set([
-        ...parseEnvIds(process.env.LORE_MASTER_ROLE_IDS || process.env.WIKI_EDITOR_ROLE_IDS),
-        ...(adminConfig.loreMasterRoleIds || [])
-    ]));
+    const {
+        adminUserIds: adminIds, adminRoleIds, staffRoleIds, headGmRoleIds,
+        headAnketologRoleIds, gmRoleIds, anketologRoleIds, moderatorRoleIds,
+        loreMasterRoleIds
+    } = getStaffConfig();
 
     // Check role memberships & explicit admin status
     const isDirectAdmin = adminIds.includes(userId);

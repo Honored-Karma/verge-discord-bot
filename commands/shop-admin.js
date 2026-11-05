@@ -1,4 +1,4 @@
-import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
+import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import { isAdmin } from "../utils/adminCheck.js";
 import { resolveMember } from "../utils/memberHelper.js";
 import { logCommand } from "../utils/logs.js";
@@ -74,7 +74,7 @@ function addCommonEditOptions(subcommand, required) {
 
 export const data = new SlashCommandBuilder()
   .setName("shop-admin")
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  .setDefaultMemberPermissions(null)
   .setDescription("[АДМИН] Управление товарами и остатками магазина")
   .setDMPermission(false)
   .addSubcommand((subcommand) => subcommand

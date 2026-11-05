@@ -11,7 +11,8 @@ const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
 export const data = new SlashCommandBuilder()
   .setName("purge-offtop")
   .setDescription("[АДМИН] Удалить оффтоп-сообщения по префиксу (( // и т.д.)")
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+  .setDefaultMemberPermissions(null)
+  .setDMPermission(false)
   .addStringOption((option) =>
     option
       .setName("prefix")

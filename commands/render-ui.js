@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
 import { parseDiscohookPayload } from '../utils/discohookParser.js';
 import { createErrorEmbed } from '../utils/embeds.js';
 import { isAdmin } from '../utils/adminCheck.js';
@@ -6,7 +6,7 @@ import { resolveMember } from '../utils/memberHelper.js';
 
 export const data = new SlashCommandBuilder()
     .setName('render-ui')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDefaultMemberPermissions(null)
     .setDMPermission(false)
     .setDescription('[АДМИН] Рендер UI из Discohook JSON')
     .addStringOption((option) =>

@@ -1,4 +1,4 @@
-import { MessageFlags, SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
+import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import { getPlayer, isSlot3Unlocked, listStyles } from "../utils/dataManager.js";
 import { hasCommandPermission } from "../utils/adminCheck.js";
 import { resolveMember } from "../utils/memberHelper.js";
@@ -110,7 +110,7 @@ export function resolveAcceptanceSlot({
 
 export const data = new SlashCommandBuilder()
   .setName("accept")
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  .setDefaultMemberPermissions(null)
   .setDMPermission(false)
   .setDescription("[АНКЕТОЛОГ] Принять анкету игрока, заполнить профиль и выдать роль")
   .addUserOption((option) =>

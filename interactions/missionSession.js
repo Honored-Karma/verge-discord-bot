@@ -63,8 +63,7 @@ export function isGMOrAdmin(member) {
   if (isAdmin(member)) return true;
   return (
     hasCommandPermission(member, "mission") ||
-    hasCommandPermission(member, "mission-create") ||
-    hasCommandPermission(member, "add-ap")
+    hasCommandPermission(member, "mission-create")
   );
 }
 

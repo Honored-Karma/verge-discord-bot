@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
 import { getPlayer, setSalaryMultiplier, getActiveSlot } from '../utils/dataManager.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds.js';
 import { hasCommandPermission } from '../utils/adminCheck.js';
@@ -9,7 +9,7 @@ import { getWeeklySalary } from '../utils/rankSystem.js';
 
 export const data = new SlashCommandBuilder()
     .setName('set-salary-multiplier')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDefaultMemberPermissions(null)
     .setDMPermission(false)
     .setDescription('[АДМИН] Установить индивидуальный множитель зарплаты для игрока/слота')
     .addUserOption(option =>

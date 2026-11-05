@@ -49,6 +49,28 @@ export function loadAdminConfigFile() {
     }
 }
 
+// Use the same file + environment role lists in Discord commands and web sessions.
+export function getStaffConfig() {
+    const fileConfig = loadAdminConfigFile();
+    const merge = (key, ...envNames) => Array.from(new Set([
+        ...(fileConfig[key] || []),
+        ...envNames.flatMap(name => (process.env[name] || '').split(','))
+            .map(id => id.trim()).filter(Boolean)
+    ]));
+    return {
+        adminUserIds: merge('adminUserIds', 'ADMIN_IDS', 'ADMIN_USER_IDS'),
+        adminRoleIds: merge('adminRoleIds', 'ADMIN_ROLE_IDS', 'ADMIN_ROLE_ID'),
+        headGmRoleIds: merge('headGmRoleIds', 'HEAD_GM_ROLE_IDS', 'HEAD_GM_ROLE_ID'),
+        headAnketologRoleIds: merge('headAnketologRoleIds', 'HEAD_ANKETOLOG_ROLE_IDS', 'HEAD_ANKETOLOG_ROLE_ID'),
+        gmRoleIds: merge('gmRoleIds', 'GM_ROLE_IDS', 'GM_ROLE_ID', 'LIMITED_ADMIN_ROLE_IDS'),
+        anketologRoleIds: merge('anketologRoleIds', 'ANKETOLOG_ROLE_IDS', 'ANKETOLOG_ROLE_ID'),
+        moderatorRoleIds: merge('moderatorRoleIds', 'MODERATOR_ROLE_IDS', 'MODERATOR_ROLE_ID'),
+        loreMasterRoleIds: merge('loreMasterRoleIds', 'LORE_MASTER_ROLE_IDS', 'WIKI_EDITOR_ROLE_IDS'),
+        staffRoleIds: merge('staffRoleIds', 'STAFF_ROLE_IDS'),
+        styleGiverRoleIds: merge('styleGiverRoleIds', 'GIVE_STYLE_ROLE_IDS', 'GIVE_STYLE_ROLE_ID')
+    };
+}
+
 /**
  * Append or save an admin user ID to admins.json
  * @param {string} userId - Discord user ID

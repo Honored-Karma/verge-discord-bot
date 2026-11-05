@@ -33,17 +33,17 @@ for (const file of commandFiles) {
     }
 }
 
-const token = process.env.DISCORD_TOKEN || process.env.TOKEN;
-const clientId = process.env.CLIENT_ID;
+const token = process.env.DISCORD_TOKEN || process.env.BOT_TOKEN || process.env.TOKEN;
+const clientId = process.env.DISCORD_CLIENT_ID || process.env.CLIENT_ID;
 const guildId = process.env.GUILD_ID;
 
 if (!token) {
-    console.error('❌ No Discord token found! Please set DISCORD_TOKEN or TOKEN in your secrets.');
+    console.error('❌ No Discord token found! Please set DISCORD_TOKEN or BOT_TOKEN in your secrets.');
     process.exit(1);
 }
 
 if (!clientId) {
-    console.error('❌ No CLIENT_ID found! Please set CLIENT_ID in your environment.');
+    console.error('❌ No client ID found! Please set DISCORD_CLIENT_ID or CLIENT_ID in your environment.');
     process.exit(1);
 }
 
