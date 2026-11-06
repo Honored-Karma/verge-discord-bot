@@ -19,6 +19,7 @@ const POPULAR_LOG_COMMANDS = [
     { name: '🥋 Тренировка стиля SP (/train-sp)', value: 'train-sp' },
     { name: '🎭 Социальный RP (/social-rp)', value: 'social-rp' },
     { name: '🔒 Блокировки тренировок (/train-block)', value: 'train-block' },
+    { name: '🚫 Запреты тренировок в каналах (/train-channel-block)', value: 'train-channel-block' },
     { name: '🎁 Лутбокс (/lootbox)', value: 'lootbox' },
     { name: '💳 Перевод валюты (/pay)', value: 'pay' },
     { name: '🛒 Магазин (/shop)', value: 'shop' },
@@ -101,6 +102,8 @@ export async function execute(interaction) {
             andClauses.push({ command: { $in: ['train-ap', 'train'] } });
         } else if (cmd === 'train-block') {
             andClauses.push({ command: { $in: ['train-block', 'train-block block', 'train-block unblock'] } });
+        } else if (cmd === 'train-channel-block') {
+            andClauses.push({ command: { $in: ['train-channel-block', 'train-channel-block block', 'train-channel-block unblock', 'train-channel-block unblock all'] } });
         } else {
             andClauses.push({ command: { $regex: new RegExp(`^${cmd}$`, 'i') } });
         }

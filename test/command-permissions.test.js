@@ -7,7 +7,7 @@ const restricted = `accept add-ap add-currency add-reputation add-sp add-style a
   deduct-currency deduct-reputation delete-style delete-user give-item give-style grant-slot
   log-disable log-enable logs physical-edit physical-register remove-item remove-player-style
   purge-offtop render-ui send-json set-ap-multiplier set-ap set-currency set-rank set-reputation
-  set-salary-multiplier set-sp-multiplier set-sp shop-admin shop-order train-block`.split(/\s+/);
+  set-salary-multiplier set-sp-multiplier set-sp shop-admin shop-order train-block train-channel-block`.split(/\s+/);
 
 test('служебные команды не требуют прав Discord и отказывают обычным игрокам до выполнения действий', async () => {
   const member = { id: 'regular-permissions-test', guild: { ownerId: 'owner' },

@@ -20,7 +20,7 @@ import {
 import { checkTrainingBlock, TRAINING_TYPES } from "../utils/trainingBlocks.js";
 import { logCommand } from "../utils/logs.js";
 import { makePlayerKey } from "../utils/playerKey.js";
-import { enforceRPActivityChannel } from "../utils/rpActivity.js";
+import { checkTrainingChannelBlocked } from "../utils/trainingChannelBlocks.js";
 import {
   createAPActivityErrorComponents,
   createTrainingModal,
@@ -64,7 +64,7 @@ export async function execute(interaction) {
     });
   }
 
-  if (await enforceRPActivityChannel(interaction, playerId, "ap")) return;
+  if (await checkTrainingChannelBlocked(interaction)) return;
 
   const blockCheck = await checkTrainingBlock(
     interaction.user.id,
@@ -122,7 +122,7 @@ export async function handleModalSubmit(interaction) {
   }
 
   const playerId = makePlayerKey(interaction.user.id, slot);
-  if (await enforceRPActivityChannel(interaction, playerId, "ap")) return;
+  if (await checkTrainingChannelBlocked(interaction)) return;
 
   const blockCheck = await checkTrainingBlock(
     interaction.user.id,

@@ -280,6 +280,18 @@ async function initializeDatabase() {
             { name: 'training_blocks_expires' }
         );
 
+        if (!collectionNames.includes('training_channel_blocks')) {
+            await db.createCollection('training_channel_blocks');
+        }
+        await db.collection('training_channel_blocks').createIndex(
+            { guild_id: 1, channel_id: 1 },
+            { unique: true, name: 'training_channel_blocks_guild_channel' }
+        );
+        await db.collection('training_channel_blocks').createIndex(
+            { guild_id: 1, is_active: 1 },
+            { name: 'training_channel_blocks_guild_active' }
+        );
+
         // Persistent state for button/select/modal panels. The message id is the
         // session key, so a panel survives a bot restart; the TTL index sweeps
         // abandoned panels without a cron job.

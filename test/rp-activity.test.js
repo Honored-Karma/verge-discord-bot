@@ -206,25 +206,35 @@ test("награды, штрафы и смена канала работают �
       assert.equal((await dm.getPlayer("user")).ap, 0);
     });
 
-    await t.test("все три команды отклоняются вне РП до открытия формы", async () => {
+    await t.test("все три команды отклоняются в заблокированном канале до открытия формы без штрафа", async () => {
+      const { blockTrainingChannels } = await import("../utils/trainingChannelBlocks.js");
+      await blockTrainingChannels({
+        guildId: "guild",
+        channels: [{ id: "blocked-chan" }],
+        adminId: "admin",
+        reason: "Тестовая блокировка",
+      });
+
       for (const commandName of ["train-ap", "train-sp", "social-rp"]) {
         const command = await import(`../commands/${commandName}.js`);
-        const interaction = channelInteraction({ allowed: false });
+        const interaction = channelInteraction();
+        interaction.channelId = "blocked-chan";
         interaction.commandName = commandName;
         // Separate users avoid the shared three-second command cooldown.
-        interaction.user.id = commandName;
-        await dm.createPlayer(commandName, commandName, "Персонаж", null, 1, null);
-        await dm.updatePlayer(commandName, { ap: 20 });
-        await dm.giveStyle(commandName, style.name, 20, "admin");
+        interaction.user.id = `blocked-${commandName}`;
+        await dm.createPlayer(interaction.user.id, commandName, "Персонаж", null, 1, null);
+        await dm.updatePlayer(interaction.user.id, { ap: 20 });
+        await dm.giveStyle(interaction.user.id, style.name, 20, "admin");
         await command.execute(interaction);
         assert.equal(interaction.modalShown, undefined);
-        assert.match(JSON.stringify(interaction.response), /РП-каналах/);
-        if (commandName === "train-sp") assert.equal(await dm.getSP(commandName, style.id), 10);
-        else assert.equal((await dm.getPlayer(commandName)).ap, 10);
+        assert.match(JSON.stringify(interaction.response), /Тренировки запрещены/);
+        // Никакого штрафа не списано
+        if (commandName === "train-sp") assert.equal(await dm.getSP(interaction.user.id, style.id), 20);
+        else assert.equal((await dm.getPlayer(interaction.user.id)).ap, 20);
       }
     });
 
-    await t.test("все три команды открываются и начисляют награды в скрытом РП-канале без штрафа", async () => {
+    await t.test("все три команды открываются и начисляют награды в незаблокированном канале без штрафа", async () => {
       const specs = [
         ["train-ap", "train_ap_modal:1"],
         ["train-sp", `train_sp_modal:1:${style.id}`],
@@ -264,7 +274,7 @@ test("награды, штрафы и смена канала работают �
       }
     });
 
-    await t.test("открытая форма перепроверяет права канала и не начисляет награду после их изменения", async () => {
+    await t.test("открытая форма блокируется, если канал был заблокирован перед отправкой", async () => {
       const specs = [
         ["train-ap", "train_ap_modal:1"],
         ["train-sp", `train_sp_modal:1:${style.id}`],
@@ -272,13 +282,18 @@ test("награды, штрафы и смена канала работают �
       ];
       for (const [commandName, customId] of specs) {
         const command = await import(`../commands/${commandName}.js`);
-        const interaction = channelInteraction({ allowed: false });
+        const interaction = channelInteraction();
+        interaction.channelId = "blocked-chan";
         interaction.customId = customId;
-        interaction.user.id = commandName;
+        interaction.user.id = `modal-block:${commandName}`;
+        await dm.createPlayer(interaction.user.id, commandName, "Персонаж", null, 1, null);
+        await dm.updatePlayer(interaction.user.id, { ap: 20 });
+        await dm.giveStyle(interaction.user.id, style.name, 20, "admin");
+
         await command.handleModalSubmit(interaction);
-        assert.match(JSON.stringify(interaction.response), /РП-каналах/);
-        if (commandName === "train-sp") assert.equal(await dm.getSP(commandName, style.id), 0);
-        else assert.equal((await dm.getPlayer(commandName)).ap, 0);
+        assert.match(JSON.stringify(interaction.response), /Тренировки запрещены/);
+        if (commandName === "train-sp") assert.equal(await dm.getSP(interaction.user.id, style.id), 20);
+        else assert.equal((await dm.getPlayer(interaction.user.id)).ap, 20);
       }
     });
 

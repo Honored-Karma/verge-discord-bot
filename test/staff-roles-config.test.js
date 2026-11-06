@@ -139,7 +139,7 @@ test("Администратор (1438987035862892544) has full access to all bo
     "logs", "mission", "physical-edit", "physical-register", "purge-offtop", "remove-item",
     "remove-player-style", "render-ui", "send-json", "set-ap-multiplier", "set-ap",
     "set-currency", "set-rank", "set-reputation", "set-salary-multiplier", "set-sp-multiplier",
-    "set-sp", "shop-admin", "train-block"
+    "set-sp", "shop-admin", "train-block", "train-channel-block"
   ];
 
   for (const cmd of testCommands) {
@@ -186,6 +186,7 @@ test("Мастер Игры / ГМ (1431759694179074162) has exact GM permission
     "delete-user",
     "delete-style",
     "add-style",
+    "train-channel-block",
   ];
 
   for (const cmd of forbidden) {
@@ -238,6 +239,7 @@ test("Главный ГМ (1438987072026185808) inherits GM permissions and has 
     "delete-user",
     "delete-style",
     "add-style",
+    "train-channel-block",
   ];
 
   for (const cmd of forbidden) {
@@ -273,6 +275,7 @@ test("Анкетолог (1431759459528610013) has exact reviewer commands", () 
     "set-sp-multiplier",
     "set-salary-multiplier",
     "train-block",
+    "train-channel-block",
     "logs",
     "render-ui",
     "send-json",
@@ -281,6 +284,7 @@ test("Анкетолог (1431759459528610013) has exact reviewer commands", () 
     "delete-user",
     "delete-style",
     "add-style",
+    "train-channel-block",
   ];
 
   for (const cmd of forbidden) {
@@ -322,6 +326,7 @@ test("Главный Анкетолог (1438987088975626251) inherits Anketolog
     "set-sp-multiplier",
     "set-salary-multiplier",
     "train-block",
+    "train-channel-block",
     "logs",
     "send-json",
     "render-ui",
@@ -329,6 +334,7 @@ test("Главный Анкетолог (1438987088975626251) inherits Anketolog
     "delete-user",
     "delete-style",
     "add-style",
+    "train-channel-block",
   ];
 
   for (const cmd of forbidden) {

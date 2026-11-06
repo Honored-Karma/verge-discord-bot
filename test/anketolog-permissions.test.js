@@ -65,6 +65,7 @@ test("ANKETOLOG_ROLE_IDS grants permissions for onboarding/character approval co
     "set-sp-multiplier",
     "set-salary-multiplier",
     "train-block",
+    "train-channel-block",
     "logs",
     "render-ui",
     "announce",
@@ -161,7 +162,7 @@ test("GM_ROLE_IDS and HEAD_GM_ROLE_IDS grant correct permissions for Game Master
     "mission-create",
     "physical-register",
     "physical-edit",
-    "train-block"
+    "train-block",
   ];
 
   for (const cmd of allowedForGM) {
@@ -182,7 +183,8 @@ test("GM_ROLE_IDS and HEAD_GM_ROLE_IDS grant correct permissions for Game Master
     "logs",
     "send-json",
     "render-ui",
-    "delete-user"
+    "delete-user",
+    "train-channel-block",
   ];
 
   for (const cmd of forbiddenForGM) {
