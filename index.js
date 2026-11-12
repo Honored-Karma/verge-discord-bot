@@ -22,7 +22,6 @@ import { createLootboxPayload } from './utils/lootbox.js';
 import { checkGlobalCooldown } from './utils/cooldowns.js';
 import { logCommand } from './utils/logs.js';
 import { isAdmin } from './utils/adminCheck.js';
-import { resetTrainingLocationOnMessage } from './utils/rpActivity.js';
 import { handleTupperMessage } from './services/tupperService.js';
 import { handleTupperReaction } from './interactions/tupperSession.js';
 
@@ -241,10 +240,6 @@ client.on(Events.InteractionCreate, async interaction => {
 
 client.on(Events.MessageCreate, async message => {
     if (message.author.bot) return;
-
-    await resetTrainingLocationOnMessage(message).catch(error => {
-        logger.error('Failed to reset training location:', error);
-    });
 
     if (await handleTupperMessage(message)) return;
 

@@ -105,7 +105,6 @@ export function createActivityResultComponents({ characterName, avatarUrl, baseR
     `Бонус ранга и активности: **+${formatNumber(dynamicBonus)}%** · эффект магазина: **+${formatNumber(shopBonus)}%**`,
     "Бонусы уже включены в итоговый множитель.",
   ];
-  if (locationFactor < 1) lines.push(`Повтор в том же канале: коэффициент **${formatNumber(locationFactor)}**. Сообщение в другом канале сервера сбросит снижение.`);
   if (activityText) lines.push("", "### Фрагмент сцены", `> ${truncateText(activityText, 350).replaceAll("\n", "\n> ").replaceAll("||", "¦¦")}`);
   const details = new ContainerBuilder().setAccentColor(RESPONSE_COLORS.brand).setSpoiler(true)
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(lines.join("\n")));

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ChannelType, Client, Guild, PermissionFlagsBits } from "discord.js";
-import { isRPActivityChannel, enforceRPActivityChannel, resetTrainingLocationOnMessage } from "../utils/rpActivity.js";
+import { isRPActivityChannel, enforceRPActivityChannel } from "../utils/rpActivity.js";
 
 const ROLE = "1431761095319879892";
 process.env.RP_ROLE_ID = ROLE;
@@ -134,43 +134,34 @@ test("награды, штрафы и смена канала работают �
       $set: { last_train_timestamp: 1, last_sp_train_timestamp: 1 },
     });
 
-    await t.test("повтор снижает множитель AP и SP, социальное RP не затронуто", async () => {
+    await t.test("повтор в том же канале не снижает множитель AP и SP", async () => {
       const first = await dm.completeAPTraining("user", 10, cooldown, context);
       assert.equal(first.success, true);
       assert.equal(first.locationFactor, 1);
+      assert.equal(first.locationRepeats, 0);
       assert.equal(first.gained, 10);
       assert.equal((await dm.completeAPTraining("user", 10, cooldown, context)).reason, "cooldown");
-      assert.equal((await dm.getPlayer("user")).training_location.repeats, 0);
+      assert.equal((await dm.getPlayer("user")).training_location, undefined);
       await expireCooldowns();
       const second = await dm.completeAPTraining("user", 10, cooldown, context);
-      assert.equal(second.locationFactor, 0.8);
+      assert.equal(second.success, true);
+      assert.equal(second.locationFactor, 1);
+      assert.equal(second.locationRepeats, 0);
+      assert.equal(second.multiplier, second.baseMultiplier + second.dynamicBonus + second.shopBonus);
       assert.equal(second.gained, Math.round(10 * second.multiplier / 100));
       const sp = await dm.completeSPTraining("user", style.id, 10, cooldown, context);
       assert.equal(sp.success, true);
-      assert.ok(Math.abs(sp.locationFactor - 0.64) < 1e-10);
+      assert.equal(sp.locationFactor, 1);
+      assert.equal(sp.locationRepeats, 0);
+      assert.equal(sp.multiplier, sp.baseMultiplier + sp.dynamicBonus + sp.shopBonus);
+      assert.equal(sp.gained, Math.round(10 * sp.multiplier / 100));
       const social = await dm.completeSocialRP("user", 10, cooldown);
       assert.equal(social.success, true);
       assert.equal(social.locationFactor, 1);
-      assert.equal((await dm.getPlayer("user")).training_location.repeats, 2);
-    });
-
-    await t.test("обычное сообщение в другом канале сбрасывает дебафф только на этом сервере", async () => {
-      const message = { author: { id: "user", bot: false }, guildId: "guild", channelId: "channel", content: "Привет" };
-      await resetTrainingLocationOnMessage(message);
-      assert.equal((await dm.getPlayer("user")).training_location.repeats, 2);
-      await resetTrainingLocationOnMessage({ ...message, guildId: "other", channelId: "other" });
-      await resetTrainingLocationOnMessage({ ...message, channelId: "other", author: { id: "user", bot: true } });
-      await resetTrainingLocationOnMessage({ ...message, channelId: "other", content: "  " });
-      assert.equal((await dm.getPlayer("user")).training_location.repeats, 2);
-      await resetTrainingLocationOnMessage({ ...message, channelId: "other" });
       assert.equal((await dm.getPlayer("user")).training_location, undefined);
-      await expireCooldowns();
-      assert.equal((await dm.completeAPTraining("user", 10, cooldown, context)).locationFactor, 1);
-      await expireCooldowns();
-      assert.equal((await dm.completeAPTraining("user", 10, cooldown, { ...context, channelId: "new" })).locationFactor, 1);
     });
 
-    await t.test("два одновременных отправления формы дают одну награду и один шаг дебаффа", async () => {
+    await t.test("два одновременных отправления формы дают ровно одну награду", async () => {
       await expireCooldowns();
       const before = await dm.getPlayer("user");
       const results = await Promise.all([
@@ -179,7 +170,6 @@ test("награды, штрафы и смена канала работают �
       ]);
       assert.equal(results.filter(result => result.success).length, 1);
       const after = await dm.getPlayer("user");
-      assert.equal(after.training_location.repeats, before.training_location.repeats + 1);
       assert.equal(after.ap - before.ap, results.find(result => result.success).gained);
     });
 
@@ -305,7 +295,6 @@ test("награды, штрафы и смена канала работают �
       ];
       await dm.updatePlayer("user", { last_socialrp_timestamp: 0 });
       await expireCooldowns();
-      await db.collection("players").updateOne({ id: "user" }, { $unset: { training_location: "" } });
       for (const [commandName, customId] of specs) {
         const command = await import(`../commands/${commandName}.js`);
         const interaction = channelInteraction({ categoryAllowed: false, categoryEveryoneDenied: false });
@@ -314,24 +303,9 @@ test("награды, штрафы и смена канала работают �
         interaction.fields = { getTextInputValue: () => "Персонаж выполняет упражнения и отрабатывает движения. ".repeat(20) };
         await command.handleModalSubmit(interaction);
         assert.match(JSON.stringify(interaction.response), /завершена|учтена/);
-        if (commandName === "train-sp") {
-          assert.match(JSON.stringify(interaction.response), /Повтор в том же канале/);
-        }
+        assert.doesNotMatch(JSON.stringify(interaction.response), /Повтор в том же канале/);
       }
-      assert.equal((await dm.getPlayer("user")).training_location.repeats, 1);
-    });
-
-    await t.test("сброс относится только к активному слоту персонажа", async () => {
-      await dm.createPlayer("user", "Игрок", "Второй персонаж", null, 2, null);
-      await dm.setActiveSlot("user", 1);
-      const secondPlayerId = "user_2";
-      await dm.updatePlayer(secondPlayerId, { training_location: { guild_id: "guild", channel_id: "channel", repeats: 3 } });
-      await resetTrainingLocationOnMessage({ author: { id: "user" }, guildId: "guild", channelId: "other", content: "Привет" });
-      assert.equal((await dm.getPlayer(secondPlayerId)).training_location.repeats, 3);
-      await dm.setActiveSlot("user", 2);
-      await resetTrainingLocationOnMessage({ author: { id: "user" }, guildId: "guild", channelId: "other", content: "Привет" });
-      assert.equal((await dm.getPlayer(secondPlayerId)).training_location, undefined);
-      await dm.setActiveSlot("user", 1);
+      assert.equal((await dm.getPlayer("user")).training_location, undefined);
     });
 
     await t.test("ошибка Discord при чтении прав отклоняет активность без штрафа", async () => {

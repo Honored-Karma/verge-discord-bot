@@ -1,8 +1,6 @@
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
-import { getDB } from "./db.js";
-import { applyRPActivityPenalty, getActiveSlot } from "./dataManager.js";
+import { applyRPActivityPenalty } from "./dataManager.js";
 import { createErrorEmbed } from "./embeds.js";
-import { makePlayerKey } from "./playerKey.js";
 import { logCommand } from "./logs.js";
 
 const DEFAULT_RP_ROLE_ID = "1431761095319879892";
@@ -83,12 +81,6 @@ async function replyError(interaction, title, description) {
   return interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
 }
 
-export async function resetTrainingLocationOnMessage(message) {
-  if (!message.guildId || message.author?.bot || !message.content?.trim()) return;
-  const slot = await getActiveSlot(message.author.id);
-  await getDB().collection("players").updateOne({
-    id: makePlayerKey(message.author.id, slot),
-    "training_location.guild_id": message.guildId,
-    "training_location.channel_id": { $ne: message.channelId },
-  }, { $unset: { training_location: "" } });
+export async function resetTrainingLocationOnMessage() {
+  // No-op: channel-repetition training penalty has been removed.
 }
