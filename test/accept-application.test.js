@@ -20,7 +20,7 @@ import {
   DEFAULT_UNVERIFIED_ROLE_ID,
 } from "../interactions/acceptApplicationSession.js";
 import { hasCommandPermission } from "../utils/adminCheck.js";
-import { resolveAcceptanceSlot } from "../commands/accept.js";
+import { resolveAcceptanceSlot, execute as acceptExecute } from "../commands/accept.js";
 
 test("accept command permissions: anketolog, GM, admin can run accept", () => {
   process.env.ANKETOLOG_ROLE_IDS = "1431759459528610013";
@@ -314,5 +314,154 @@ test("resolveAcceptanceSlot: blocks accepting when all slots are occupied", () =
   });
   assert.equal(res.ok, false);
   assert.equal(res.title, "Все слоты заняты");
+});
+
+test("/accept execute and confirm flow grant initial KRW, YEN, and combat style SP", async (t) => {
+  let server = null;
+  try {
+    const { MongoMemoryServer } = await import("mongodb-memory-server");
+    server = await MongoMemoryServer.create();
+  } catch {
+    t.skip("mongod недоступен в этой среде");
+    return;
+  }
+
+  process.env.MONGODB_URI = server.getUri();
+  process.env.ANKETOLOG_ROLE_IDS = "1431759459528610013";
+
+  const { connectDatabase, closeDatabase, getDB } = await import("../utils/db.js");
+  const { addStyle, getAllPlayerSP, getLearnedPlayerStyles, getPlayer } = await import(
+    "../utils/dataManager.js"
+  );
+  const { getInteractionSession } = await import("../utils/interactionSessions.js");
+  const { sweepGlobalCooldowns } = await import("../utils/cooldowns.js");
+
+  try {
+    await connectDatabase();
+    await addStyle("Тхэквондо", "admin_1");
+    await addStyle("Бокс", "admin_1");
+
+    const anketologId = "anketolog_test_1";
+    const targetUserId = "applicant_test_1";
+    const sessionMessageId = "panel_msg_1";
+
+    const buildInteraction = (optionsMap, actorId = anketologId) => {
+      let replyPayload = null;
+      const member = {
+        id: actorId,
+        guild: { ownerId: "owner_1" },
+        permissions: { has: () => false },
+        roles: { cache: [{ id: "1431759459528610013" }] },
+      };
+      return {
+        user: { id: actorId, username: "anketolog", tag: "anketolog#0001" },
+        guildId: "guild_1",
+        channelId: "channel_1",
+        guild: {
+          ownerId: "owner_1",
+          members: { fetch: async () => member },
+        },
+        member,
+        options: {
+          getUser: (name) =>
+            name === "user" ? { id: targetUserId, username: "playerone" } : null,
+          getInteger: (name) => (name in optionsMap ? optionsMap[name] : null),
+          getString: (name) => (name in optionsMap ? optionsMap[name] : null),
+          getAttachment: () => null,
+        },
+        reply: async (payload) => {
+          replyPayload = payload;
+          return { id: sessionMessageId, ...payload };
+        },
+        getReplyPayload: () => replyPayload,
+      };
+    };
+
+    // 1. Unknown combat_style should be rejected before creating a session
+    sweepGlobalCooldowns(Date.now() + 10000);
+    const badInteraction = buildInteraction({
+      character_name: "Ли Мин",
+      combat_style: "Несуществующий стиль",
+      initial_krw: 50000,
+      initial_yen: 2500,
+    });
+    await acceptExecute(badInteraction);
+    assert.ok(
+      badInteraction.getReplyPayload().embeds[0].data.title.includes("Боевой стиль не найден"),
+      "should reject unknown combat_style immediately"
+    );
+    assert.equal(await getInteractionSession(sessionMessageId), null);
+
+    // 2. Valid combat_style (case-insensitive) + initial_krw + initial_yen
+    sweepGlobalCooldowns(Date.now() + 10000);
+    const okInteraction = buildInteraction({
+      character_name: "Ли Мин",
+      attribute_name: "Пепел",
+      combat_style: "тхэквондо",
+      initial_krw: 75000,
+      initial_yen: 5000,
+    });
+    await acceptExecute(okInteraction);
+
+    const previewDesc = okInteraction.getReplyPayload().embeds[0].data.description;
+    assert.ok(previewDesc.includes("Тхэквондо"), "preview should show normalized combat style");
+    assert.ok(previewDesc.includes("75"), "preview should show initial KRW");
+    assert.ok(previewDesc.includes("5"), "preview should show initial YEN");
+
+    const session = await getInteractionSession(sessionMessageId);
+    assert.ok(session, "interaction session should be persisted");
+    assert.equal(session.state.combat_style, "Тхэквондо");
+    assert.equal(session.state.initial_krw, 75000);
+    assert.equal(session.state.initial_yen, 5000);
+
+    // 3. Confirm acceptance and verify DB state + player_sp + balances
+    let confirmReply = null;
+    const confirmInteraction = {
+      customId: ACC_BTN_CONFIRM,
+      guildId: "guild_1",
+      channelId: "channel_1",
+      guild: null,
+      channel: { send: async () => ({ id: "public_msg_1" }) },
+      user: { id: anketologId, username: "anketolog", tag: "anketolog#0001" },
+      client: { commands: new Map() },
+      deferUpdate: async () => {},
+      editReply: async (payload) => {
+        confirmReply = payload;
+      },
+    };
+
+    await acceptApplicationInteractionHandler.handleComponent({
+      interaction: confirmInteraction,
+      session,
+    });
+
+    const createdPlayer = await getPlayer(targetUserId);
+    assert.ok(createdPlayer, "player document should be created");
+    assert.equal(createdPlayer.krw, 75000);
+    assert.equal(createdPlayer.yen, 5000);
+
+    const allSp = await getAllPlayerSP(targetUserId);
+    assert.equal(allSp.length, 1);
+    assert.equal(allSp[0].name, "Тхэквондо");
+    assert.equal(allSp[0].sp, 1);
+    assert.equal(typeof allSp[0].id, "number");
+
+    const learned = await getLearnedPlayerStyles(targetUserId);
+    assert.equal(learned.length, 1);
+    assert.equal(learned[0].name, "Тхэквондо");
+    assert.equal(learned[0].sp, 1);
+
+    const rawSpDoc = await getDB().collection("player_sp").findOne({ player_id: targetUserId });
+    assert.equal(typeof rawSpDoc.style_id, "number");
+
+    const successDesc = confirmReply.embeds[0].data.description;
+    assert.ok(successDesc.includes("Тхэквондо"));
+    assert.ok(successDesc.includes("1 SP"));
+    assert.ok(successDesc.includes("75"));
+    assert.ok(successDesc.includes("5"));
+  } finally {
+    await closeDatabase();
+    await server.stop();
+  }
 });
 

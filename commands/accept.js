@@ -12,6 +12,7 @@ import {
   createAcceptApplicationComponents,
   createAcceptApplicationPreviewEmbed,
   createAcceptApplicationState,
+  resolveCombatStyle,
 } from "../interactions/acceptApplicationSession.js";
 import { createInteractionSession } from "../utils/interactionSessions.js";
 
@@ -252,6 +253,23 @@ export async function execute(interaction) {
   const initialYenOpt = interaction.options.getInteger("initial_yen") ?? 0;
   const avatarAttachment = interaction.options.getAttachment("avatar");
 
+  let resolvedCombatStyle = "";
+  if (combatStyleOpt && combatStyleOpt.trim()) {
+    const style = await resolveCombatStyle(combatStyleOpt);
+    if (!style) {
+      return interaction.reply({
+        embeds: [
+          createErrorEmbed(
+            "Боевой стиль не найден",
+            `Боевой стиль **«${combatStyleOpt.trim()}»** не найден в базе.\n\nВыберите стиль из автодополнения или проверьте список доступных стилей командой \`/styles-list\`.`
+          ),
+        ],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    resolvedCombatStyle = style.name;
+  }
+
   let avatarUrl = null;
   if (avatarAttachment && avatarAttachment.contentType?.startsWith("image/")) {
     try {
@@ -277,6 +295,9 @@ export async function execute(interaction) {
     rank: "",
     character_avatar: avatarUrl,
     character_url: characterUrlOpt || "",
+    combat_style: resolvedCombatStyle,
+    initial_krw: initialKrwOpt,
+    initial_yen: initialYenOpt,
     stats: {},
   });
 

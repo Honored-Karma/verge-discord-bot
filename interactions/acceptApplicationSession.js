@@ -9,7 +9,7 @@ import {
   TextInputStyle,
 } from "discord.js";
 import { getDB } from "../utils/db.js";
-import { getPlayer, setActiveSlot, getStyleByName, setSP } from "../utils/dataManager.js";
+import { getPlayer, setActiveSlot, getStyleByName, listStyles, setSP } from "../utils/dataManager.js";
 import { hasCommandPermission } from "../utils/adminCheck.js";
 import {
   isValidCharacterUrl,
@@ -25,6 +25,7 @@ import { buildModalCustomId } from "../utils/interactionRouter.js";
 import { logCommand } from "../utils/logs.js";
 import { createErrorEmbed, createSuccessEmbed } from "../utils/embeds.js";
 import { slugifyCharacterName, generatePublicId } from "../services/playerService.js";
+import { createPlayerIdentity } from "../utils/publicIdentity.js";
 import { describeOrgSync, syncOrgRoles } from "../utils/orgRoles.js";
 
 export const ACCEPT_APPLICATION_NAMESPACE = "accept_application";
@@ -61,6 +62,16 @@ function formatNumber(value) {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
+}
+
+export async function resolveCombatStyle(styleName) {
+  const trimmed = typeof styleName === "string" ? styleName.trim() : "";
+  if (!trimmed) return null;
+  const exact = await getStyleByName(trimmed);
+  if (exact) return exact;
+  const styles = await listStyles();
+  const lower = trimmed.toLowerCase();
+  return styles.find((s) => String(s.name || "").trim().toLowerCase() === lower) || null;
 }
 
 export function createAcceptApplicationState({
@@ -420,6 +431,13 @@ async function confirmAcceptApplication({ interaction, session }) {
     physicalStats.stamina_percent !== null ||
     physicalStats.reaction_ms !== null;
 
+  let styleStatus = {
+    requested: state.combat_style || "",
+    granted: false,
+    styleName: null,
+    error: null,
+  };
+
   // 1. Sync / Save Player Document
   if (db) {
     const existingPlayer = await db.collection("players").findOne({ id: playerId });
@@ -441,6 +459,7 @@ async function confirmAcceptApplication({ interaction, session }) {
     try {
       await db.collection("players").insertOne({
         id: playerId,
+        ...createPlayerIdentity(playerId, state.character_name.trim(), slot),
         username: state.target_username,
         character_name: state.character_name.trim(),
         character_avatar: state.character_avatar || null,
@@ -470,11 +489,21 @@ async function confirmAcceptApplication({ interaction, session }) {
 
       if (state.combat_style) {
         try {
-          const style = await getStyleByName(state.combat_style);
-          const sName = style ? style.name : state.combat_style.trim();
-          await setSP(playerId, sName, 1);
+          const style = await resolveCombatStyle(state.combat_style);
+          if (!style || style.id === undefined || style.id === null) {
+            styleStatus.error = `Боевой стиль «${state.combat_style}» не найден в базе стилей.`;
+          } else {
+            const spSet = await setSP(playerId, style.id, 1, interaction.user.id);
+            if (spSet) {
+              styleStatus.granted = true;
+              styleStatus.styleName = style.name;
+            } else {
+              styleStatus.error = `Не удалось выдать боевой стиль «${style.name}».`;
+            }
+          }
         } catch (styleErr) {
           console.warn("Failed to set combat style on accept:", styleErr);
+          styleStatus.error = `Ошибка выдачи боевого стиля «${state.combat_style}».`;
         }
       }
     } catch (insertErr) {
@@ -593,12 +622,16 @@ async function confirmAcceptApplication({ interaction, session }) {
     `• **Персонаж:** **${state.character_name}** (Слот ${state.slot})\n` +
     `• **Роль игрока:** <@&${playerRoleId}> ${roleStatus.added ? "✅ выдана" : "⚠️ ошибка выдачи"}\n` +
     (orgNote ? `• **Организация:** ${orgNote}\n` : "") +
-    (state.combat_style ? `• **Боевой стиль (БИ):** **${state.combat_style}** (1 SP)\n` : "") +
+    (styleStatus.granted ? `• **Боевой стиль (БИ):** **${styleStatus.styleName}** (1 SP)\n` : "") +
     (state.initial_krw > 0 || state.initial_yen > 0 ? `• **Стартовый баланс:** ${formatNumber(state.initial_krw)} ₩ / ${formatNumber(state.initial_yen)} ¥\n` : "") +
     `\nСообщение о принятии опубликовано в <#${interaction.channelId}>.`;
 
   if (roleStatus.error) {
     successDesc += `\n\n⚠️ Предупреждение по ролям: ${roleStatus.error}`;
+  }
+
+  if (styleStatus.error) {
+    successDesc += `\n\n⚠️ Предупреждение по БИ: ${styleStatus.error}`;
   }
 
   await interaction.editReply({
@@ -620,8 +653,12 @@ async function confirmAcceptApplication({ interaction, session }) {
       attribute_name: state.attribute_name,
       organization: state.organization,
       rank: state.rank,
+      combat_style: styleStatus.styleName || state.combat_style || null,
+      initial_krw: state.initial_krw || 0,
+      initial_yen: state.initial_yen || 0,
       physical_stats: physicalStats,
       role_status: roleStatus,
+      style_status: styleStatus,
     },
   }).catch((err) => console.error("Error logging accept application:", err));
 }
